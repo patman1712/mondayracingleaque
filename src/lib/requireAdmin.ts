@@ -1,11 +1,19 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { getAuthOptions, isAuthConfigured } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { readAdminCookie, verifyAdminSession } from "@/lib/adminAuth";
 
 export async function requireAdmin() {
-  if (!isAuthConfigured()) redirect("/admin/setup");
+  try {
+    const adminCount = await prisma.adminUser.count();
+    if (adminCount === 0) redirect("/admin/setup");
+  } catch {
+    redirect("/admin/setup");
+  }
 
-  const session = await getServerSession(getAuthOptions());
+  const token = await readAdminCookie();
+  if (!token) redirect("/admin/login");
+
+  const session = await verifyAdminSession(token);
   if (!session) redirect("/admin/login");
   return session;
 }

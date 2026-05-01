@@ -3,6 +3,7 @@ node_modules
 .turbo
 dist
 .config
+data
 .DS_Store
 .env
 .env.local

@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./data/mrl.db"
 }
 
 enum League {
@@ -69,4 +69,16 @@ model RaceResult {
 
   @@unique([raceId, driverId])
   @@unique([raceId, position])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model AppConfig {
+  key   String @id
+  value String
 }
