@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Container } from "./Container";
 
 const leagues = [
@@ -8,8 +11,17 @@ const leagues = [
 ];
 
 export function Header() {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+
   return (
-    <header className="border-b border-white/10 bg-black/30 backdrop-blur">
+    <header
+      className={
+        isHome
+          ? "absolute inset-x-0 top-0 z-50 bg-black/35 backdrop-blur"
+          : "border-b border-white/10 bg-black/30 backdrop-blur"
+      }
+    >
       <Container>
         <div className="flex items-center justify-between py-4">
           <Link href="/" className="flex items-center gap-3">

@@ -47,7 +47,7 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
   }, []);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4">
       {leagues.map((l, idx) => {
         const start = raceStartMs[idx];
         const remaining = start ? start - now : null;
@@ -57,46 +57,44 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
           <Link
             key={l.key}
             href={l.href}
-            className="group rounded-2xl border border-white/10 bg-black/30 p-5 backdrop-blur hover:bg-black/40"
+            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur hover:bg-black/45"
           >
-            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
-              Nächster Start · {l.label}
-            </div>
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-mrl-red/70" />
+            <div className="pl-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                {l.label}
+              </div>
 
-            {l.nextRace ? (
-              <div className="mt-3">
-                <div className="truncate text-base font-semibold text-white">
-                  {l.nextRace.name}
-                </div>
-                <div className="mt-1 text-sm text-white/70">
-                  {startsAt
-                    ? startsAt.toLocaleString("de-DE", {
-                        weekday: "short",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })
-                    : ""}
-                </div>
-                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
-                    Countdown
+              {l.nextRace ? (
+                <div className="mt-3">
+                  <div className="truncate text-base font-semibold text-white">
+                    {l.nextRace.name}
                   </div>
-                  <div className="mt-1 font-mono text-2xl font-semibold text-white">
+                  <div className="mt-1 text-sm text-white/70">
+                    {startsAt
+                      ? startsAt.toLocaleString("de-DE", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })
+                      : ""}
+                  </div>
+                  <div className="mt-3 font-mono text-2xl font-semibold text-white">
                     {remaining == null ? "--:--:--" : formatRemaining(remaining)}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-                Kein Rennen geplant.
-              </div>
-            )}
+              ) : (
+                <div className="mt-3 text-sm text-white/70">
+                  Kein Rennen geplant.
+                </div>
+              )}
 
-            <div className="mt-4 text-sm font-semibold text-white/70 group-hover:text-white">
-              Zur Liga →
+              <div className="mt-4 text-sm font-semibold text-white/70 group-hover:text-white">
+                Details →
+              </div>
             </div>
           </Link>
         );
