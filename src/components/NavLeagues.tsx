@@ -135,7 +135,7 @@ export function NavLeagues() {
               onMouseEnter={() => cancelClose()}
               onMouseLeave={() => scheduleClose()}
             >
-              <div className="rounded-2xl border border-white/10 bg-black/70 p-3 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl">
                 <div className="flex items-center justify-between px-2 py-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                     {l.label}
