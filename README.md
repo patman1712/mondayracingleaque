@@ -1,6 +1,6 @@
 # Monday Racing League (MRL) Website
 
-Next.js + Tailwind + Prisma (PostgreSQL) mit Admin-Bereich (Login) zum Befüllen der Inhalte.
+Next.js + Tailwind + Prisma (SQLite) mit Admin-Bereich (Login) zum Befüllen der Inhalte.
 
 ## Features
 
@@ -22,49 +22,22 @@ Next.js + Tailwind + Prisma (PostgreSQL) mit Admin-Bereich (Login) zum Befüllen
 npm install
 ```
 
-2. Umgebungsvariablen setzen (Beispiel: [.env.example](file:///Users/foto-scheiber/Desktop/test/MondayRacingLeaque/.env.example))
-
-3. Prisma Client generieren
-
-```bash
-npx prisma generate
-```
-
-4. Datenbank Schema pushen (benötigt laufende PostgreSQL DB)
-
-```bash
-npm run prisma:push
-```
-
-5. Dev Server
+2. Dev Server
 
 ```bash
 npm run dev
 ```
 
-Admin Login: `/admin`
-
-## Admin Passwort Hash
-
-```bash
-node scripts/hash-admin-password.mjs "DEIN_PASSWORT"
-```
-
-Den Output als `ADMIN_PASSWORD_HASH` setzen.
+Admin Setup: `/admin/setup`  
+Admin Login: `/admin/login`
 
 ## Railway Deployment (Kurz)
 
 1. Neues Railway Projekt erstellen
-2. PostgreSQL hinzufügen
-3. Umgebungsvariablen setzen:
-   - `DATABASE_URL` (von Railway Postgres)
-   - `NEXTAUTH_URL` (deine Railway Domain)
-   - `NEXTAUTH_SECRET` (random)
-   - `ADMIN_EMAIL`
-   - `ADMIN_PASSWORD_HASH`
-4. Deploy
-5. Nach dem ersten Deploy einmalig Schema pushen (Railway Shell / CI Step):
+2. (Empfohlen) Volume anlegen und auf den Web-Service mounten:
+   - Mount Path: `/app/data`
+3. Deploy
+4. Danach einmal Admin einrichten:
+   - `/admin/setup` öffnen und ersten Admin anlegen
 
-```bash
-npm run prisma:push
-```
+Hinweis: Ohne Volume sind Daten nach einem Redeploy/Restart nicht dauerhaft.

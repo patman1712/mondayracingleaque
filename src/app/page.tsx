@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/Container";
+import { LeagueCountdowns } from "@/components/LeagueCountdowns";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,12 @@ export default async function HomePage() {
 
   let news: NewsItem[] = [];
   let races: RaceItem[] = [];
+  let nextByLeague: Record<"ONE" | "TWO" | "ROOKIE", { name: string; startsAt: Date } | null> =
+    {
+      ONE: null,
+      TWO: null,
+      ROOKIE: null
+    };
 
   try {
     news = await prisma.newsPost.findMany({
@@ -51,35 +58,106 @@ export default async function HomePage() {
     });
   } catch {}
 
+  try {
+    const [one, two, rookie] = await Promise.all([
+      prisma.race.findFirst({
+        where: { league: "ONE", startsAt: { gte: now } },
+        orderBy: { startsAt: "asc" },
+        select: { name: true, startsAt: true }
+      }),
+      prisma.race.findFirst({
+        where: { league: "TWO", startsAt: { gte: now } },
+        orderBy: { startsAt: "asc" },
+        select: { name: true, startsAt: true }
+      }),
+      prisma.race.findFirst({
+        where: { league: "ROOKIE", startsAt: { gte: now } },
+        orderBy: { startsAt: "asc" },
+        select: { name: true, startsAt: true }
+      })
+    ]);
+
+    nextByLeague = {
+      ONE: one,
+      TWO: two,
+      ROOKIE: rookie
+    };
+  } catch {}
+
   return (
     <div>
-      <div className="border-b border-white/10 bg-gradient-to-b from-mrl-gray to-mrl-black">
-        <Container>
-          <div className="py-12">
-            <div className="text-sm font-semibold text-white/70">F1 26</div>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
-              Monday Racing League
-            </h1>
-            <p className="mt-4 max-w-2xl text-white/70">
-              News, Kalender, Fahrer, Ergebnisse und WM-Stand für MRL One, MRL
-              Two und MRL Rookie.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/news"
-                className="rounded-full bg-mrl-red px-5 py-3 text-sm font-semibold text-white"
-              >
-                Zu den News
-              </Link>
-              <Link
-                href="/calendar"
-                className="rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
-              >
-                Kalender
-              </Link>
+      <div
+        className="border-b border-white/10 bg-cover bg-center"
+        style={{ backgroundImage: "url(/hero.svg)" }}
+      >
+        <div className="bg-black/55">
+          <Container>
+            <div className="py-12 md:py-16">
+              <div className="text-sm font-semibold text-white/70">F1 26</div>
+              <h1 className="mt-2 text-4xl font-extrabold tracking-tight md:text-6xl">
+                Monday Racing League
+              </h1>
+              <p className="mt-4 max-w-2xl text-white/70">
+                News, Kalender, Fahrer, Ergebnisse und WM-Stand für MRL One, MRL
+                Two und MRL Rookie.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="/news"
+                  className="rounded-full bg-mrl-red px-5 py-3 text-sm font-semibold text-white"
+                >
+                  Zu den News
+                </Link>
+                <Link
+                  href="/calendar"
+                  className="rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
+                >
+                  Kalender
+                </Link>
+              </div>
+
+              <div className="mt-10">
+                <LeagueCountdowns
+                  leagues={[
+                    {
+                      key: "ONE",
+                      label: "MRL One",
+                      href: "/mrl-one",
+                      nextRace: nextByLeague.ONE
+                        ? {
+                            name: nextByLeague.ONE.name,
+                            startsAt: nextByLeague.ONE.startsAt.toISOString()
+                          }
+                        : null
+                    },
+                    {
+                      key: "TWO",
+                      label: "MRL Two",
+                      href: "/mrl-two",
+                      nextRace: nextByLeague.TWO
+                        ? {
+                            name: nextByLeague.TWO.name,
+                            startsAt: nextByLeague.TWO.startsAt.toISOString()
+                          }
+                        : null
+                    },
+                    {
+                      key: "ROOKIE",
+                      label: "MRL Rookie",
+                      href: "/mrl-rookie",
+                      nextRace: nextByLeague.ROOKIE
+                        ? {
+                            name: nextByLeague.ROOKIE.name,
+                            startsAt: nextByLeague.ROOKIE.startsAt.toISOString()
+                          }
+                        : null
+                    }
+                  ]}
+                />
+              </div>
             </div>
-          </div>
-        </Container>
+          </Container>
+        </div>
       </div>
 
       <Container>
