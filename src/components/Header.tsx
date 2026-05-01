@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Container } from "./Container";
-
-const leagues = [
-  { slug: "mrl-one", label: "MRL One" },
-  { slug: "mrl-two", label: "MRL Two" },
-  { slug: "mrl-rookie", label: "MRL Rookie" }
-];
+import { NavLeagues } from "./NavLeagues";
 
 export function Header() {
   const pathname = usePathname();
@@ -23,7 +18,7 @@ export function Header() {
       }
     >
       <Container>
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between gap-6 py-4">
           <Link href="/" className="flex items-center gap-3">
             <img
               src="/logo.svg"
@@ -36,23 +31,17 @@ export function Header() {
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-5 text-sm md:flex">
+          <nav className="hidden flex-1 items-center gap-5 text-sm md:flex">
             <Link href="/news" className="text-white/80 hover:text-white">
               News
             </Link>
             <Link href="/calendar" className="text-white/80 hover:text-white">
               Kalender
             </Link>
-            {leagues.map((l) => (
-              <Link
-                key={l.slug}
-                href={`/${l.slug}`}
-                className="text-white/80 hover:text-white"
-              >
-                {l.label}
-              </Link>
-            ))}
           </nav>
+          <div className="hidden md:block">
+            <NavLeagues />
+          </div>
 
           <Link
             href="/admin"
