@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/AdminShell";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export default async function AdminLeagueHomePage({
 }: {
   params: Promise<{ league: string }>;
 }) {
+  await requireAdmin();
+
   const { league } = await params;
   const label = leagueLabel[league];
   if (!label) notFound();

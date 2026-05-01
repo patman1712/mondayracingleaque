@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,8 @@ export default async function AdminRaceResultsPage({
 }: {
   params: Promise<{ league: string; raceId: string }>;
 }) {
+  await requireAdmin();
+
   const { league, raceId } = await params;
   const l = leagueEnum[league];
   if (!l) notFound();

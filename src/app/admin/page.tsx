@@ -1,16 +1,26 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHomePage() {
-  const [newsCount, driverCount, raceCount, resultCount] = await Promise.all([
-    prisma.newsPost.count(),
-    prisma.driver.count(),
-    prisma.race.count(),
-    prisma.raceResult.count()
-  ]);
+  await requireAdmin();
+
+  let newsCount = 0;
+  let driverCount = 0;
+  let raceCount = 0;
+  let resultCount = 0;
+
+  try {
+    [newsCount, driverCount, raceCount, resultCount] = await Promise.all([
+      prisma.newsPost.count(),
+      prisma.driver.count(),
+      prisma.race.count(),
+      prisma.raceResult.count()
+    ]);
+  } catch {}
 
   const tiles = [
     { label: "News", value: newsCount, href: "/admin/news" },

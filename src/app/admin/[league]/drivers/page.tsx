@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,8 @@ export default async function AdminDriversPage({
 }: {
   params: Promise<{ league: string }>;
 }) {
+  await requireAdmin();
+
   const { league } = await params;
   const l = leagueEnum[league];
   if (!l) notFound();

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/slugify";
 import { AdminShell } from "@/components/AdminShell";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,8 @@ async function deleteNews(formData: FormData) {
 }
 
 export default async function AdminNewsPage() {
+  await requireAdmin();
+
   type PostItem = {
     id: string;
     title: string;

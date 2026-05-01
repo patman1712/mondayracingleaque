@@ -1,6 +1,18 @@
 import NextAuth from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthOptions, isAuthConfigured } from "@/lib/auth";
 
-const handler = NextAuth(authOptions);
+export async function GET(req: Request) {
+  if (!isAuthConfigured()) {
+    return new Response("Auth not configured", { status: 503 });
+  }
+  const handler = NextAuth(getAuthOptions());
+  return (handler as unknown as (r: Request) => Promise<Response>)(req);
+}
 
-export { handler as GET, handler as POST };
+export async function POST(req: Request) {
+  if (!isAuthConfigured()) {
+    return new Response("Auth not configured", { status: 503 });
+  }
+  const handler = NextAuth(getAuthOptions());
+  return (handler as unknown as (r: Request) => Promise<Response>)(req);
+}

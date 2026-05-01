@@ -1,9 +1,11 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
+import { getAuthOptions, isAuthConfigured } from "@/lib/auth";
 
 export async function requireAdmin() {
-  const session = await getServerSession(authOptions);
+  if (!isAuthConfigured()) redirect("/admin/setup");
+
+  const session = await getServerSession(getAuthOptions());
   if (!session) redirect("/admin/login");
   return session;
 }
