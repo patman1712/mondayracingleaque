@@ -10,6 +10,10 @@ try {
   fs.mkdirSync(path.join(process.cwd(), "data"), { recursive: true });
 } catch {}
 
+try {
+  fs.mkdirSync("/app/data", { recursive: true });
+} catch {}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({

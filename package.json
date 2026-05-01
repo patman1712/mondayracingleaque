@@ -8,9 +8,9 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "next dev",
-    "build": "next build",
-    "start": "prisma db push && next start",
+    "dev": "node scripts/start.mjs dev",
+    "build": "node scripts/start.mjs build",
+    "start": "node scripts/start.mjs start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
