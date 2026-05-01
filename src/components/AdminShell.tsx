@@ -1,0 +1,80 @@
+import Link from "next/link";
+import { ReactNode } from "react";
+import { requireAdmin } from "@/lib/requireAdmin";
+import { Container } from "@/components/Container";
+import { SignOutButton } from "@/components/SignOutButton";
+
+const leagueLinks = [
+  { slug: "one", label: "MRL One" },
+  { slug: "two", label: "MRL Two" },
+  { slug: "rookie", label: "MRL Rookie" }
+];
+
+const sectionLinks = [
+  { key: "drivers", label: "Fahrer" },
+  { key: "races", label: "Rennkalender" },
+  { key: "results", label: "Ergebnisse" },
+  { key: "standings", label: "WM Stand" }
+];
+
+export async function AdminShell({ children }: { children: ReactNode }) {
+  await requireAdmin();
+
+  return (
+    <Container>
+      <div className="mt-8 flex items-center justify-between">
+        <div>
+          <div className="text-lg font-semibold">Admin</div>
+          <div className="text-sm text-white/60">Inhalte verwalten</div>
+        </div>
+        <SignOutButton />
+      </div>
+
+      <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
+        <aside className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+            Allgemein
+          </div>
+          <div className="mt-2 space-y-1 text-sm">
+            <Link
+              href="/admin"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              Übersicht
+            </Link>
+            <Link
+              href="/admin/news"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              News
+            </Link>
+          </div>
+
+          <div className="mt-6 text-xs font-semibold uppercase tracking-wider text-white/60">
+            Ligen
+          </div>
+          <div className="mt-2 space-y-4">
+            {leagueLinks.map((l) => (
+              <div key={l.slug}>
+                <div className="px-3 text-sm font-semibold">{l.label}</div>
+                <div className="mt-1 space-y-1">
+                  {sectionLinks.map((s) => (
+                    <Link
+                      key={s.key}
+                      href={`/admin/${l.slug}/${s.key}`}
+                      className="block rounded-lg px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                    >
+                      {s.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <section className="min-w-0">{children}</section>
+      </div>
+    </Container>
+  );
+}

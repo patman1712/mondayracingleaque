@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum League {
+  ONE
+  TWO
+  ROOKIE
+}
+
+model NewsPost {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  excerpt     String?
+  content     String
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Driver {
+  id        String   @id @default(cuid())
+  league    League
+  name      String
+  number    Int?
+  team      String?
+  country   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results RaceResult[]
+}
+
+model Race {
+  id        String   @id @default(cuid())
+  league    League
+  season    Int
+  round     Int
+  name      String
+  circuit   String?
+  location  String?
+  startsAt  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results RaceResult[]
+
+  @@unique([league, season, round])
+}
+
+model RaceResult {
+  id         String   @id @default(cuid())
+  raceId     String
+  driverId   String
+  position   Int
+  points     Float
+  status     String?
+  fastestLap Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  race   Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([raceId, driverId])
+  @@unique([raceId, position])
+}
