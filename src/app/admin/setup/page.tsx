@@ -10,20 +10,28 @@ async function createAdmin(formData: FormData) {
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) return;
+  if (!email || !password) redirect("/admin/setup?error=1");
 
   const count = await prisma.adminUser.count().catch(() => 0);
   if (count > 0) redirect("/admin/login");
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.adminUser
+  const created = await prisma.adminUser
     .create({ data: { email, passwordHash } })
     .catch(() => null);
+  if (!created) redirect("/admin/setup?error=1");
 
   redirect("/admin/login");
 }
 
-export default async function AdminSetupPage() {
+export default async function AdminSetupPage({
+  searchParams
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const sp = await searchParams;
+  const showError = sp.error === "1";
+
   const count = await prisma.adminUser.count().catch(() => 0);
   if (count > 0) redirect("/admin/login");
 
@@ -60,6 +68,11 @@ export default async function AdminSetupPage() {
           <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
             Admin anlegen
           </button>
+          {showError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              Setup fehlgeschlagen. Bitte erneut versuchen.
+            </div>
+          ) : null}
           <div className="text-xs text-white/60">
             Hinweis: Für persistente Inhalte auf Railway sollte ein Volume für
             <span className="font-semibold"> data/</span> gemountet werden.
