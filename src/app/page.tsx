@@ -86,79 +86,85 @@ export default async function HomePage() {
 
   return (
     <div>
-      <div
-        className="border-b border-white/10 bg-cover bg-center"
-        style={{ backgroundImage: "url(/hero.svg)" }}
-      >
-        <div className="bg-black/55">
-          <Container>
-            <div className="py-12 md:py-16">
-              <div className="text-sm font-semibold text-white/70">F1 26</div>
-              <h1 className="mt-2 text-4xl font-extrabold tracking-tight md:text-6xl">
-                Monday Racing League
-              </h1>
-              <p className="mt-4 max-w-2xl text-white/70">
-                News, Kalender, Fahrer, Ergebnisse und WM-Stand für MRL One, MRL
-                Two und MRL Rookie.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  href="/news"
-                  className="rounded-full bg-mrl-red px-5 py-3 text-sm font-semibold text-white"
-                >
-                  Zu den News
-                </Link>
-                <Link
-                  href="/calendar"
-                  className="rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
-                >
-                  Kalender
-                </Link>
-              </div>
+      <section className="relative min-h-[86dvh] border-b border-white/10">
+        <img
+          src="/hero-1.svg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/55 to-mrl-black" />
 
-              <div className="mt-10">
-                <LeagueCountdowns
-                  leagues={[
-                    {
-                      key: "ONE",
-                      label: "MRL One",
-                      href: "/mrl-one",
-                      nextRace: nextByLeague.ONE
-                        ? {
-                            name: nextByLeague.ONE.name,
-                            startsAt: nextByLeague.ONE.startsAt.toISOString()
-                          }
-                        : null
-                    },
-                    {
-                      key: "TWO",
-                      label: "MRL Two",
-                      href: "/mrl-two",
-                      nextRace: nextByLeague.TWO
-                        ? {
-                            name: nextByLeague.TWO.name,
-                            startsAt: nextByLeague.TWO.startsAt.toISOString()
-                          }
-                        : null
-                    },
-                    {
-                      key: "ROOKIE",
-                      label: "MRL Rookie",
-                      href: "/mrl-rookie",
-                      nextRace: nextByLeague.ROOKIE
-                        ? {
-                            name: nextByLeague.ROOKIE.name,
-                            startsAt: nextByLeague.ROOKIE.startsAt.toISOString()
-                          }
-                        : null
-                    }
-                  ]}
-                />
-              </div>
+        <Container>
+          <div className="relative flex min-h-[86dvh] flex-col pb-10 pt-12 md:pb-12 md:pt-16">
+            <div className="text-sm font-semibold text-white/70">F1 26</div>
+            <h1 className="mt-2 max-w-3xl text-4xl font-extrabold tracking-tight md:text-6xl">
+              Monday Racing League
+            </h1>
+            <p className="mt-4 max-w-2xl text-white/70">
+              News, Kalender, Fahrer, Ergebnisse und WM-Stand für MRL One, MRL
+              Two und MRL Rookie.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/news"
+                className="rounded-full bg-mrl-red px-5 py-3 text-sm font-semibold text-white"
+              >
+                Zu den News
+              </Link>
+              <Link
+                href="/calendar"
+                className="rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                Kalender
+              </Link>
             </div>
-          </Container>
-        </div>
-      </div>
+
+            <div className="mt-10 md:mt-auto">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/60">
+                Countdown
+              </div>
+              <LeagueCountdowns
+                leagues={[
+                  {
+                    key: "ONE",
+                    label: "MRL One",
+                    href: "/mrl-one",
+                    nextRace: nextByLeague.ONE
+                      ? {
+                          name: nextByLeague.ONE.name,
+                          startsAt: nextByLeague.ONE.startsAt.toISOString()
+                        }
+                      : null
+                  },
+                  {
+                    key: "TWO",
+                    label: "MRL Two",
+                    href: "/mrl-two",
+                    nextRace: nextByLeague.TWO
+                      ? {
+                          name: nextByLeague.TWO.name,
+                          startsAt: nextByLeague.TWO.startsAt.toISOString()
+                        }
+                      : null
+                  },
+                  {
+                    key: "ROOKIE",
+                    label: "MRL Rookie",
+                    href: "/mrl-rookie",
+                    nextRace: nextByLeague.ROOKIE
+                      ? {
+                          name: nextByLeague.ROOKIE.name,
+                          startsAt: nextByLeague.ROOKIE.startsAt.toISOString()
+                        }
+                      : null
+                  }
+                ]}
+              />
+            </div>
+          </div>
+        </Container>
+      </section>
 
       <Container>
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
