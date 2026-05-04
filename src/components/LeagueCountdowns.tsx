@@ -8,6 +8,10 @@ type CountdownRace = {
   startsAt: string;
   circuit: string | null;
   location: string | null;
+  season: number;
+  seasonNo: number;
+  round: number;
+  seasonIsTest: boolean;
 };
 
 type CountdownLeague = {
@@ -54,28 +58,15 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
         const start = raceStartMs[idx];
         const remaining = start ? start - now : null;
         const startsAt = l.nextRace ? new Date(l.nextRace.startsAt) : null;
-        let title = l.nextRace ? l.nextRace.name : "";
+        let title = "";
         let place = "";
         if (l.nextRace) {
+          title = `${l.nextRace.seasonIsTest ? "TEST · " : ""}Saison ${l.nextRace.season} · Season ${l.nextRace.seasonNo} · Runde ${l.nextRace.round}`;
           const rawCircuit = (l.nextRace.circuit ?? "").trim();
           const rawLocation = (l.nextRace.location ?? "").trim();
           const circuit = rawCircuit.replace(/\s*[-–—]\s*$/, "").trim();
           const location = rawLocation.replace(/\s*[-–—]\s*$/, "").trim();
           place = [circuit, location].filter(Boolean).join(" · ");
-
-          const parts = title
-            .split("·")
-            .map((p) => p.trim())
-            .filter(Boolean);
-          const roundIdx = parts.findIndex((p) => /^R\d+$/i.test(p));
-          if (roundIdx !== -1) {
-            title = parts.slice(0, roundIdx + 1).join(" · ");
-          } else if (circuit && parts.length > 1) {
-            const last = parts[parts.length - 1] ?? "";
-            if (last.includes(circuit)) {
-              title = parts.slice(0, -1).join(" · ");
-            }
-          }
         }
 
         return (
@@ -103,6 +94,7 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
                   <div className="mt-1 text-sm text-white/70">
                     {startsAt
                       ? startsAt.toLocaleString("de-DE", {
+                          timeZone: "Europe/Berlin",
                           weekday: "short",
                           day: "2-digit",
                           month: "2-digit",

@@ -28,7 +28,16 @@ export default async function HomePage() {
   let races: RaceItem[] = [];
   let nextByLeague: Record<
     "ONE" | "TWO" | "ROOKIE",
-    { name: string; startsAt: Date; circuit: string | null; location: string | null } | null
+    {
+      name: string;
+      startsAt: Date;
+      circuit: string | null;
+      location: string | null;
+      season: number;
+      seasonNo: number;
+      round: number;
+      seasonIsTest: boolean;
+    } | null
   > = {
     ONE: null,
     TWO: null,
@@ -66,7 +75,16 @@ export default async function HomePage() {
         .findFirst({
           where: { league, seasonIsTest: false, startsAt: { gte: now } },
           orderBy: { startsAt: "asc" },
-          select: { name: true, startsAt: true, circuit: true, location: true }
+          select: {
+            name: true,
+            startsAt: true,
+            circuit: true,
+            location: true,
+            season: true,
+            seasonNo: true,
+            round: true,
+            seasonIsTest: true
+          }
         })
         .catch(() => null);
       if (normal) return normal;
@@ -74,7 +92,16 @@ export default async function HomePage() {
         .findFirst({
           where: { league, startsAt: { gte: now } },
           orderBy: { startsAt: "asc" },
-          select: { name: true, startsAt: true, circuit: true, location: true }
+          select: {
+            name: true,
+            startsAt: true,
+            circuit: true,
+            location: true,
+            season: true,
+            seasonNo: true,
+            round: true,
+            seasonIsTest: true
+          }
         })
         .catch(() => null);
     }
@@ -157,7 +184,11 @@ export default async function HomePage() {
                             name: nextByLeague.ONE.name,
                             startsAt: nextByLeague.ONE.startsAt.toISOString(),
                             circuit: nextByLeague.ONE.circuit,
-                            location: nextByLeague.ONE.location
+                            location: nextByLeague.ONE.location,
+                            season: nextByLeague.ONE.season,
+                            seasonNo: nextByLeague.ONE.seasonNo,
+                            round: nextByLeague.ONE.round,
+                            seasonIsTest: nextByLeague.ONE.seasonIsTest
                           }
                         : null
                     },
@@ -170,7 +201,11 @@ export default async function HomePage() {
                             name: nextByLeague.TWO.name,
                             startsAt: nextByLeague.TWO.startsAt.toISOString(),
                             circuit: nextByLeague.TWO.circuit,
-                            location: nextByLeague.TWO.location
+                            location: nextByLeague.TWO.location,
+                            season: nextByLeague.TWO.season,
+                            seasonNo: nextByLeague.TWO.seasonNo,
+                            round: nextByLeague.TWO.round,
+                            seasonIsTest: nextByLeague.TWO.seasonIsTest
                           }
                         : null
                     },
@@ -183,7 +218,11 @@ export default async function HomePage() {
                             name: nextByLeague.ROOKIE.name,
                             startsAt: nextByLeague.ROOKIE.startsAt.toISOString(),
                             circuit: nextByLeague.ROOKIE.circuit,
-                            location: nextByLeague.ROOKIE.location
+                            location: nextByLeague.ROOKIE.location,
+                            season: nextByLeague.ROOKIE.season,
+                            seasonNo: nextByLeague.ROOKIE.seasonNo,
+                            round: nextByLeague.ROOKIE.round,
+                            seasonIsTest: nextByLeague.ROOKIE.seasonIsTest
                           }
                         : null
                     }
