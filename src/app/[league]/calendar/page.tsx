@@ -82,6 +82,7 @@ export default async function LeagueCalendarPage({
                 <div className="text-lg font-semibold">{r.name}</div>
                 <div className="text-sm text-white/60">
                   {new Date(r.startsAt).toLocaleString("de-DE", {
+                    timeZone: "Europe/Berlin",
                     weekday: "short",
                     day: "2-digit",
                     month: "2-digit",

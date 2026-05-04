@@ -26,12 +26,14 @@ export default async function HomePage() {
 
   let news: NewsItem[] = [];
   let races: RaceItem[] = [];
-  let nextByLeague: Record<"ONE" | "TWO" | "ROOKIE", { name: string; startsAt: Date } | null> =
-    {
-      ONE: null,
-      TWO: null,
-      ROOKIE: null
-    };
+  let nextByLeague: Record<
+    "ONE" | "TWO" | "ROOKIE",
+    { name: string; startsAt: Date; circuit: string | null; location: string | null } | null
+  > = {
+    ONE: null,
+    TWO: null,
+    ROOKIE: null
+  };
 
   try {
     news = await prisma.newsPost.findMany({
@@ -64,7 +66,7 @@ export default async function HomePage() {
         .findFirst({
           where: { league, seasonIsTest: false, startsAt: { gte: now } },
           orderBy: { startsAt: "asc" },
-          select: { name: true, startsAt: true }
+          select: { name: true, startsAt: true, circuit: true, location: true }
         })
         .catch(() => null);
       if (normal) return normal;
@@ -72,7 +74,7 @@ export default async function HomePage() {
         .findFirst({
           where: { league, startsAt: { gte: now } },
           orderBy: { startsAt: "asc" },
-          select: { name: true, startsAt: true }
+          select: { name: true, startsAt: true, circuit: true, location: true }
         })
         .catch(() => null);
     }
@@ -153,7 +155,9 @@ export default async function HomePage() {
                       nextRace: nextByLeague.ONE
                         ? {
                             name: nextByLeague.ONE.name,
-                            startsAt: nextByLeague.ONE.startsAt.toISOString()
+                            startsAt: nextByLeague.ONE.startsAt.toISOString(),
+                            circuit: nextByLeague.ONE.circuit,
+                            location: nextByLeague.ONE.location
                           }
                         : null
                     },
@@ -164,7 +168,9 @@ export default async function HomePage() {
                       nextRace: nextByLeague.TWO
                         ? {
                             name: nextByLeague.TWO.name,
-                            startsAt: nextByLeague.TWO.startsAt.toISOString()
+                            startsAt: nextByLeague.TWO.startsAt.toISOString(),
+                            circuit: nextByLeague.TWO.circuit,
+                            location: nextByLeague.TWO.location
                           }
                         : null
                     },
@@ -175,7 +181,9 @@ export default async function HomePage() {
                       nextRace: nextByLeague.ROOKIE
                         ? {
                             name: nextByLeague.ROOKIE.name,
-                            startsAt: nextByLeague.ROOKIE.startsAt.toISOString()
+                            startsAt: nextByLeague.ROOKIE.startsAt.toISOString(),
+                            circuit: nextByLeague.ROOKIE.circuit,
+                            location: nextByLeague.ROOKIE.location
                           }
                         : null
                     }

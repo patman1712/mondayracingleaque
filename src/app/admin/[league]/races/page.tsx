@@ -22,38 +22,69 @@ function ensureDir(p: string) {
   } catch {}
 }
 
-function parseStartsAt(raw: string) {
+const DISPLAY_TZ = "Europe/Berlin";
+
+function getTimeZoneOffsetMs(timeZone: string, date: Date) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const parts = dtf.formatToParts(date);
+  const map = new Map(parts.map((p) => [p.type, p.value] as const));
+  const y = Number(map.get("year"));
+  const m = Number(map.get("month"));
+  const d = Number(map.get("day"));
+  const hh = Number(map.get("hour"));
+  const mm = Number(map.get("minute"));
+  const ss = Number(map.get("second"));
+  const asUtc = Date.UTC(y, m - 1, d, hh, mm, ss);
+  return asUtc - date.getTime();
+}
+
+function zonedTimeToUtc(timeZone: string, y: number, m: number, d: number, hh: number, mm: number) {
+  let utc = Date.UTC(y, m - 1, d, hh, mm, 0, 0);
+  let offset = getTimeZoneOffsetMs(timeZone, new Date(utc));
+  utc = utc - offset;
+  offset = getTimeZoneOffsetMs(timeZone, new Date(utc));
+  return new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0) - offset);
+}
+
+type ParsedStartsAt = { date: Date; localIso: string };
+
+function parseStartsAt(raw: string): ParsedStartsAt | null {
   const v = raw.trim();
   if (!v) return null;
 
   const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/);
   if (iso) {
     const [, yyyy, mm, dd, hh, min] = iso;
-    const d = new Date(
-      Number(yyyy),
-      Number(mm) - 1,
-      Number(dd),
-      Number(hh),
-      Number(min),
-      0,
-      0
-    );
-    return Number.isNaN(d.getTime()) ? null : d;
+    const y = Number(yyyy);
+    const m = Number(mm);
+    const d = Number(dd);
+    const h = Number(hh);
+    const mi = Number(min);
+    const date = zonedTimeToUtc(DISPLAY_TZ, y, m, d, h, mi);
+    if (Number.isNaN(date.getTime())) return null;
+    return { date, localIso: `${yyyy}-${mm}-${dd}T${hh}:${min}` };
   }
 
   const isoComma = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:,\s*|\s+)(\d{2}):(\d{2})$/);
   if (isoComma) {
     const [, yyyy, mm, dd, hh, min] = isoComma;
-    const d = new Date(
-      Number(yyyy),
-      Number(mm) - 1,
-      Number(dd),
-      Number(hh),
-      Number(min),
-      0,
-      0
-    );
-    return Number.isNaN(d.getTime()) ? null : d;
+    const y = Number(yyyy);
+    const m = Number(mm);
+    const d = Number(dd);
+    const h = Number(hh);
+    const mi = Number(min);
+    const date = zonedTimeToUtc(DISPLAY_TZ, y, m, d, h, mi);
+    if (Number.isNaN(date.getTime())) return null;
+    return { date, localIso: `${yyyy}-${mm}-${dd}T${hh}:${min}` };
   }
 
   const m = v.match(
@@ -61,25 +92,14 @@ function parseStartsAt(raw: string) {
   );
   if (!m) return null;
   const [, dd, mm, yyyy, hh, min] = m;
-  const d = new Date(
-    Number(yyyy),
-    Number(mm) - 1,
-    Number(dd),
-    Number(hh),
-    Number(min),
-    0,
-    0
-  );
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function formatDateTimeLocal(d: Date) {
-  const yyyy = String(d.getFullYear()).padStart(4, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  const y = Number(yyyy);
+  const mo = Number(mm);
+  const da = Number(dd);
+  const h = Number(hh);
+  const mi = Number(min);
+  const date = zonedTimeToUtc(DISPLAY_TZ, y, mo, da, h, mi);
+  if (Number.isNaN(date.getTime())) return null;
+  return { date, localIso: `${yyyy}-${mm}-${dd}T${hh}:${min}` };
 }
 
 function dataRootDir() {
@@ -112,14 +132,8 @@ function buildRaceName(input: {
   circuit: string | null;
   location: string | null;
 }) {
-  const parts: string[] = [];
-  if (input.seasonIsTest) parts.push("TEST");
-  parts.push(String(input.season));
-  parts.push(`Season ${input.seasonNo}`);
-  parts.push(`R${input.round}`);
-  if (input.circuit) parts.push(input.circuit);
-  if (input.location) parts.push(input.location);
-  return parts.join(" · ");
+  const base = input.circuit ? input.circuit : `Runde ${input.round}`;
+  return input.seasonIsTest ? `TEST · ${base}` : base;
 }
 
 const leagueLabel: Record<League, string> = {
@@ -169,17 +183,21 @@ async function createRace(
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
+  if (!circuitId && !circuit) {
+    returnQuery.set("error", "invalid");
+    redirect(`${basePath}?${returnQuery.toString()}`);
+  }
   if (!startsAtRaw) {
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
 
-  const startsAt = parseStartsAt(startsAtRaw);
-  if (!startsAt) {
+  const parsedStartsAt = parseStartsAt(startsAtRaw);
+  if (!parsedStartsAt) {
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
-  returnQuery.set("startsAt", formatDateTimeLocal(startsAt));
+  returnQuery.set("startsAt", parsedStartsAt.localIso);
 
   try {
     let circuitNameToSave = circuit || null;
@@ -227,7 +245,7 @@ async function createRace(
         circuitId: circuitId || null,
         circuit: circuitNameToSave,
         location: locationToSave,
-        startsAt
+        startsAt: parsedStartsAt.date
       }
     });
 
@@ -375,7 +393,6 @@ export default async function AdminRacesPage({
   const sp = await searchParams;
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
-  const startsAtDefault = sp.startsAt ? parseStartsAt(sp.startsAt) : null;
   const defaults = {
     season: sp.season ?? "",
     seasonNo: sp.seasonNo ?? "",
@@ -385,7 +402,7 @@ export default async function AdminRacesPage({
     circuitId: sp.circuitId ?? "",
     circuit: sp.circuit ?? "",
     location: sp.location ?? "",
-    startsAt: startsAtDefault ? formatDateTimeLocal(startsAtDefault) : ""
+    startsAt: sp.startsAt ?? ""
   };
 
   const { league } = await params;
@@ -646,7 +663,7 @@ export default async function AdminRacesPage({
                     {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round} · {r.name}
                   </div>
                   <div className="mt-1 text-sm text-white/60">
-                    {new Date(r.startsAt).toLocaleString("de-DE")}
+                    {new Date(r.startsAt).toLocaleString("de-DE", { timeZone: DISPLAY_TZ })}
                     {r.circuit ? ` · ${r.circuit}` : ""}
                   </div>
                 </div>

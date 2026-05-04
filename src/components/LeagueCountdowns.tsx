@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 type CountdownRace = {
   name: string;
   startsAt: string;
+  circuit: string | null;
+  location: string | null;
 };
 
 type CountdownLeague = {
@@ -52,6 +54,17 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
         const start = raceStartMs[idx];
         const remaining = start ? start - now : null;
         const startsAt = l.nextRace ? new Date(l.nextRace.startsAt) : null;
+        let place = "";
+        if (l.nextRace) {
+          const circuit = l.nextRace.circuit ?? "";
+          const location = l.nextRace.location ?? "";
+          const nameHasCircuit = circuit ? l.nextRace.name.includes(circuit) : false;
+          if (nameHasCircuit) {
+            place = location;
+          } else {
+            place = [circuit, location].filter(Boolean).join(" · ");
+          }
+        }
 
         return (
           <Link
@@ -70,6 +83,11 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
                   <div className="truncate text-base font-semibold text-white">
                     {l.nextRace.name}
                   </div>
+                  {place ? (
+                    <div className="mt-1 truncate text-sm text-white/70">
+                      {place}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-sm text-white/70">
                     {startsAt
                       ? startsAt.toLocaleString("de-DE", {

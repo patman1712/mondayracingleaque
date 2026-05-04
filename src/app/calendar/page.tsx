@@ -147,7 +147,11 @@ export default async function CalendarPage({
         <div className="rounded-2xl border border-white/10 bg-white/5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
             <div className="text-lg font-semibold">
-              {viewMonth.toLocaleString("de-DE", { month: "long", year: "numeric" })}
+              {viewMonth.toLocaleString("de-DE", {
+                month: "long",
+                year: "numeric",
+                timeZone: "Europe/Berlin"
+              })}
             </div>
             <div className="flex items-center gap-2">
               <Link
@@ -284,6 +288,7 @@ export default async function CalendarPage({
                         <div className="mt-1 text-xs text-white/70">
                           {leagueLabel(r.league)} ·{" "}
                           {new Date(r.startsAt).toLocaleString("de-DE", {
+                            timeZone: "Europe/Berlin",
                             weekday: "short",
                             day: "2-digit",
                             month: "2-digit",

@@ -10,7 +10,11 @@ function leagueFromSlug(slug: string): LeagueKey | null {
 }
 
 function formatDateRange(d: Date) {
-  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "Europe/Berlin"
+  });
 }
 
 function imageUrl(imagePath: string | null | undefined) {
