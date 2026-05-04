@@ -23,7 +23,8 @@ export default async function LeagueHomePage({
     { href: `/${league}/drivers`, label: "Fahrer" },
     { href: `/${league}/results`, label: "Ergebnisse" },
     { href: `/${league}/standings`, label: "WM Stand" },
-    { href: `/${league}/calendar`, label: "Rennkalender" }
+    { href: `/${league}/calendar`, label: "Rennkalender" },
+    { href: `/${league}/archive`, label: "Archiv" }
   ];
 
   return (

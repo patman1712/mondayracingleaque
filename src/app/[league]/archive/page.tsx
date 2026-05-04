@@ -23,24 +23,19 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-function addDays(d: Date, days: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
-
-function formatRange(start: Date) {
-  const end = addDays(start, 2);
-  const s = start.toLocaleDateString("de-DE", {
-    timeZone: "Europe/Berlin",
-    day: "2-digit"
-  });
-  const e = end.toLocaleDateString("de-DE", {
+function formatRaceDateTime(d: Date, includeTime: boolean) {
+  const date = d.toLocaleDateString("de-DE", {
     timeZone: "Europe/Berlin",
     day: "2-digit",
     month: "short"
   });
-  return `${s} – ${e}`.toUpperCase();
+  if (!includeTime) return date.toUpperCase();
+  const time = d.toLocaleTimeString("de-DE", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return `${date} · ${time}`.toUpperCase();
 }
 
 export default async function LeagueArchivePage({
@@ -129,6 +124,12 @@ export default async function LeagueArchivePage({
           </div>
         ) : (
           races.map((r) => (
+            (() => {
+              const start = new Date(r.startsAt);
+              const isUpcoming = start.getTime() > Date.now();
+              const trackLine = [r.location, r.circuit].filter(Boolean).join(" · ");
+
+              return (
             <div key={r.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
               <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
               {imageUrl(r.imagePath) ? (
@@ -141,38 +142,42 @@ export default async function LeagueArchivePage({
 
               <div className="relative p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
-                    {r.seasonIsTest ? "Testing" : `Round ${r.round}`}
-                  </div>
+                  {r.seasonIsTest ? (
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
+                      TEST
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                   <div className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80">
-                    {formatRange(new Date(r.startsAt))}
+                    {formatRaceDateTime(start, isUpcoming)}
                   </div>
                 </div>
 
                 <div className="mt-4">
                   <div className="truncate text-2xl font-extrabold tracking-tight text-white">
-                    {r.circuit || r.name}
-                  </div>
-                  <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/50">
                     {r.name}
                   </div>
-                  <div className="mt-3 text-sm text-white/70">
-                    {r.circuit || r.location ? (
-                      <div className="truncate">
-                        {[r.circuit, r.location].filter(Boolean).join(" · ")}
+                  {isUpcoming ? (
+                    <div className="mt-3">
+                      {trackLine ? (
+                        <div className="truncate text-sm text-white/70">
+                          {trackLine}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 text-xs text-white/60">
+                        {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
                       </div>
-                    ) : null}
-                    <div className="mt-2 text-xs text-white/60">
-                      {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
                     </div>
-                  </div>
+                  ) : null}
                 </div>
               </div>
             </div>
+              );
+            })()
           ))
         )}
       </div>
     </Container>
   );
 }
-

@@ -19,7 +19,8 @@ const sub = [
   { key: "drivers", label: "Fahrer" },
   { key: "results", label: "Ergebnisse" },
   { key: "standings", label: "WM Stand" },
-  { key: "calendar", label: "Rennkalender" }
+  { key: "calendar", label: "Rennkalender" },
+  { key: "archive", label: "Archiv" }
 ] as const;
 
 type SubKey = (typeof sub)[number]["key"];
