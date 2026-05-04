@@ -12,12 +12,6 @@ const leagueEnum: Record<string, League> = {
   "mrl-rookie": League.ROOKIE
 };
 
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
-
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
@@ -102,30 +96,13 @@ export default async function TeamDetailPage({
       ? `Saison ${fallbackParticipation.season.year} · Season ${fallbackParticipation.season.seasonNo}${fallbackParticipation.season.isTest ? " · TEST" : ""}`
       : null;
 
+  const driverTiles: Array<(typeof drivers)[number] | null> = [
+    drivers[0] ?? null,
+    drivers[1] ?? null
+  ];
+
   return (
     <>
-      <Container>
-        <div className="mt-10">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-2xl font-extrabold">
-                {team.name}
-              </div>
-              <div className="mt-2 text-sm text-white/70">
-                {leagueLabel[l]}
-                {seasonLabel ? ` · ${seasonLabel}` : ""}
-              </div>
-            </div>
-            <Link
-              href={`/${league}/teams`}
-              className="rounded-lg border border-white/15 bg-black/20 px-4 py-2 text-sm font-semibold text-white hover:bg-black/30"
-            >
-              Zurück zu Teams
-            </Link>
-          </div>
-        </div>
-      </Container>
-
       <div
         className="relative left-1/2 right-1/2 -mx-[50vw] mt-6 w-screen overflow-hidden bg-black/30"
         style={{ backgroundImage: heroBg(color) }}
@@ -134,6 +111,15 @@ export default async function TeamDetailPage({
           <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
           <div className="absolute inset-0">
             <div className="absolute left-0 top-0 h-full w-[55%] bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
+          </div>
+
+          <div className="absolute left-4 top-4 z-10 sm:left-6 sm:top-6">
+            <Link
+              href={`/${league}/teams`}
+              className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-black/35 hover:text-white"
+            >
+              ← Teams
+            </Link>
           </div>
 
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-24 sm:pb-28">
@@ -150,28 +136,30 @@ export default async function TeamDetailPage({
             )}
           </div>
 
-          <div className="absolute inset-0 flex items-end pb-8">
+          <div className="absolute inset-x-0 bottom-0 pb-8">
             <Container>
-              <div className="min-w-0">
-                <div className="flex items-center gap-4">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt=""
-                      className="h-14 w-14 rounded-2xl bg-black/30 object-contain"
-                    />
-                  ) : (
-                    <div className="h-14 w-14 rounded-2xl bg-black/30" />
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate text-3xl font-extrabold tracking-tight text-white">
-                      {team.name}
-                    </div>
-                    <div className="mt-2 text-sm text-white/70">
-                      {leagueLabel[l]}
-                    </div>
+              <div className="flex flex-col items-center gap-4">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt=""
+                    className="h-12 w-12 rounded-2xl bg-black/25 object-contain"
+                  />
+                ) : null}
+
+                <div className="flex w-full items-center justify-center gap-4">
+                  <div className="h-[6px] w-[22%] max-w-[240px] bg-gradient-to-r from-transparent via-white/70 to-white/70" />
+                  <div className="px-2 text-center text-3xl font-extrabold uppercase tracking-wide text-white sm:text-4xl">
+                    {team.name}
                   </div>
+                  <div className="h-[6px] w-[22%] max-w-[240px] bg-gradient-to-l from-transparent via-white/70 to-white/70" />
                 </div>
+
+                {seasonLabel ? (
+                  <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                    {seasonLabel}
+                  </div>
+                ) : null}
               </div>
             </Container>
           </div>
@@ -179,32 +167,46 @@ export default async function TeamDetailPage({
       </div>
 
       <Container>
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-base font-semibold">Fahrer</div>
-          <div className="mt-4 space-y-2">
-            {drivers.length === 0 ? (
-              <div className="text-sm text-white/60">
-                Noch keine Fahrer zugeordnet.
-              </div>
-            ) : (
-              drivers.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-                >
+        <div className="mt-10">
+          <div className="text-lg font-extrabold uppercase tracking-wider">
+            Drivers
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          {driverTiles.map((d, idx) => (
+            <div
+              key={d?.id ?? `empty-${idx}`}
+              className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+              style={{ backgroundImage: heroBg(color) }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/60" />
+              <div className="absolute left-0 top-0 h-full w-[55%] bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
+
+              <div className="relative p-6">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate font-semibold">
-                      {d.number ? `#${d.number} ` : ""}
-                      {d.name}
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                      {team.name}
                     </div>
-                    <div className="mt-1 text-sm text-white/60">
-                      {d.country ?? ""}
+                    <div className="mt-2 text-2xl font-extrabold leading-tight text-white">
+                      {d ? d.name : "TBA"}
+                    </div>
+                    <div className="mt-2 text-sm text-white/70">
+                      {d?.country ?? ""}
                     </div>
                   </div>
+                  <div className="text-3xl font-extrabold text-white/85">
+                    {d?.number ?? "—"}
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
+
+                <div className="pointer-events-none absolute bottom-0 right-0 h-[78%] w-[54%] opacity-20">
+                  <div className="absolute inset-0 bg-gradient-to-l from-white/70 to-transparent" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </Container>
     </>
