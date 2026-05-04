@@ -25,6 +25,7 @@ function extFromMime(mime: string) {
   if (mime === "image/jpeg") return "jpg";
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
+  if (mime === "image/svg+xml") return "svg";
   return null;
 }
 
@@ -445,7 +446,7 @@ export default async function AdminTeamsPage({
               <input
                 name="logo"
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               />
             </div>
@@ -539,7 +540,7 @@ export default async function AdminTeamsPage({
                     <input
                       name="logo"
                       type="file"
-                      accept="image/png,image/jpeg,image/webp"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
                       className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                     />
                   </div>

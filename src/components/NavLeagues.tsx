@@ -385,6 +385,7 @@ export function NavLeagues() {
                                           alt=""
                                           width={40}
                                           height={40}
+                                          unoptimized
                                           className="h-10 w-10 rounded-2xl bg-black/20 object-contain"
                                         />
                                       ) : (

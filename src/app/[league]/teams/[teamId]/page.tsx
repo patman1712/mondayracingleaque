@@ -223,6 +223,7 @@ export default async function TeamDetailPage({
                           alt=""
                           width={40}
                           height={40}
+                        unoptimized
                           className="hidden rounded-xl bg-black/25 object-contain sm:block"
                         />
                       ) : null}

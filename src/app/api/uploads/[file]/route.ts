@@ -14,6 +14,7 @@ function contentTypeFromExt(ext: string) {
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".png") return "image/png";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".svg") return "image/svg+xml";
   return "application/octet-stream";
 }
 
@@ -60,6 +61,7 @@ export async function GET(
       "content-type": contentTypeFromExt(ext),
       "content-length": String(stat.size),
       etag,
+      "x-content-type-options": "nosniff",
       "cache-control": cacheControlForFile(file)
     }
   });

@@ -165,6 +165,7 @@ export default async function LeagueTeamsPage({
                       alt=""
                       width={48}
                       height={48}
+                      unoptimized
                       className="h-12 w-12 rounded-2xl bg-black/20 object-contain"
                     />
                   ) : (
