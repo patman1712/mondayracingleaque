@@ -29,7 +29,8 @@ ensureDir(path.join(process.cwd(), "data"));
 const prisma = prismaBin();
 const cmd = process.argv[2] ?? "generate";
 
-const args = cmd === "push" ? ["db", "push"] : ["generate"];
+const args =
+  cmd === "push" ? ["db", "push", "--accept-data-loss"] : ["generate"];
 const res = spawnSync(prisma, args, {
   stdio: "inherit",
   env: process.env

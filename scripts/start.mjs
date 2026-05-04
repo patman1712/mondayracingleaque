@@ -39,7 +39,7 @@ const next = nextBin();
 
 const cmd = process.argv[2] ?? "start";
 
-const push = spawnSync(prisma, ["db", "push"], {
+const push = spawnSync(prisma, ["db", "push", "--accept-data-loss"], {
   stdio: "inherit",
   env: process.env
 });
