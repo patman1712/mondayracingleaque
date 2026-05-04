@@ -216,16 +216,18 @@ export default async function TeamDetailPage({
               <Container>
                 <div className="relative z-10 -mt-1 sm:-mt-2">
                   <div className="flex items-center justify-center gap-4">
-                    <div className="flex min-w-0 items-center justify-center gap-3">
+                    <div className="min-w-0">
                       {logoUrl ? (
-                        <Image
-                          src={logoUrl}
-                          alt=""
-                          width={40}
-                          height={40}
-                        unoptimized
-                          className="hidden rounded-xl bg-black/25 object-contain sm:block"
-                        />
+                        <div className="flex justify-center">
+                          <Image
+                            src={logoUrl}
+                            alt=""
+                            width={96}
+                            height={96}
+                            unoptimized
+                            className="mb-2 h-10 w-10 bg-black/25 object-contain sm:h-12 sm:w-12 lg:h-14 lg:w-14"
+                          />
+                        </div>
                       ) : null}
                       <div className="truncate text-center text-2xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
                         {team.name}
