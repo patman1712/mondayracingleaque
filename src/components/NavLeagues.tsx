@@ -358,7 +358,10 @@ export function NavLeagues() {
                                   className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                                   style={{ backgroundImage: teamBg(t.color) }}
                                 >
-                                  <div className="absolute inset-0 opacity-30" style={f1Dots()} />
+                                  <div
+                                    className="absolute inset-0 opacity-25"
+                                    style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                                  />
                                   <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
                                   <div
                                     className="absolute left-0 top-0 h-[6px] w-full"

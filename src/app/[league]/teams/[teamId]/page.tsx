@@ -146,7 +146,10 @@ export default async function TeamDetailPage({
                 className="absolute inset-0 h-full w-full object-cover object-center opacity-95"
               />
             ) : null}
-            <div className="absolute inset-0 opacity-35" style={f1Dots()} />
+            <div
+              className="absolute inset-0 opacity-30"
+              style={{ ...f1Dots(), clipPath: "polygon(0 0, 78% 0, 52% 100%, 0 100%)" }}
+            />
             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/65" />
 
             <div className="absolute left-4 top-4 z-10 sm:left-6 sm:top-6">
@@ -180,31 +183,52 @@ export default async function TeamDetailPage({
                 backgroundImage: `linear-gradient(90deg, ${hexToRgba(accent, 0.95)}, ${hexToRgba(accent, 0.65)}, transparent)`
               }}
             />
-            <div className="relative bg-white py-4 sm:py-5">
+            <div className="relative py-5 sm:py-6">
+              <div className="absolute inset-0 bg-gradient-to-b from-black/55 to-black/80" />
               <div className="absolute inset-0">
-                <div className="absolute left-0 top-0 h-full w-[120px] bg-white" style={{ clipPath: "polygon(0 0, 100% 0, 78% 100%, 0 100%)" }} />
-                <div className="absolute right-0 top-0 h-full w-[120px] bg-white" style={{ clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)" }} />
+                <div
+                  className="absolute left-0 top-1/2 h-[12px] w-[30%] -translate-y-1/2 bg-white"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute left-0 top-1/2 h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 94% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute right-0 top-1/2 h-[12px] w-[30%] -translate-y-1/2 bg-white"
+                  style={{ clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute right-0 top-1/2 h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90"
+                  style={{ clipPath: "polygon(6% 0, 100% 0, 100% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute left-1/2 top-1/2 h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95"
+                  style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute left-1/2 top-1/2 h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95"
+                  style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
+                />
               </div>
               <Container>
                 <div className="flex items-center justify-center gap-4">
-                  <div className="hidden h-[10px] w-[220px] bg-white sm:block" style={{ clipPath: "polygon(0 0, 92% 0, 100% 100%, 0 100%)" }} />
                   <div className="flex min-w-0 items-center justify-center gap-3">
                     {logoUrl ? (
                       <img
                         src={logoUrl}
                         alt=""
-                        className="hidden h-10 w-10 rounded-xl bg-black/5 object-contain sm:block"
+                        className="hidden h-10 w-10 rounded-xl bg-black/25 object-contain sm:block"
                       />
                     ) : null}
-                    <div className="truncate text-center text-3xl font-extrabold uppercase tracking-wide text-black sm:text-4xl lg:text-5xl">
+                    <div className="truncate text-center text-3xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
                       {team.name}
                     </div>
                   </div>
-                  <div className="hidden h-[10px] w-[220px] bg-white sm:block" style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 8% 100%)" }} />
                 </div>
 
                 {heroNames.length ? (
-                  <div className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-black/60 sm:text-xs">
+                  <div className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:text-xs">
                     {heroNames.join(" · ")}
                   </div>
                 ) : null}
@@ -238,7 +262,10 @@ export default async function TeamDetailPage({
               className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
               style={{ backgroundImage: heroBg(color) }}
             >
-              <div className="absolute inset-0 opacity-30" style={f1Dots()} />
+              <div
+                className="absolute inset-0 opacity-25"
+                style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+              />
               <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/75" />
               <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
 
