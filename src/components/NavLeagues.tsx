@@ -153,7 +153,7 @@ export function NavLeagues() {
 
   function scheduleClose() {
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setOpen(null), 120);
+    closeTimer.current = window.setTimeout(() => setOpen(null), 240);
   }
 
   function cancelClose() {
@@ -167,7 +167,7 @@ export function NavLeagues() {
         const isOpen = open === l.slug;
         const schedule = scheduleByLeague[l.slug];
         const accent = schedule?.accent ?? l.accent;
-        const wide = isOpen && (active === "calendar" || active === "teams");
+        const wide = isOpen;
         const teams = teamsByLeague[l.slug]?.teams ?? [];
 
         return (
@@ -192,16 +192,20 @@ export function NavLeagues() {
 
             <div
               className={[
-                "absolute left-1/2 top-full mt-3 -translate-x-1/2 transition",
-                wide ? "w-[980px]" : "w-[360px]",
+                "absolute left-1/2 top-full mt-2 -translate-x-1/2 transition",
+                "z-50",
                 isOpen
                   ? "pointer-events-auto translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-1 opacity-0"
               ].join(" ")}
+              style={{ width: "min(980px, calc(100vw - 32px))" }}
               onMouseEnter={() => cancelClose()}
               onMouseLeave={() => scheduleClose()}
             >
-              <div className="rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl">
+              <div
+                className="max-h-[70vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl"
+                style={{ scrollbarGutter: "stable" }}
+              >
                 <div className="flex items-center justify-between px-2 py-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                     {l.label}
@@ -212,7 +216,7 @@ export function NavLeagues() {
                   />
                 </div>
 
-                <div className={wide ? "grid gap-3 p-2 md:grid-cols-[240px_1fr]" : "grid gap-2 p-2"}>
+                <div className="grid gap-3 p-2 md:grid-cols-[240px_1fr]">
                   <div className="grid gap-2">
                     {sub.map((s) => {
                       const isActive = active === s.key;
@@ -373,29 +377,24 @@ export function NavLeagues() {
                                   />
 
                                   <div className="relative p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/90 group-hover:text-white">
-                                          {t.name}
-                                        </div>
-                                      </div>
+                                    <div className="flex items-start justify-end">
                                       {t.logoUrl ? (
                                         <Image
                                           src={t.logoUrl}
                                           alt=""
-                                          width={40}
-                                          height={40}
+                                          width={44}
+                                          height={44}
                                           unoptimized
-                                          className="h-10 w-10 rounded-2xl bg-black/20 object-contain"
+                                          className="h-10 w-10 bg-black/20 object-contain"
                                         />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-2xl bg-black/20" />
+                                        <div className="h-10 w-10 bg-black/20" />
                                       )}
                                     </div>
 
-                                    <div className="mt-4 relative h-[88px] overflow-hidden">
+                                    <div className="mt-2 relative h-[92px] overflow-hidden">
                                       {t.carUrl ? (
-                                        <div className="absolute inset-x-0 bottom-0 mx-auto h-[102px] w-full">
+                                        <div className="absolute inset-x-0 bottom-0 mx-auto h-[104px] w-full">
                                           <Image
                                             src={t.carUrl}
                                             alt=""
@@ -406,10 +405,14 @@ export function NavLeagues() {
                                           />
                                         </div>
                                       ) : (
-                                        <div className="flex h-[88px] w-full items-center justify-center text-[11px] font-semibold text-white/35">
+                                        <div className="flex h-[92px] w-full items-center justify-center text-[11px] font-semibold text-white/35">
                                           CAR
                                         </div>
                                       )}
+                                    </div>
+
+                                    <div className="mt-3 truncate text-center text-sm font-extrabold uppercase tracking-wide text-white/90 group-hover:text-white">
+                                      {t.name}
                                     </div>
                                   </div>
                                 </Link>
@@ -426,6 +429,171 @@ export function NavLeagues() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+export function MobileNavLeagues({
+  onNavigate
+}: {
+  onNavigate?: () => void;
+}) {
+  const [league, setLeague] = useState<League["slug"] | null>(null);
+  const [active, setActive] = useState<SubKey>("drivers");
+  const [scheduleByLeague, setScheduleByLeague] = useState<
+    Partial<Record<League["slug"], LeagueSchedule>>
+  >({});
+  const [teamsByLeague, setTeamsByLeague] = useState<
+    Partial<Record<League["slug"], LeagueTeams>>
+  >({});
+  const [loadingLeague, setLoadingLeague] = useState<League["slug"] | null>(null);
+
+  useEffect(() => {
+    if (!league) return;
+    if (active !== "calendar") return;
+    if (scheduleByLeague[league]) return;
+    if (loadingLeague === league) return;
+
+    setLoadingLeague(league);
+    fetch(`/api/league/schedule?league=${encodeURIComponent(league)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: LeagueSchedule) => {
+        setScheduleByLeague((prev) => ({ ...prev, [league]: data }));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingLeague(null));
+  }, [league, active, scheduleByLeague, loadingLeague]);
+
+  useEffect(() => {
+    if (!league) return;
+    if (active !== "teams") return;
+    if (teamsByLeague[league]) return;
+    if (loadingLeague === league) return;
+
+    setLoadingLeague(league);
+    fetch(`/api/league/teams?league=${encodeURIComponent(league)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: LeagueTeams) => {
+        setTeamsByLeague((prev) => ({ ...prev, [league]: data }));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingLeague(null));
+  }, [league, active, teamsByLeague, loadingLeague]);
+
+  const selected = leagues.find((l) => l.slug === league) ?? null;
+  const accent = selected ? (scheduleByLeague[selected.slug]?.accent ?? selected.accent) : "rgba(225,6,0,1)";
+
+  if (!selected) {
+    return (
+      <div className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+          Ligen
+        </div>
+        <div className="grid gap-2">
+          {leagues.map((l) => (
+            <button
+              key={l.slug}
+              type="button"
+              onClick={() => {
+                setLeague(l.slug);
+                setActive("drivers");
+              }}
+              className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-semibold text-white/85 hover:bg-white/10"
+            >
+              <span>{l.label}</span>
+              <span className="text-white/50">→</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+          onClick={() => setLeague(null)}
+        >
+          ← Zurück
+        </button>
+        <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+          {selected.label}
+        </div>
+        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent }} />
+      </div>
+
+      <div className="grid gap-2">
+        {sub.map((s) => (
+          <Link
+            key={s.key}
+            href={`/${selected.slug}/${s.key}`}
+            onClick={() => onNavigate?.()}
+            className={[
+              "group rounded-xl border border-white/10 px-4 py-3 transition",
+              active === s.key ? "bg-white/10" : "bg-white/5 hover:bg-white/10"
+            ].join(" ")}
+            style={{ ["--accent" as unknown as string]: accent }}
+            onMouseEnter={() => setActive(s.key)}
+            onFocus={() => setActive(s.key)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-white/85 transition group-hover:text-white">
+                {s.label}
+              </div>
+              <div className="text-white/50 transition group-hover:text-white" style={{ color: "var(--accent)" }}>
+                →
+              </div>
+            </div>
+            <div
+              className="mt-2 h-[2px] w-full rounded-full bg-white/10"
+              style={{
+                background: "linear-gradient(90deg, var(--accent), rgba(255,255,255,0.06))"
+              }}
+            />
+          </Link>
+        ))}
+      </div>
+
+      {active === "teams" ? (
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+              Teams
+            </div>
+            <Link
+              href={`/${selected.slug}/teams`}
+              onClick={() => onNavigate?.()}
+              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+            >
+              Alle Teams
+            </Link>
+          </div>
+          <div className="mt-3 text-sm text-white/70">
+            {loadingLeague === selected.slug && !teamsByLeague[selected.slug] ? "Lädt..." : `${teamsByLeague[selected.slug]?.teams.length ?? 0} Teams`}
+          </div>
+        </div>
+      ) : active === "calendar" ? (
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+              Rennkalender
+            </div>
+            <Link
+              href={`/${selected.slug}/calendar`}
+              onClick={() => onNavigate?.()}
+              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+            >
+              Öffnen
+            </Link>
+          </div>
+          <div className="mt-3 text-sm text-white/70">
+            {loadingLeague === selected.slug && !scheduleByLeague[selected.slug] ? "Lädt..." : "Übersicht öffnen"}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,12 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Container } from "./Container";
-import { NavLeagues } from "./NavLeagues";
+import { MobileNavLeagues, NavLeagues } from "./NavLeagues";
 
 export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
 
   return (
     <header
@@ -43,14 +58,66 @@ export function Header() {
             <NavLeagues />
           </div>
 
-          <Link
-            href="/admin"
-            className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
-          >
-            Admin
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 md:hidden"
+              onClick={() => setMobileOpen(true)}
+            >
+              Menü
+            </button>
+            <Link
+              href="/admin"
+              className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
+            >
+              Admin
+            </Link>
+          </div>
         </div>
       </Container>
+
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-[100] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="absolute inset-y-0 right-0 w-[min(420px,100vw)] overflow-y-auto border-l border-white/10 bg-[#0B0D10] p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Menü</div>
+              <button
+                type="button"
+                className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                onClick={() => setMobileOpen(false)}
+              >
+                Schließen
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              <Link
+                href="/news"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
+              >
+                News
+              </Link>
+              <Link
+                href="/calendar"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
+              >
+                Kalender
+              </Link>
+            </div>
+
+            <div className="mt-6">
+              <MobileNavLeagues onNavigate={() => setMobileOpen(false)} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }
