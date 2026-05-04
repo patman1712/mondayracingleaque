@@ -335,7 +335,7 @@ export function NavLeagues() {
                             </Link>
                           </div>
 
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {teams.length === 0 ? (
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60 sm:col-span-2 lg:col-span-4">
                                 {loadingLeague === l.slug ? "Lädt..." : "Noch keine Teams"}
@@ -344,11 +344,11 @@ export function NavLeagues() {
                               teams.slice(0, 8).map((t) => (
                                 <Link
                                   key={t.id}
-                                  href={`/${l.slug}/teams`}
+                                  href={`/${l.slug}/teams/${t.id}`}
                                   className="group overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                                   style={{ backgroundImage: teamBg(t.color) }}
                                 >
-                                  <div className="p-3">
+                                  <div className="p-4">
                                     <div className="flex items-center justify-between gap-3">
                                       <div className="min-w-0">
                                         <div className="truncate text-sm font-semibold text-white/85 group-hover:text-white">
@@ -359,18 +359,18 @@ export function NavLeagues() {
                                         <img
                                           src={t.logoUrl}
                                           alt=""
-                                          className="h-9 w-9 rounded-lg bg-black/20 object-contain"
+                                          className="h-10 w-10 rounded-xl bg-black/20 object-contain"
                                         />
                                       ) : (
-                                        <div className="h-9 w-9 rounded-lg bg-black/20" />
+                                        <div className="h-10 w-10 rounded-xl bg-black/20" />
                                       )}
                                     </div>
-                                    <div className="mt-3 h-[58px] overflow-hidden rounded-xl bg-black/20">
+                                    <div className="mt-4 h-[78px] overflow-hidden rounded-2xl bg-black/20">
                                       {t.carUrl ? (
                                         <img
                                           src={t.carUrl}
                                           alt=""
-                                          className="h-full w-full object-contain"
+                                          className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.02]"
                                         />
                                       ) : (
                                         <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-white/35">

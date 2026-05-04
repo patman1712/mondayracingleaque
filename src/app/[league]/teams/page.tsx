@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import { League } from "@prisma/client";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -116,30 +117,24 @@ export default async function LeagueTeamsPage({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {teams.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60 sm:col-span-2 lg:col-span-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60 sm:col-span-2 lg:col-span-3">
             Noch keine Teams.
           </div>
         ) : (
           teams.map((t) => (
-            <div
+            <Link
               key={t.id}
-              className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+              href={`/${league}/teams/${t.id}`}
+              className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-black/30"
               style={{ backgroundImage: teamBg(t.color) }}
             >
-              <div className="p-4">
+              <div className="p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-white/90">
+                    <div className="truncate text-base font-semibold text-white/90">
                       {t.name}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
-                      <div
-                        className="h-2.5 w-2.5 rounded"
-                        style={{ backgroundColor: t.color ?? "rgba(255,255,255,0.2)" }}
-                      />
-                      <div className="truncate">{t.color ?? "—"}</div>
                     </div>
                   </div>
 
@@ -147,10 +142,10 @@ export default async function LeagueTeamsPage({
                     <img
                       src={imageUrl(t.logoPath) ?? ""}
                       alt=""
-                      className="h-10 w-10 rounded-lg bg-black/20 object-contain"
+                      className="h-11 w-11 rounded-xl bg-black/20 object-contain"
                     />
                   ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black/20 text-xs font-extrabold text-white/50">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/20 text-xs font-extrabold text-white/50">
                       {t.name
                         .split(" ")
                         .filter(Boolean)
@@ -161,12 +156,12 @@ export default async function LeagueTeamsPage({
                   )}
                 </div>
 
-                <div className="mt-4 h-[74px] overflow-hidden rounded-xl bg-black/20">
+                <div className="mt-5 h-[110px] overflow-hidden rounded-2xl bg-black/20">
                   {t.carPath ? (
                     <img
                       src={imageUrl(t.carPath) ?? ""}
                       alt=""
-                      className="h-full w-full object-contain"
+                      className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.02]"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
@@ -175,11 +170,10 @@ export default async function LeagueTeamsPage({
                   )}
                 </div>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </div>
     </Container>
   );
 }
-
