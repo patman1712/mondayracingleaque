@@ -57,18 +57,25 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
         let title = l.nextRace ? l.nextRace.name : "";
         let place = "";
         if (l.nextRace) {
-          const circuit = l.nextRace.circuit ?? "";
-          const location = l.nextRace.location ?? "";
+          const rawCircuit = (l.nextRace.circuit ?? "").trim();
+          const rawLocation = (l.nextRace.location ?? "").trim();
+          const circuit = rawCircuit.replace(/\s*[-–—]\s*$/, "").trim();
+          const location = rawLocation.replace(/\s*[-–—]\s*$/, "").trim();
           place = [circuit, location].filter(Boolean).join(" · ");
 
-          if (circuit && title.includes("·")) {
-            const parts = title.split("·").map((p) => p.trim()).filter(Boolean);
+          const parts = title
+            .split("·")
+            .map((p) => p.trim())
+            .filter(Boolean);
+          const roundIdx = parts.findIndex((p) => /^R\d+$/i.test(p));
+          if (roundIdx !== -1) {
+            title = parts.slice(0, roundIdx + 1).join(" · ");
+          } else if (circuit && parts.length > 1) {
             const last = parts[parts.length - 1] ?? "";
-            if (parts.length > 1 && last.includes(circuit)) {
+            if (last.includes(circuit)) {
               title = parts.slice(0, -1).join(" · ");
             }
           }
-          if (!title) title = l.nextRace.name;
         }
 
         return (
