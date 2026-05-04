@@ -58,6 +58,15 @@ function parseStartsAt(raw: string) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function formatDateTimeLocal(d: Date) {
+  const yyyy = String(d.getFullYear()).padStart(4, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
 function dataRootDir() {
   const railwayMount = "/app/data";
   if (fs.existsSync(railwayMount)) return railwayMount;
@@ -110,8 +119,8 @@ async function createRace(
   if (location) returnQuery.set("location", location);
   if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
 
-  const season = Number(seasonRaw);
-  const round = Number(roundRaw);
+  const season = Number.parseInt(seasonRaw, 10);
+  const round = Number.parseInt(roundRaw, 10);
 
   if (!Number.isFinite(season) || !Number.isFinite(round) || !name) {
     returnQuery.set("error", "invalid");
@@ -127,6 +136,7 @@ async function createRace(
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
+  returnQuery.set("startsAt", formatDateTimeLocal(startsAt));
 
   try {
     const created = await prisma.race.create({
@@ -265,13 +275,14 @@ export default async function AdminRacesPage({
   const sp = await searchParams;
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
+  const startsAtDefault = sp.startsAt ? parseStartsAt(sp.startsAt) : null;
   const defaults = {
     season: sp.season ?? "",
     round: sp.round ?? "",
     name: sp.name ?? "",
     circuit: sp.circuit ?? "",
     location: sp.location ?? "",
-    startsAt: sp.startsAt ?? ""
+    startsAt: startsAtDefault ? formatDateTimeLocal(startsAtDefault) : ""
   };
 
   const { league } = await params;
@@ -331,7 +342,9 @@ export default async function AdminRacesPage({
             </label>
             <input
               name="season"
+              type="number"
               inputMode="numeric"
+              step={1}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               placeholder="2026"
               defaultValue={defaults.season}
@@ -343,7 +356,9 @@ export default async function AdminRacesPage({
             </label>
             <input
               name="round"
+              type="number"
               inputMode="numeric"
+              step={1}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               placeholder="1"
               defaultValue={defaults.round}
@@ -386,13 +401,12 @@ export default async function AdminRacesPage({
             </label>
             <input
               name="startsAt"
-              type="text"
+              type="datetime-local"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="04.05.2026, 12:30"
               defaultValue={defaults.startsAt}
             />
             <div className="mt-1 text-xs text-white/60">
-              Formate: 04.05.2026, 12:30 oder 2026-05-04 12:30
+              Datum & Uhrzeit bitte über den Picker auswählen.
             </div>
           </div>
           <div className="md:col-span-2">
