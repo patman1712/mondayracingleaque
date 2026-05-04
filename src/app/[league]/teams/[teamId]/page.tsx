@@ -63,7 +63,7 @@ export default async function TeamDetailPage({
     ? await prisma.teamSeason
         .findFirst({
           where: { teamId: team.id, seasonId: currentSeason.id },
-          select: { color: true, carImagePath: true }
+          select: { color: true, carImagePath: true, heroBackgroundPath: true }
         })
         .catch(() => null)
     : null;
@@ -73,13 +73,21 @@ export default async function TeamDetailPage({
         .findFirst({
           where: { teamId: team.id, season: { league: l } },
           orderBy: [{ season: { year: "desc" } }, { season: { seasonNo: "desc" } }, { season: { isTest: "asc" } }],
-          select: { color: true, carImagePath: true, season: { select: { year: true, seasonNo: true, isTest: true } } }
+          select: {
+            color: true,
+            carImagePath: true,
+            heroBackgroundPath: true,
+            season: { select: { year: true, seasonNo: true, isTest: true } }
+          }
         })
         .catch(() => null)
     : null;
 
   const color = participation?.color ?? team.color ?? fallbackParticipation?.color ?? null;
   const carUrl = imageUrl(participation?.carImagePath ?? fallbackParticipation?.carImagePath ?? null);
+  const heroBackgroundUrl = imageUrl(
+    participation?.heroBackgroundPath ?? fallbackParticipation?.heroBackgroundPath ?? null
+  );
   const logoUrl = imageUrl(team.logoPath);
 
   const drivers = await prisma.driver
@@ -108,6 +116,13 @@ export default async function TeamDetailPage({
         style={{ backgroundImage: heroBg(color) }}
       >
         <div className="relative h-[46vh] min-h-[360px] max-h-[760px] sm:h-[56vh]">
+          {heroBackgroundUrl ? (
+            <img
+              src={heroBackgroundUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover object-center opacity-85"
+            />
+          ) : null}
           <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
           <div className="absolute inset-0">
             <div className="absolute left-0 top-0 h-full w-[55%] bg-gradient-to-r from-black/55 via-black/20 to-transparent" />

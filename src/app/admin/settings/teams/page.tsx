@@ -48,6 +48,22 @@ const leagueLabel: Record<League, string> = {
   [League.ROOKIE]: "MRL Rookie"
 };
 
+const publicSlug: Record<League, string> = {
+  [League.ONE]: "mrl-one",
+  [League.TWO]: "mrl-two",
+  [League.ROOKIE]: "mrl-rookie"
+};
+
+async function revalidatePublicTeamsForSeason(seasonId: string, teamId?: string) {
+  const s = await prisma.season
+    .findUnique({ where: { id: seasonId }, select: { league: true } })
+    .catch(() => null);
+  if (!s) return;
+  const slug = publicSlug[s.league];
+  revalidatePath(`/${slug}/teams`);
+  if (teamId) revalidatePath(`/${slug}/teams/${teamId}`);
+}
+
 async function createTeam(formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
@@ -110,6 +126,7 @@ async function addParticipation(formData: FormData) {
   const seasonId = String(formData.get("seasonId") ?? "");
   const color = String(formData.get("color") ?? "").trim();
   const car = formData.get("car");
+  const heroBackground = formData.get("heroBackground");
 
   if (!teamId || !seasonId) redirect("/admin/settings/teams?error=invalid");
 
@@ -123,18 +140,30 @@ async function addParticipation(formData: FormData) {
     carImagePath = fileName;
   }
 
+  let heroBackgroundPath: string | null = null;
+  if (heroBackground instanceof File && heroBackground.size > 0) {
+    if (heroBackground.size > 8_000_000) redirect("/admin/settings/teams?error=image");
+    const ext = extFromMime(heroBackground.type);
+    if (!ext) redirect("/admin/settings/teams?error=image");
+    const fileName = `team-hero-${teamId}-${seasonId}-${Date.now()}.${ext}`;
+    await writeUpload(fileName, heroBackground);
+    heroBackgroundPath = fileName;
+  }
+
   await prisma.teamSeason
     .create({
       data: {
         teamId,
         seasonId,
         color: color || null,
-        carImagePath
+        carImagePath,
+        heroBackgroundPath
       }
     })
     .catch(() => redirect("/admin/settings/teams?error=duplicate"));
 
   revalidatePath("/admin/settings/teams");
+  await revalidatePublicTeamsForSeason(seasonId, teamId);
   redirect("/admin/settings/teams?ok=1");
 }
 
@@ -143,9 +172,13 @@ async function updateParticipation(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const color = String(formData.get("color") ?? "").trim();
   const car = formData.get("car");
+  const heroBackground = formData.get("heroBackground");
   if (!id) return;
 
-  const current = await prisma.teamSeason.findUnique({ where: { id }, select: { teamId: true, seasonId: true, carImagePath: true } }).catch(() => null);
+  const current = await prisma.teamSeason.findUnique({
+    where: { id },
+    select: { teamId: true, seasonId: true, carImagePath: true, heroBackgroundPath: true }
+  }).catch(() => null);
   if (!current) redirect("/admin/settings/teams?error=invalid");
 
   let carImagePath: string | null | undefined = undefined;
@@ -164,15 +197,33 @@ async function updateParticipation(formData: FormData) {
     }
   }
 
+  let heroBackgroundPath: string | null | undefined = undefined;
+  if (heroBackground instanceof File && heroBackground.size > 0) {
+    if (heroBackground.size > 8_000_000) redirect("/admin/settings/teams?error=image");
+    const ext = extFromMime(heroBackground.type);
+    if (!ext) redirect("/admin/settings/teams?error=image");
+    const fileName = `team-hero-${current.teamId}-${current.seasonId}-${Date.now()}.${ext}`;
+    await writeUpload(fileName, heroBackground);
+    heroBackgroundPath = fileName;
+    if (current.heroBackgroundPath) {
+      const abs = path.join(dataRootDir(), "uploads", current.heroBackgroundPath);
+      try {
+        fs.unlinkSync(abs);
+      } catch {}
+    }
+  }
+
   await prisma.teamSeason.update({
     where: { id },
     data: {
       color: color || null,
-      ...(carImagePath !== undefined ? { carImagePath } : {})
+      ...(carImagePath !== undefined ? { carImagePath } : {}),
+      ...(heroBackgroundPath !== undefined ? { heroBackgroundPath } : {})
     }
   });
 
   revalidatePath("/admin/settings/teams");
+  await revalidatePublicTeamsForSeason(current.seasonId, current.teamId);
   redirect("/admin/settings/teams?ok=1");
 }
 
@@ -181,7 +232,10 @@ async function deleteParticipation(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const current = await prisma.teamSeason.findUnique({ where: { id }, select: { carImagePath: true } }).catch(() => null);
+  const current = await prisma.teamSeason.findUnique({
+    where: { id },
+    select: { teamId: true, seasonId: true, carImagePath: true, heroBackgroundPath: true }
+  }).catch(() => null);
   await prisma.teamSeason.delete({ where: { id } }).catch(() => null);
 
   if (current?.carImagePath) {
@@ -190,8 +244,15 @@ async function deleteParticipation(formData: FormData) {
       fs.unlinkSync(abs);
     } catch {}
   }
+  if (current?.heroBackgroundPath) {
+    const abs = path.join(dataRootDir(), "uploads", current.heroBackgroundPath);
+    try {
+      fs.unlinkSync(abs);
+    } catch {}
+  }
 
   revalidatePath("/admin/settings/teams");
+  if (current) await revalidatePublicTeamsForSeason(current.seasonId, current.teamId);
   redirect("/admin/settings/teams?ok=1");
 }
 
@@ -385,6 +446,17 @@ export default async function AdminTeamsPage({
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                               />
                             </div>
+                            <div className="md:col-span-3">
+                              <label className="mb-1 block text-xs font-semibold text-white/70">
+                                Hero Background (PNG/JPG/WEBP)
+                              </label>
+                              <input
+                                name="heroBackground"
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                              />
+                            </div>
                             <div className="md:col-span-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 {p.carImagePath ? (
@@ -398,6 +470,9 @@ export default async function AdminTeamsPage({
                                 )}
                                 <div className="text-xs text-white/60">
                                   {p.carImagePath ?? "Noch kein Design hochgeladen"}
+                                </div>
+                                <div className="text-xs text-white/60">
+                                  {p.heroBackgroundPath ? "Hero Background gesetzt" : "Kein Hero Background"}
                                 </div>
                               </div>
                               <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
@@ -458,6 +533,17 @@ export default async function AdminTeamsPage({
                           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                         />
                       </div>
+                      <div className="md:col-span-3">
+                        <label className="mb-1 block text-xs font-semibold text-white/70">
+                          Hero Background Upload
+                        </label>
+                        <input
+                          name="heroBackground"
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                        />
+                      </div>
                       <div className="flex items-end">
                         <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
                           Hinzufügen
@@ -474,4 +560,3 @@ export default async function AdminTeamsPage({
     </AdminShell>
   );
 }
-
