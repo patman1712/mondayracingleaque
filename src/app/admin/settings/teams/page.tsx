@@ -115,6 +115,86 @@ async function createTeam(formData: FormData) {
   redirect("/admin/settings/teams?ok=1");
 }
 
+async function revalidatePublicTeam(teamId: string) {
+  const rows = await prisma.teamSeason
+    .findMany({
+      where: { teamId },
+      select: { season: { select: { league: true } } },
+      take: 200
+    })
+    .catch(() => []);
+  const leagues = Array.from(new Set(rows.map((r) => r.season.league)));
+  for (const l of leagues) {
+    const slug = publicSlug[l];
+    revalidatePath(`/${slug}/teams`);
+    revalidatePath(`/${slug}/teams/${teamId}`);
+  }
+}
+
+async function updateTeam(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  const logo = asUploadFile(formData.get("logo"));
+  if (!id) return;
+  if (!name) redirect("/admin/settings/teams?error=invalid");
+
+  const current = await prisma.team.findUnique({ where: { id }, select: { logoPath: true } }).catch(() => null);
+  if (!current) redirect("/admin/settings/teams?error=invalid");
+
+  let logoPath: string | null | undefined = undefined;
+  let newLogoPath: string | null = null;
+  if (logo && logo.size > 0) {
+    if (logo.size > 5_000_000) redirect("/admin/settings/teams?error=image");
+    const ext = extFromMime(logo.type);
+    if (!ext) redirect("/admin/settings/teams?error=image");
+    const fileName = `team-logo-${id}-${Date.now()}.${ext}`;
+    await writeUpload(fileName, logo);
+    logoPath = fileName;
+    newLogoPath = fileName;
+  }
+
+  try {
+    await prisma.team.update({
+      where: { id },
+      data: {
+        name,
+        color: color || null,
+        ...(logoPath !== undefined ? { logoPath } : {})
+      }
+    });
+  } catch (e) {
+    deleteUpload(newLogoPath);
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      redirect("/admin/settings/teams?error=duplicate");
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+      redirect("/admin/settings/teams?error=db");
+    }
+    redirect("/admin/settings/teams?error=save");
+  }
+
+  if (newLogoPath && current.logoPath) deleteUpload(current.logoPath);
+
+  revalidatePath("/admin/settings/teams");
+  await revalidatePublicTeam(id);
+  redirect("/admin/settings/teams?ok=1");
+}
+
+async function removeTeamLogo(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const current = await prisma.team.findUnique({ where: { id }, select: { logoPath: true } }).catch(() => null);
+  if (!current) redirect("/admin/settings/teams?error=invalid");
+  await prisma.team.update({ where: { id }, data: { logoPath: null } }).catch(() => null);
+  if (current.logoPath) deleteUpload(current.logoPath);
+  revalidatePath("/admin/settings/teams");
+  await revalidatePublicTeam(id);
+  redirect("/admin/settings/teams?ok=1");
+}
+
 async function deleteTeam(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
@@ -415,13 +495,70 @@ export default async function AdminTeamsPage({
                     </div>
                   </div>
 
-                  <form action={deleteTeam}>
-                    <input type="hidden" name="id" value={t.id} />
-                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                      Löschen
-                    </button>
-                  </form>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <form action={deleteTeam}>
+                      <input type="hidden" name="id" value={t.id} />
+                      <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                        Löschen
+                      </button>
+                    </form>
+                  </div>
                 </div>
+
+                <form
+                  action={updateTeam}
+                  encType="multipart/form-data"
+                  className="mt-4 grid gap-4 md:grid-cols-3"
+                >
+                  <input type="hidden" name="id" value={t.id} />
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-white/70">
+                      Teamname
+                    </label>
+                    <input
+                      name="name"
+                      defaultValue={t.name}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-white/70">
+                      Teamfarbe
+                    </label>
+                    <input
+                      name="color"
+                      type="color"
+                      defaultValue={t.color ?? "#e10600"}
+                      className="h-10 w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-white/70">
+                      Teamlogo ersetzen (PNG/JPG/WEBP)
+                    </label>
+                    <input
+                      name="logo"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                    />
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    {t.logoPath ? (
+                      <button
+                        formAction={removeTeamLogo}
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                      >
+                        Logo entfernen
+                      </button>
+                    ) : (
+                      <div />
+                    )}
+                    <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                      Speichern
+                    </button>
+                  </div>
+                </form>
 
                 <div className="mt-6">
                   <div className="text-sm font-semibold">Teilnahmen (Liga/Saison)</div>
@@ -468,7 +605,7 @@ export default async function AdminTeamsPage({
                             </div>
                             <div className="md:col-span-2">
                               <label className="mb-1 block text-xs font-semibold text-white/70">
-                                Auto-Design (PNG/JPG/WEBP)
+                                Auto-Design ersetzen (PNG/JPG/WEBP)
                               </label>
                               <input
                                 name="car"
