@@ -171,6 +171,7 @@ async function createRace(
         seasonIsTest,
         round,
         name,
+        circuitId: circuitId || null,
         circuit: circuitNameToSave,
         location: locationToSave,
         startsAt

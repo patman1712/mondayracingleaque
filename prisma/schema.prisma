@@ -45,6 +45,7 @@ model Race {
   seasonIsTest Boolean @default(false)
   round     Int
   name      String
+  circuitId String?
   circuit   String?
   location  String?
   startsAt  DateTime
@@ -52,6 +53,7 @@ model Race {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  circuitRef Circuit? @relation(fields: [circuitId], references: [id], onDelete: SetNull)
   results RaceResult[]
 
   @@unique([league, season, seasonNo, seasonIsTest, round])
@@ -103,8 +105,11 @@ model Circuit {
   id       String @id @default(cuid())
   name     String
   location String?
+  imagePath String?
 
   createdAt DateTime @default(now())
+
+  races Race[]
 
   @@unique([name, location])
 }

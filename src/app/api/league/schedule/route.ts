@@ -31,21 +31,42 @@ export async function GET(req: Request) {
       .findFirst({
         where: { league, seasonIsTest: false, startsAt: { lt: now } },
         orderBy: { startsAt: "desc" },
-        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
+        select: {
+          id: true,
+          name: true,
+          startsAt: true,
+          round: true,
+          imagePath: true,
+          circuitRef: { select: { imagePath: true } }
+        }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
         where: { league, seasonIsTest: false, startsAt: { gt: now } },
         orderBy: { startsAt: "asc" },
-        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
+        select: {
+          id: true,
+          name: true,
+          startsAt: true,
+          round: true,
+          imagePath: true,
+          circuitRef: { select: { imagePath: true } }
+        }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
         where: { league, seasonIsTest: false, startsAt: { lte: now } },
         orderBy: { startsAt: "desc" },
-        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
+        select: {
+          id: true,
+          name: true,
+          startsAt: true,
+          round: true,
+          imagePath: true,
+          circuitRef: { select: { imagePath: true } }
+        }
       })
       .catch(() => null)
   ]);
@@ -65,7 +86,7 @@ export async function GET(req: Request) {
           title: previous.name,
           round: previous.round,
           date: formatDateRange(new Date(previous.startsAt)),
-          imageUrl: imageUrl(previous.imagePath)
+          imageUrl: imageUrl(previous.imagePath || previous.circuitRef?.imagePath)
         }
       : null,
     current: current
@@ -75,7 +96,7 @@ export async function GET(req: Request) {
           round: current.round,
           date: formatDateRange(new Date(current.startsAt)),
           live: true,
-          imageUrl: imageUrl(current.imagePath)
+          imageUrl: imageUrl(current.imagePath || current.circuitRef?.imagePath)
         }
       : null,
     upcoming: upcoming
@@ -84,7 +105,7 @@ export async function GET(req: Request) {
           title: upcoming.name,
           round: upcoming.round,
           date: formatDateRange(new Date(upcoming.startsAt)),
-          imageUrl: imageUrl(upcoming.imagePath)
+          imageUrl: imageUrl(upcoming.imagePath || upcoming.circuitRef?.imagePath)
         }
       : null
   };
