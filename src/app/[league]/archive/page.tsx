@@ -140,12 +140,15 @@ export default async function LeagueArchivePage({
               );
 
               return (
-            <div key={r.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+            <div
+              key={r.id}
+              className="relative min-h-[190px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[210px]"
+            >
               {imageUrl(r.imagePath) ? (
                 <img
                   src={imageUrl(r.imagePath) ?? ""}
                   alt=""
-                  className="absolute right-0 top-0 h-full w-[55%] object-cover opacity-60"
+                  className="absolute inset-0 h-full w-full object-cover object-center opacity-75"
                 />
               ) : null}
 
