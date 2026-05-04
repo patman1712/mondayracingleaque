@@ -1,19 +1,27 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { League } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 async function createSeason(formData: FormData) {
   "use server";
   const yearRaw = String(formData.get("year") ?? "").trim();
+  const seasonNoRaw = String(formData.get("seasonNo") ?? "").trim();
+  const leagueRaw = String(formData.get("league") ?? "").trim();
   const label = String(formData.get("label") ?? "").trim();
   const year = Number.parseInt(yearRaw, 10);
-  if (!Number.isFinite(year)) redirect("/admin/settings/seasons?error=invalid");
+  const seasonNo = Number.parseInt(seasonNoRaw, 10);
+  const league =
+    leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
+  if (!Number.isFinite(year) || !Number.isFinite(seasonNo) || !league) {
+    redirect("/admin/settings/seasons?error=invalid");
+  }
 
   try {
     await prisma.season.create({
-      data: { year, label: label || null }
+      data: { league, year, seasonNo, label: label || null }
     });
   } catch {
     redirect("/admin/settings/seasons?error=duplicate");
@@ -40,8 +48,17 @@ export default async function AdminSeasonsPage({
   const error = sp.error ?? null;
 
   const seasons = await prisma.season
-    .findMany({ orderBy: { year: "desc" }, take: 50 })
+    .findMany({
+      orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { league: "asc" }],
+      take: 200
+    })
     .catch(() => []);
+
+  const leagueLabel: Record<League, string> = {
+    [League.ONE]: "MRL One",
+    [League.TWO]: "MRL Two",
+    [League.ROOKIE]: "MRL Rookie"
+  };
 
   return (
     <AdminShell>
@@ -60,15 +77,29 @@ export default async function AdminSeasonsPage({
           {error ? (
             <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {error === "duplicate"
-                ? "Diese Saison existiert bereits."
-                : "Bitte eine gültige Saison eingeben."}
+                ? "Diese Saison (Liga/Jahr/Season) existiert bereits."
+                : "Bitte Liga, Jahr und Season korrekt eingeben."}
             </div>
           ) : null}
 
-          <form action={createSeason} className="mt-4 grid gap-4 md:grid-cols-3">
+          <form action={createSeason} className="mt-4 grid gap-4 md:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs font-semibold text-white/70">
-                Saison (Jahr)
+                Liga
+              </label>
+              <select
+                name="league"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                defaultValue={League.ONE}
+              >
+                <option value={League.ONE}>MRL One</option>
+                <option value={League.TWO}>MRL Two</option>
+                <option value={League.ROOKIE}>MRL Rookie</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">
+                Jahr
               </label>
               <input
                 name="year"
@@ -79,7 +110,21 @@ export default async function AdminSeasonsPage({
                 placeholder="2026"
               />
             </div>
-            <div className="md:col-span-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">
+                Season
+              </label>
+              <input
+                name="seasonNo"
+                type="number"
+                inputMode="numeric"
+                step={1}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                placeholder="1"
+                defaultValue={1}
+              />
+            </div>
+            <div className="md:col-span-4">
               <label className="mb-1 block text-xs font-semibold text-white/70">
                 Label (optional)
               </label>
@@ -107,7 +152,9 @@ export default async function AdminSeasonsPage({
                   className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-semibold">{s.year}</div>
+                    <div className="truncate font-semibold">
+                      {s.year} · Season {s.seasonNo} · {leagueLabel[s.league]}
+                    </div>
                     {s.label ? (
                       <div className="mt-1 text-sm text-white/60">{s.label}</div>
                     ) : null}

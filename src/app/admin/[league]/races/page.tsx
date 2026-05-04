@@ -104,7 +104,9 @@ async function createRace(
 
   await requireAdmin();
   const basePath = `/admin/${adminLeague}/races`;
+  const seasonKey = String(formData.get("seasonKey") ?? "").trim();
   const seasonRaw = String(formData.get("season") ?? "").trim();
+  const seasonNoRaw = String(formData.get("seasonNo") ?? "").trim();
   const roundRaw = String(formData.get("round") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const circuitId = String(formData.get("circuitId") ?? "").trim();
@@ -113,7 +115,9 @@ async function createRace(
   const startsAtRaw = String(formData.get("startsAt") ?? "").trim();
 
   const returnQuery = new URLSearchParams();
+  if (seasonKey) returnQuery.set("seasonKey", seasonKey);
   if (seasonRaw) returnQuery.set("season", seasonRaw);
+  if (seasonNoRaw) returnQuery.set("seasonNo", seasonNoRaw);
   if (roundRaw) returnQuery.set("round", roundRaw);
   if (name) returnQuery.set("name", name);
   if (circuitId) returnQuery.set("circuitId", circuitId);
@@ -121,10 +125,13 @@ async function createRace(
   if (location) returnQuery.set("location", location);
   if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
 
-  const season = Number.parseInt(seasonRaw, 10);
+  const seasonFromKey = seasonKey.match(/^(\d{4})-(\d{1,2})$/);
+  const season = Number.parseInt(seasonFromKey?.[1] ?? seasonRaw, 10);
+  const seasonNoFallback = seasonNoRaw || "1";
+  const seasonNo = Number.parseInt(seasonFromKey?.[2] ?? seasonNoFallback, 10);
   const round = Number.parseInt(roundRaw, 10);
 
-  if (!Number.isFinite(season) || !Number.isFinite(round) || !name) {
+  if (!Number.isFinite(season) || !Number.isFinite(seasonNo) || !Number.isFinite(round) || !name) {
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
@@ -159,6 +166,7 @@ async function createRace(
       data: {
         league,
         season,
+        seasonNo,
         round,
         name,
         circuit: circuitNameToSave,
@@ -279,6 +287,8 @@ export default async function AdminRacesPage({
     ok?: string;
     error?: string;
     season?: string;
+    seasonNo?: string;
+    seasonKey?: string;
     round?: string;
     name?: string;
     circuitId?: string;
@@ -295,6 +305,8 @@ export default async function AdminRacesPage({
   const startsAtDefault = sp.startsAt ? parseStartsAt(sp.startsAt) : null;
   const defaults = {
     season: sp.season ?? "",
+    seasonNo: sp.seasonNo ?? "",
+    seasonKey: sp.seasonKey ?? "",
     round: sp.round ?? "",
     name: sp.name ?? "",
     circuitId: sp.circuitId ?? "",
@@ -307,12 +319,17 @@ export default async function AdminRacesPage({
   const l = leagueEnum[league];
   if (!l) notFound();
 
-  type SeasonItem = { year: number };
+  type SeasonItem = { year: number; seasonNo: number; label: string | null };
   type CircuitItem = { id: string; name: string; location: string | null };
 
   const [seasons, circuits] = await Promise.all([
     prisma.season
-      .findMany({ orderBy: { year: "desc" }, take: 30, select: { year: true } })
+      .findMany({
+        where: { league: l },
+        orderBy: [{ year: "desc" }, { seasonNo: "desc" }],
+        take: 50,
+        select: { year: true, seasonNo: true, label: true }
+      })
       .catch((): SeasonItem[] => []),
     prisma.circuit
       .findMany({
@@ -376,26 +393,40 @@ export default async function AdminRacesPage({
             </label>
             {seasons.length > 0 ? (
               <select
-                name="season"
+                name="seasonKey"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                defaultValue={defaults.season || String(seasons[0]?.year ?? "")}
+                defaultValue={
+                  defaults.seasonKey ||
+                  `${seasons[0]?.year ?? new Date().getFullYear()}-${seasons[0]?.seasonNo ?? 1}`
+                }
               >
                 {seasons.map((s) => (
-                  <option key={s.year} value={String(s.year)}>
-                    {s.year}
+                  <option key={`${s.year}-${s.seasonNo}`} value={`${s.year}-${s.seasonNo}`}>
+                    {s.year} · Season {s.seasonNo}
                   </option>
                 ))}
               </select>
             ) : (
-              <input
-                name="season"
-                type="number"
-                inputMode="numeric"
-                step={1}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                placeholder="2026"
-                defaultValue={defaults.season}
-              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  name="season"
+                  type="number"
+                  inputMode="numeric"
+                  step={1}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                  placeholder="Jahr (z.B. 2026)"
+                  defaultValue={defaults.season}
+                />
+                <input
+                  name="seasonNo"
+                  type="number"
+                  inputMode="numeric"
+                  step={1}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                  placeholder="Season (z.B. 1)"
+                  defaultValue={defaults.seasonNo || "1"}
+                />
+              </div>
             )}
           </div>
           <div>

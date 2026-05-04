@@ -41,6 +41,7 @@ model Race {
   id        String   @id @default(cuid())
   league    League
   season    Int
+  seasonNo  Int      @default(1)
   round     Int
   name      String
   circuit   String?
@@ -52,7 +53,7 @@ model Race {
 
   results RaceResult[]
 
-  @@unique([league, season, round])
+  @@unique([league, season, seasonNo, round])
 }
 
 model RaceResult {
@@ -86,10 +87,14 @@ model AppConfig {
 
 model Season {
   id    String @id @default(cuid())
-  year  Int    @unique
+  league League @default(ONE)
+  year  Int
+  seasonNo Int @default(1)
   label String?
 
   createdAt DateTime @default(now())
+
+  @@unique([league, year, seasonNo])
 }
 
 model Circuit {
