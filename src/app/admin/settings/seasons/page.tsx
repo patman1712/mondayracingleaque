@@ -10,6 +10,7 @@ async function createSeason(formData: FormData) {
   const yearRaw = String(formData.get("year") ?? "").trim();
   const seasonNoRaw = String(formData.get("seasonNo") ?? "").trim();
   const leagueRaw = String(formData.get("league") ?? "").trim();
+  const isTest = formData.get("isTest") === "on";
   const label = String(formData.get("label") ?? "").trim();
   const year = Number.parseInt(yearRaw, 10);
   const seasonNo = Number.parseInt(seasonNoRaw, 10);
@@ -21,7 +22,7 @@ async function createSeason(formData: FormData) {
 
   try {
     await prisma.season.create({
-      data: { league, year, seasonNo, label: label || null }
+      data: { league, year, seasonNo, label: label || null, isTest }
     });
   } catch {
     redirect("/admin/settings/seasons?error=duplicate");
@@ -35,6 +36,20 @@ async function deleteSeason(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.season.delete({ where: { id } }).catch(() => null);
+  redirect("/admin/settings/seasons?ok=1");
+}
+
+async function toggleTestSeason(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const current = await prisma.season
+    .findUnique({ where: { id }, select: { isTest: true } })
+    .catch(() => null);
+  if (!current) return;
+  await prisma.season
+    .update({ where: { id }, data: { isTest: !current.isTest } })
+    .catch(() => null);
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -134,6 +149,14 @@ export default async function AdminSeasonsPage({
                 placeholder="F1 26"
               />
             </div>
+            <label className="flex w-fit items-center gap-2 text-sm text-white/80 md:col-span-4">
+              <input
+                name="isTest"
+                type="checkbox"
+                className="h-4 w-4 rounded border-white/20 bg-white/5"
+              />
+              Testseason
+            </label>
             <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
               Saison anlegen
             </button>
@@ -158,13 +181,26 @@ export default async function AdminSeasonsPage({
                     {s.label ? (
                       <div className="mt-1 text-sm text-white/60">{s.label}</div>
                     ) : null}
+                    {s.isTest ? (
+                      <div className="mt-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-100">
+                        Testseason
+                      </div>
+                    ) : null}
                   </div>
-                  <form action={deleteSeason}>
-                    <input type="hidden" name="id" value={s.id} />
-                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                      Löschen
-                    </button>
-                  </form>
+                  <div className="flex items-center gap-2">
+                    <form action={toggleTestSeason}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                        Test
+                      </button>
+                    </form>
+                    <form action={deleteSeason}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                        Löschen
+                      </button>
+                    </form>
+                  </div>
                 </div>
               ))
             )}

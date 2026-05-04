@@ -91,6 +91,7 @@ model Season {
   year  Int
   seasonNo Int @default(1)
   label String?
+  isTest Boolean @default(false)
 
   createdAt DateTime @default(now())
 

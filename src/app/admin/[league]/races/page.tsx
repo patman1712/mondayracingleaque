@@ -319,7 +319,7 @@ export default async function AdminRacesPage({
   const l = leagueEnum[league];
   if (!l) notFound();
 
-  type SeasonItem = { year: number; seasonNo: number; label: string | null };
+  type SeasonItem = { year: number; seasonNo: number; label: string | null; isTest: boolean };
   type CircuitItem = { id: string; name: string; location: string | null };
 
   const [seasons, circuits] = await Promise.all([
@@ -328,7 +328,7 @@ export default async function AdminRacesPage({
         where: { league: l },
         orderBy: [{ year: "desc" }, { seasonNo: "desc" }],
         take: 50,
-        select: { year: true, seasonNo: true, label: true }
+        select: { year: true, seasonNo: true, label: true, isTest: true }
       })
       .catch((): SeasonItem[] => []),
     prisma.circuit
@@ -402,6 +402,7 @@ export default async function AdminRacesPage({
               >
                 {seasons.map((s) => (
                   <option key={`${s.year}-${s.seasonNo}`} value={`${s.year}-${s.seasonNo}`}>
+                    {s.isTest ? "TEST · " : ""}
                     {s.year} · Season {s.seasonNo}
                   </option>
                 ))}
