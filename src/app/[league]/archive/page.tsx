@@ -141,7 +141,6 @@ export default async function LeagueArchivePage({
 
               return (
             <div key={r.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-              <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
               {imageUrl(r.imagePath) ? (
                 <img
                   src={imageUrl(r.imagePath) ?? ""}
@@ -151,30 +150,30 @@ export default async function LeagueArchivePage({
               ) : null}
 
               <div className="relative p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div />
+                <div className="flex justify-end">
                   <div className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80">
                     {formatRaceDateTime(start, isUpcoming)}
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <div className="truncate text-2xl font-extrabold tracking-tight text-white">
-                    {title}
-                  </div>
-                  {isUpcoming ? (
-                    <div className="mt-3">
-                      {trackLine ? (
-                        <div className="truncate text-sm text-white/70">
-                          {trackLine}
-                        </div>
-                      ) : null}
-                      <div className="mt-2 text-xs text-white/60">
-                        {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
+                {isUpcoming ? (
+                  <div className="mt-4">
+                    {trackLine ? (
+                      <div className="truncate text-sm text-white/70">
+                        {trackLine}
                       </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-white/60">
+                      {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
                     </div>
-                  ) : null}
-                </div>
+                  </div>
+                ) : title ? (
+                  <div className="mt-4">
+                    <div className="truncate text-2xl font-extrabold tracking-tight text-white">
+                      {title}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
               );
