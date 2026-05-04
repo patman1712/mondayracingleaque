@@ -9,7 +9,8 @@ function ensureDir(p) {
 }
 
 function resolveDatabaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const existing = process.env.DATABASE_URL;
+  if (existing && existing.startsWith("file:")) return existing;
 
   const railwayMount = "/app/data";
   if (fs.existsSync(railwayMount)) return "file:/app/data/mrl.db";

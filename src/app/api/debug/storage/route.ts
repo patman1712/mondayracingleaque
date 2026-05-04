@@ -8,10 +8,16 @@ function parseSqliteFile(url: string | undefined) {
   return p;
 }
 
-export async function GET() {
-  const mount = "/app/data";
-  const mounted = fs.existsSync(mount);
+function isWritableDir(p: string) {
+  try {
+    fs.accessSync(p, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
+export async function GET() {
   const dbUrl = process.env.DATABASE_URL;
   const dbFile = parseSqliteFile(dbUrl);
 
@@ -23,25 +29,43 @@ export async function GET() {
         : null;
 
   const dbExists = resolvedDbPath ? fs.existsSync(resolvedDbPath) : false;
+  const dbDir = resolvedDbPath ? path.dirname(resolvedDbPath) : null;
 
-  let writable = false;
+  const mount = "/app/data";
+  const mounted = fs.existsSync(mount);
+  const mountWritable = mounted ? isWritableDir(mount) : false;
+
+  const dirExists = dbDir ? fs.existsSync(dbDir) : false;
+  const dirWritable = dbDir ? isWritableDir(dbDir) : false;
+
+  let canWriteTestFile = false;
   try {
-    const testPath = path.join(mount, ".rwtest");
-    fs.writeFileSync(testPath, "ok");
-    fs.unlinkSync(testPath);
-    writable = true;
+    if (dbDir) {
+      const testPath = path.join(dbDir, `.rwtest-${Date.now()}`);
+      fs.writeFileSync(testPath, "ok");
+      fs.unlinkSync(testPath);
+      canWriteTestFile = true;
+    }
   } catch {}
+
+  const stat = dbExists && resolvedDbPath ? fs.statSync(resolvedDbPath) : null;
 
   return Response.json(
     {
-      mounted,
-      writable,
       databaseUrl: dbUrl ?? null,
       resolvedDbPath,
       dbExists,
+      dbSizeBytes: stat ? stat.size : null,
+      dbMtimeMs: stat ? stat.mtimeMs : null,
+      dbDir,
+      dirExists,
+      dirWritable,
+      canWriteTestFile,
+      mount,
+      mounted,
+      mountWritable,
       cwd: process.cwd()
     },
     { headers: { "cache-control": "no-store" } }
   );
 }
-

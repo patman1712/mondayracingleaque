@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "node scripts/prisma.mjs generate",
     "dev": "node scripts/start.mjs dev",
     "build": "node scripts/start.mjs build",
     "start": "node scripts/start.mjs start",
