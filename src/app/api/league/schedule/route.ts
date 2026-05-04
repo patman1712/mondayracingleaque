@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getLeagueColors, leagueLabel, type LeagueKey } from "@/lib/leagueColors";
+import { Prisma } from "@prisma/client";
 
 function leagueFromSlug(slug: string): LeagueKey | null {
   if (slug === "mrl-one") return "ONE";
@@ -22,53 +23,46 @@ export async function GET(req: Request) {
   const slug = url.searchParams.get("league") ?? "";
   const league = leagueFromSlug(slug);
   if (!league) return new Response("Bad league", { status: 400 });
+  const leagueKey = league;
 
   const now = new Date();
 
-  const [colors, previous, upcoming, currentWindow] = await Promise.all([
-    getLeagueColors(),
-    prisma.race
+  const colors = await getLeagueColors();
+
+  const select = {
+    id: true,
+    name: true,
+    startsAt: true,
+    round: true,
+    imagePath: true,
+    seasonIsTest: true,
+    circuitRef: { select: { imagePath: true } }
+  } satisfies Prisma.RaceSelect;
+
+  type RaceCard = Prisma.RaceGetPayload<{ select: typeof select }>;
+
+  async function findPreferred(where: Prisma.RaceWhereInput, orderBy: Prisma.RaceOrderByWithRelationInput) {
+    const normal = await prisma.race
       .findFirst({
-        where: { league, seasonIsTest: false, startsAt: { lt: now } },
-        orderBy: { startsAt: "desc" },
-        select: {
-          id: true,
-          name: true,
-          startsAt: true,
-          round: true,
-          imagePath: true,
-          circuitRef: { select: { imagePath: true } }
-        }
+        where: { ...where, league: leagueKey, seasonIsTest: false },
+        orderBy,
+        select
       })
-      .catch(() => null),
-    prisma.race
+      .catch((): RaceCard | null => null);
+    if (normal) return normal;
+    return prisma.race
       .findFirst({
-        where: { league, seasonIsTest: false, startsAt: { gt: now } },
-        orderBy: { startsAt: "asc" },
-        select: {
-          id: true,
-          name: true,
-          startsAt: true,
-          round: true,
-          imagePath: true,
-          circuitRef: { select: { imagePath: true } }
-        }
+        where: { ...where, league: leagueKey },
+        orderBy,
+        select
       })
-      .catch(() => null),
-    prisma.race
-      .findFirst({
-        where: { league, seasonIsTest: false, startsAt: { lte: now } },
-        orderBy: { startsAt: "desc" },
-        select: {
-          id: true,
-          name: true,
-          startsAt: true,
-          round: true,
-          imagePath: true,
-          circuitRef: { select: { imagePath: true } }
-        }
-      })
-      .catch(() => null)
+      .catch((): RaceCard | null => null);
+  }
+
+  const [previous, upcoming, currentWindow] = await Promise.all([
+    findPreferred({ startsAt: { lt: now } }, { startsAt: "desc" }),
+    findPreferred({ startsAt: { gt: now } }, { startsAt: "asc" }),
+    findPreferred({ startsAt: { lte: now } }, { startsAt: "desc" })
   ]);
 
   const current =
@@ -77,9 +71,9 @@ export async function GET(req: Request) {
       : null;
 
   const payload = {
-    league,
-    leagueLabel: leagueLabel(league),
-    accent: colors[league],
+    league: leagueKey,
+    leagueLabel: leagueLabel(leagueKey),
+    accent: colors[leagueKey],
     previous: previous
       ? {
           id: previous.id,

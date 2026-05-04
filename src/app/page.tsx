@@ -44,7 +44,7 @@ export default async function HomePage() {
 
   try {
     races = await prisma.race.findMany({
-      where: { seasonIsTest: false, startsAt: { gte: now } },
+      where: { startsAt: { gte: now } },
       orderBy: { startsAt: "asc" },
       take: 6,
       select: {
@@ -59,22 +59,28 @@ export default async function HomePage() {
   } catch {}
 
   try {
+    async function nextRace(league: "ONE" | "TWO" | "ROOKIE") {
+      const normal = await prisma.race
+        .findFirst({
+          where: { league, seasonIsTest: false, startsAt: { gte: now } },
+          orderBy: { startsAt: "asc" },
+          select: { name: true, startsAt: true }
+        })
+        .catch(() => null);
+      if (normal) return normal;
+      return prisma.race
+        .findFirst({
+          where: { league, startsAt: { gte: now } },
+          orderBy: { startsAt: "asc" },
+          select: { name: true, startsAt: true }
+        })
+        .catch(() => null);
+    }
+
     const [one, two, rookie] = await Promise.all([
-      prisma.race.findFirst({
-        where: { league: "ONE", seasonIsTest: false, startsAt: { gte: now } },
-        orderBy: { startsAt: "asc" },
-        select: { name: true, startsAt: true }
-      }),
-      prisma.race.findFirst({
-        where: { league: "TWO", seasonIsTest: false, startsAt: { gte: now } },
-        orderBy: { startsAt: "asc" },
-        select: { name: true, startsAt: true }
-      }),
-      prisma.race.findFirst({
-        where: { league: "ROOKIE", seasonIsTest: false, startsAt: { gte: now } },
-        orderBy: { startsAt: "asc" },
-        select: { name: true, startsAt: true }
-      })
+      nextRace("ONE"),
+      nextRace("TWO"),
+      nextRace("ROOKIE")
     ]);
 
     nextByLeague = {

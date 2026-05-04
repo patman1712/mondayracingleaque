@@ -29,6 +29,8 @@ export default async function LeagueCalendarPage({
   type RaceItem = {
     id: string;
     season: number;
+    seasonNo: number;
+    seasonIsTest: boolean;
     round: number;
     name: string;
     circuit: string | null;
@@ -45,6 +47,8 @@ export default async function LeagueCalendarPage({
       select: {
         id: true,
         season: true,
+        seasonNo: true,
+        seasonIsTest: true,
         round: true,
         name: true,
         circuit: true,
@@ -88,7 +92,7 @@ export default async function LeagueCalendarPage({
                 </div>
               </div>
               <div className="mt-1 text-sm text-white/70">
-                Saison {r.season} · Runde {r.round}
+                {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
                 {r.circuit ? ` · ${r.circuit}` : ""}
                 {r.location ? ` · ${r.location}` : ""}
               </div>

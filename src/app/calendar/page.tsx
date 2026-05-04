@@ -55,6 +55,8 @@ export default async function CalendarPage({
     id: string;
     league: LeagueKey;
     season: number;
+    seasonNo: number;
+    seasonIsTest: boolean;
     round: number;
     name: string;
     circuit: string | null;
@@ -78,13 +80,15 @@ export default async function CalendarPage({
 
   try {
     const races = await prisma.race.findMany({
-      where: { seasonIsTest: false, startsAt: { gte: monthStart, lt: monthEnd } },
+      where: { startsAt: { gte: monthStart, lt: monthEnd } },
       orderBy: [{ startsAt: "asc" }],
       take: 500,
       select: {
         id: true,
         league: true,
         season: true,
+        seasonNo: true,
+        seasonIsTest: true,
         round: true,
         name: true,
         circuit: true,
@@ -103,6 +107,8 @@ export default async function CalendarPage({
         id: true,
         league: true,
         season: true,
+        seasonNo: true,
+        seasonIsTest: true,
         round: true,
         name: true,
         circuit: true,
@@ -272,6 +278,7 @@ export default async function CalendarPage({
                       />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-white">
+                          {r.seasonIsTest ? "TEST · " : ""}
                           {r.name}
                         </div>
                         <div className="mt-1 text-xs text-white/70">
