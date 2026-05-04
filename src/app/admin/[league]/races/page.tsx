@@ -23,10 +23,25 @@ function ensureDir(p: string) {
 }
 
 function parseStartsAt(raw: string) {
-  const direct = new Date(raw);
-  if (!Number.isNaN(direct.getTime())) return direct;
+  const v = raw.trim();
+  if (!v) return null;
 
-  const m = raw.match(
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/);
+  if (iso) {
+    const [, yyyy, mm, dd, hh, min] = iso;
+    const d = new Date(
+      Number(yyyy),
+      Number(mm) - 1,
+      Number(dd),
+      Number(hh),
+      Number(min),
+      0,
+      0
+    );
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const m = v.match(
     /^(\d{2})\.(\d{2})\.(\d{4})(?:,\s*|\s+)(\d{2}):(\d{2})$/
   );
   if (!m) return null;
@@ -80,20 +95,38 @@ async function createRace(
 
   await requireAdmin();
   const basePath = `/admin/${adminLeague}/races`;
-  const season = Number(formData.get("season") ?? "");
-  const round = Number(formData.get("round") ?? "");
+  const seasonRaw = String(formData.get("season") ?? "").trim();
+  const roundRaw = String(formData.get("round") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const circuit = String(formData.get("circuit") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const startsAtRaw = String(formData.get("startsAt") ?? "").trim();
 
+  const returnQuery = new URLSearchParams();
+  if (seasonRaw) returnQuery.set("season", seasonRaw);
+  if (roundRaw) returnQuery.set("round", roundRaw);
+  if (name) returnQuery.set("name", name);
+  if (circuit) returnQuery.set("circuit", circuit);
+  if (location) returnQuery.set("location", location);
+  if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
+
+  const season = Number(seasonRaw);
+  const round = Number(roundRaw);
+
   if (!Number.isFinite(season) || !Number.isFinite(round) || !name) {
-    redirect(`${basePath}?error=invalid`);
+    returnQuery.set("error", "invalid");
+    redirect(`${basePath}?${returnQuery.toString()}`);
   }
-  if (!startsAtRaw) redirect(`${basePath}?error=invalid`);
+  if (!startsAtRaw) {
+    returnQuery.set("error", "invalid");
+    redirect(`${basePath}?${returnQuery.toString()}`);
+  }
 
   const startsAt = parseStartsAt(startsAtRaw);
-  if (!startsAt) redirect(`${basePath}?error=invalid`);
+  if (!startsAt) {
+    returnQuery.set("error", "invalid");
+    redirect(`${basePath}?${returnQuery.toString()}`);
+  }
 
   try {
     const created = await prisma.race.create({
@@ -110,9 +143,15 @@ async function createRace(
 
     const image = formData.get("image");
     if (image instanceof File && image.size > 0) {
-      if (image.size > 5_000_000) redirect(`${basePath}?error=image`);
+      if (image.size > 5_000_000) {
+        returnQuery.set("error", "image");
+        redirect(`${basePath}?${returnQuery.toString()}`);
+      }
       const ext = extFromMime(image.type);
-      if (!ext) redirect(`${basePath}?error=image`);
+      if (!ext) {
+        returnQuery.set("error", "image");
+        redirect(`${basePath}?${returnQuery.toString()}`);
+      }
       const fileName = `${created.id}.${ext}`;
       await writeRaceImage(fileName, image);
       await prisma.race.update({
@@ -125,8 +164,12 @@ async function createRace(
       typeof e === "object" && e !== null && "code" in e
         ? (e as { code?: string }).code
         : undefined;
-    if (code === "P2002") redirect(`${basePath}?error=duplicate`);
-    redirect(`${basePath}?error=save`);
+    if (code === "P2002") {
+      returnQuery.set("error", "duplicate");
+      redirect(`${basePath}?${returnQuery.toString()}`);
+    }
+    returnQuery.set("error", "save");
+    redirect(`${basePath}?${returnQuery.toString()}`);
   }
 
   const publicSlug =
@@ -206,13 +249,30 @@ export default async function AdminRacesPage({
   searchParams
 }: {
   params: Promise<{ league: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+    season?: string;
+    round?: string;
+    name?: string;
+    circuit?: string;
+    location?: string;
+    startsAt?: string;
+  }>;
 }) {
   await requireAdmin();
 
   const sp = await searchParams;
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
+  const defaults = {
+    season: sp.season ?? "",
+    round: sp.round ?? "",
+    name: sp.name ?? "",
+    circuit: sp.circuit ?? "",
+    location: sp.location ?? "",
+    startsAt: sp.startsAt ?? ""
+  };
 
   const { league } = await params;
   const l = leagueEnum[league];
@@ -274,6 +334,7 @@ export default async function AdminRacesPage({
               inputMode="numeric"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               placeholder="2026"
+              defaultValue={defaults.season}
             />
           </div>
           <div>
@@ -285,6 +346,7 @@ export default async function AdminRacesPage({
               inputMode="numeric"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               placeholder="1"
+              defaultValue={defaults.round}
             />
           </div>
           <div className="md:col-span-2">
@@ -295,6 +357,7 @@ export default async function AdminRacesPage({
               name="name"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               placeholder="Bahrain GP"
+              defaultValue={defaults.name}
             />
           </div>
           <div>
@@ -304,6 +367,7 @@ export default async function AdminRacesPage({
             <input
               name="circuit"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              defaultValue={defaults.circuit}
             />
           </div>
           <div>
@@ -313,6 +377,7 @@ export default async function AdminRacesPage({
             <input
               name="location"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              defaultValue={defaults.location}
             />
           </div>
           <div className="md:col-span-2">
@@ -321,9 +386,14 @@ export default async function AdminRacesPage({
             </label>
             <input
               name="startsAt"
-              type="datetime-local"
+              type="text"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              placeholder="04.05.2026, 12:30"
+              defaultValue={defaults.startsAt}
             />
+            <div className="mt-1 text-xs text-white/60">
+              Formate: 04.05.2026, 12:30 oder 2026-05-04 12:30
+            </div>
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
