@@ -24,6 +24,7 @@ export default async function LeagueHomePage({
     { href: `/${league}/results`, label: "Ergebnisse" },
     { href: `/${league}/standings`, label: "WM Stand" },
     { href: `/${league}/calendar`, label: "Rennkalender" },
+    { href: `/${league}/teams`, label: "Teams" },
     { href: `/${league}/archive`, label: "Archiv" }
   ];
 
