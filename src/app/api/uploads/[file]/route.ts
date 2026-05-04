@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,15 @@ function contentTypeFromExt(ext: string) {
   return "application/octet-stream";
 }
 
+function cacheControlForFile(file: string) {
+  if (/-\d{10,}\.[a-z0-9]+$/i.test(file)) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600, must-revalidate";
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ file: string }> }
 ) {
   const { file } = await params;
@@ -33,11 +41,26 @@ export async function GET(
 
   if (!fs.existsSync(abs)) return new Response("Not found", { status: 404 });
   const ext = path.extname(file).toLowerCase();
-  const buf = fs.readFileSync(abs);
-  return new Response(buf, {
+  const stat = fs.statSync(abs);
+  const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+  const inm = req.headers.get("if-none-match");
+  if (inm === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        etag,
+        "cache-control": cacheControlForFile(file)
+      }
+    });
+  }
+
+  const stream = Readable.toWeb(fs.createReadStream(abs));
+  return new Response(stream as unknown as BodyInit, {
     headers: {
       "content-type": contentTypeFromExt(ext),
-      "cache-control": "public, max-age=604800"
+      "content-length": String(stat.size),
+      etag,
+      "cache-control": cacheControlForFile(file)
     }
   });
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -311,10 +312,13 @@ export function NavLeagues() {
                                     {slot.label}
                                   </div>
                                   <div className="relative mt-3 aspect-[16/10] overflow-hidden">
-                                    <img
+                                    <Image
                                       src={src}
                                       alt=""
-                                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                      fill
+                                      sizes="(max-width: 640px) 92vw, (max-width: 1024px) 640px, 720px"
+                                      className="object-cover transition duration-300 group-hover:scale-[1.03]"
+                                      quality={80}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
                                     <div className="absolute bottom-3 left-3 right-3">
@@ -376,9 +380,11 @@ export function NavLeagues() {
                                         </div>
                                       </div>
                                       {t.logoUrl ? (
-                                        <img
+                                        <Image
                                           src={t.logoUrl}
                                           alt=""
+                                          width={40}
+                                          height={40}
                                           className="h-10 w-10 rounded-2xl bg-black/20 object-contain"
                                         />
                                       ) : (
@@ -388,11 +394,16 @@ export function NavLeagues() {
 
                                     <div className="mt-4 relative h-[88px] overflow-hidden">
                                       {t.carUrl ? (
-                                        <img
-                                          src={t.carUrl}
-                                          alt=""
-                                          className="absolute inset-x-0 bottom-0 mx-auto h-[102px] w-full object-contain transition duration-300 group-hover:scale-[1.03]"
-                                        />
+                                        <div className="absolute inset-x-0 bottom-0 mx-auto h-[102px] w-full">
+                                          <Image
+                                            src={t.carUrl}
+                                            alt=""
+                                            fill
+                                            sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 200px"
+                                            className="object-contain transition duration-300 group-hover:scale-[1.03]"
+                                            quality={80}
+                                          />
+                                        </div>
                                       ) : (
                                         <div className="flex h-[88px] w-full items-center justify-center text-[11px] font-semibold text-white/35">
                                           CAR

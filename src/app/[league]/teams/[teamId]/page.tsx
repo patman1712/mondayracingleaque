@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import { League } from "@prisma/client";
+import Image from "next/image";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -140,10 +141,13 @@ export default async function TeamDetailPage({
             style={{ backgroundImage: heroBg(color) }}
           >
             {heroBackgroundUrl ? (
-              <img
+              <Image
                 src={heroBackgroundUrl}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover object-center opacity-95"
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover object-center opacity-95"
               />
             ) : null}
             <div
@@ -161,15 +165,21 @@ export default async function TeamDetailPage({
               </Link>
             </div>
 
-            <div className="pointer-events-none absolute inset-0 flex items-start justify-center pt-10 sm:pt-12">
+            <div className="pointer-events-none absolute inset-0 flex items-start justify-center pt-8 sm:pt-12">
               {carUrl ? (
-                <img
-                  src={carUrl}
-                  alt=""
-                  className="h-[230px] w-[min(1100px,96vw)] object-contain drop-shadow-[0_24px_60px_rgba(0,0,0,0.6)] sm:h-[280px] lg:h-[320px]"
-                />
+                <div className="relative h-[200px] w-[min(1100px,96vw)] sm:h-[260px] lg:h-[320px]">
+                  <Image
+                    src={carUrl}
+                    alt=""
+                    fill
+                    priority
+                    sizes="(max-width: 640px) 96vw, (max-width: 1024px) 96vw, 1100px"
+                    className="object-contain drop-shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+                    quality={80}
+                  />
+                </div>
               ) : (
-                <div className="flex h-[230px] w-[min(1100px,96vw)] items-center justify-center text-sm font-semibold text-white/35 sm:h-[280px] lg:h-[320px]">
+                <div className="flex h-[200px] w-[min(1100px,96vw)] items-center justify-center text-sm font-semibold text-white/35 sm:h-[260px] lg:h-[320px]">
                   CAR
                 </div>
               )}
@@ -187,27 +197,27 @@ export default async function TeamDetailPage({
               <div className="absolute inset-0 bg-gradient-to-b from-black/55 to-black/80" />
               <div className="absolute inset-0">
                 <div
-                  className="absolute left-0 top-1/2 h-[12px] w-[30%] -translate-y-1/2 bg-white"
+                  className="absolute left-0 top-1/2 hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
                   style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-0 top-1/2 h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90"
+                  className="absolute left-0 top-1/2 hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
                   style={{ clipPath: "polygon(0 0, 100% 0, 94% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute right-0 top-1/2 h-[12px] w-[30%] -translate-y-1/2 bg-white"
+                  className="absolute right-0 top-1/2 hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
                   style={{ clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute right-0 top-1/2 h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90"
+                  className="absolute right-0 top-1/2 hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
                   style={{ clipPath: "polygon(6% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-1/2 top-1/2 h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95"
+                  className="absolute left-1/2 top-1/2 hidden h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95 sm:block"
                   style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-1/2 top-1/2 h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95"
+                  className="absolute left-1/2 top-1/2 hidden h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95 sm:block"
                   style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
                 />
               </div>
@@ -215,13 +225,15 @@ export default async function TeamDetailPage({
                 <div className="flex items-center justify-center gap-4">
                   <div className="flex min-w-0 items-center justify-center gap-3">
                     {logoUrl ? (
-                      <img
+                      <Image
                         src={logoUrl}
                         alt=""
-                        className="hidden h-10 w-10 rounded-xl bg-black/25 object-contain sm:block"
+                        width={40}
+                        height={40}
+                        className="hidden rounded-xl bg-black/25 object-contain sm:block"
                       />
                     ) : null}
-                    <div className="truncate text-center text-3xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
+                    <div className="truncate text-center text-2xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
                       {team.name}
                     </div>
                   </div>
@@ -232,13 +244,8 @@ export default async function TeamDetailPage({
                     {heroNames.join(" · ")}
                   </div>
                 ) : null}
-              </Container>
-            </div>
-
-            <div className="bg-gradient-to-b from-black/65 to-black/90 py-7 sm:py-9">
-              <Container>
                 {seasonLabel ? (
-                  <div className="text-center text-xs font-semibold uppercase tracking-wider text-white/70">
+                  <div className="mt-1 text-center text-[11px] font-semibold uppercase tracking-wider text-white/60 sm:text-xs">
                     {seasonLabel}
                   </div>
                 ) : null}
@@ -249,7 +256,7 @@ export default async function TeamDetailPage({
       </div>
 
       <Container>
-        <div className="mt-10">
+        <div className="mt-10 sm:mt-12">
           <div className="text-lg font-extrabold uppercase tracking-wider">
             Drivers
           </div>

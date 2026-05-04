@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import { League } from "@prisma/client";
+import Image from "next/image";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -159,9 +160,11 @@ export default async function LeagueTeamsPage({
                   </div>
 
                   {t.logoPath ? (
-                    <img
+                    <Image
                       src={imageUrl(t.logoPath) ?? ""}
                       alt=""
+                      width={48}
+                      height={48}
                       className="h-12 w-12 rounded-2xl bg-black/20 object-contain"
                     />
                   ) : (
@@ -176,13 +179,18 @@ export default async function LeagueTeamsPage({
                   )}
                 </div>
 
-                <div className="mt-6 relative h-[140px] overflow-hidden">
+                <div className="relative mt-6 h-[130px] overflow-hidden sm:h-[140px]">
                   {t.carPath ? (
-                    <img
-                      src={imageUrl(t.carPath) ?? ""}
-                      alt=""
-                      className="absolute inset-x-0 bottom-0 mx-auto h-[160px] w-full object-contain transition duration-300 group-hover:scale-[1.03]"
-                    />
+                    <div className="absolute inset-x-0 bottom-0 mx-auto h-[150px] w-full sm:h-[160px]">
+                      <Image
+                        src={imageUrl(t.carPath) ?? ""}
+                        alt=""
+                        fill
+                        sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 33vw"
+                        className="object-contain transition duration-300 group-hover:scale-[1.03]"
+                        quality={80}
+                      />
+                    </div>
                   ) : (
                     <div className="flex h-[140px] w-full items-center justify-center text-xs font-semibold text-white/35">
                       CAR
