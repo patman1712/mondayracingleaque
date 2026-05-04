@@ -23,6 +23,11 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function cleanTileText(value: string | null | undefined) {
+  if (!value) return null;
+  return value.replace(/[\s·•\-–—]+$/g, "").trim() || null;
+}
+
 function formatRaceDateTime(d: Date, includeTime: boolean) {
   const date = d.toLocaleDateString("de-DE", {
     timeZone: "Europe/Berlin",
@@ -127,7 +132,12 @@ export default async function LeagueArchivePage({
             (() => {
               const start = new Date(r.startsAt);
               const isUpcoming = start.getTime() > Date.now();
-              const trackLine = [r.location, r.circuit].filter(Boolean).join(" · ");
+              const location = cleanTileText(r.location);
+              const circuit = cleanTileText(r.circuit);
+              const trackLine = [location, circuit].filter(Boolean).join(" · ");
+              const title = cleanTileText(
+                r.seasonIsTest ? r.name.replace(/^TEST\s*·\s*/i, "") : r.name
+              );
 
               return (
             <div key={r.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
@@ -142,13 +152,7 @@ export default async function LeagueArchivePage({
 
               <div className="relative p-5">
                 <div className="flex items-center justify-between gap-3">
-                  {r.seasonIsTest ? (
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
-                      TEST
-                    </div>
-                  ) : (
-                    <div />
-                  )}
+                  <div />
                   <div className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80">
                     {formatRaceDateTime(start, isUpcoming)}
                   </div>
@@ -156,7 +160,7 @@ export default async function LeagueArchivePage({
 
                 <div className="mt-4">
                   <div className="truncate text-2xl font-extrabold tracking-tight text-white">
-                    {r.name}
+                    {title}
                   </div>
                   {isUpcoming ? (
                     <div className="mt-3">
