@@ -140,9 +140,10 @@ export default async function LeagueCalendarPage({
               );
 
               return (
-            <div
+            <Link
               key={r.id}
-              className="relative min-h-[190px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[210px]"
+              href={`/${league}/races/${r.id}`}
+              className="relative block min-h-[190px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[210px]"
             >
               {imageUrl(r.imagePath) ? (
                 <img
@@ -178,7 +179,7 @@ export default async function LeagueCalendarPage({
                   </div>
                 ) : null}
               </div>
-            </div>
+            </Link>
               );
             })()
           ))

@@ -55,6 +55,9 @@ model Race {
   location  String?
   startsAt  DateTime
   imagePath String?
+  twitchChannel String?
+  resultsImagePath String?
+  resultsOcrText String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
