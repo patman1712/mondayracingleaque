@@ -83,3 +83,21 @@ model AppConfig {
   key   String @id
   value String
 }
+
+model Season {
+  id    String @id @default(cuid())
+  year  Int    @unique
+  label String?
+
+  createdAt DateTime @default(now())
+}
+
+model Circuit {
+  id       String @id @default(cuid())
+  name     String
+  location String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([name, location])
+}

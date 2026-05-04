@@ -107,6 +107,7 @@ async function createRace(
   const seasonRaw = String(formData.get("season") ?? "").trim();
   const roundRaw = String(formData.get("round") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
+  const circuitId = String(formData.get("circuitId") ?? "").trim();
   const circuit = String(formData.get("circuit") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const startsAtRaw = String(formData.get("startsAt") ?? "").trim();
@@ -115,6 +116,7 @@ async function createRace(
   if (seasonRaw) returnQuery.set("season", seasonRaw);
   if (roundRaw) returnQuery.set("round", roundRaw);
   if (name) returnQuery.set("name", name);
+  if (circuitId) returnQuery.set("circuitId", circuitId);
   if (circuit) returnQuery.set("circuit", circuit);
   if (location) returnQuery.set("location", location);
   if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
@@ -139,14 +141,28 @@ async function createRace(
   returnQuery.set("startsAt", formatDateTimeLocal(startsAt));
 
   try {
+    let circuitNameToSave = circuit || null;
+    let locationToSave = location || null;
+    if (circuitId) {
+      const c = await prisma.circuit
+        .findUnique({ where: { id: circuitId }, select: { name: true, location: true } })
+        .catch(() => null);
+      if (!c) {
+        returnQuery.set("error", "invalid");
+        redirect(`${basePath}?${returnQuery.toString()}`);
+      }
+      circuitNameToSave = c.name;
+      locationToSave = c.location ?? null;
+    }
+
     const created = await prisma.race.create({
       data: {
         league,
         season,
         round,
         name,
-        circuit: circuit || null,
-        location: location || null,
+        circuit: circuitNameToSave,
+        location: locationToSave,
         startsAt
       }
     });
@@ -265,6 +281,7 @@ export default async function AdminRacesPage({
     season?: string;
     round?: string;
     name?: string;
+    circuitId?: string;
     circuit?: string;
     location?: string;
     startsAt?: string;
@@ -280,6 +297,7 @@ export default async function AdminRacesPage({
     season: sp.season ?? "",
     round: sp.round ?? "",
     name: sp.name ?? "",
+    circuitId: sp.circuitId ?? "",
     circuit: sp.circuit ?? "",
     location: sp.location ?? "",
     startsAt: startsAtDefault ? formatDateTimeLocal(startsAtDefault) : ""
@@ -288,6 +306,22 @@ export default async function AdminRacesPage({
   const { league } = await params;
   const l = leagueEnum[league];
   if (!l) notFound();
+
+  type SeasonItem = { year: number };
+  type CircuitItem = { id: string; name: string; location: string | null };
+
+  const [seasons, circuits] = await Promise.all([
+    prisma.season
+      .findMany({ orderBy: { year: "desc" }, take: 30, select: { year: true } })
+      .catch((): SeasonItem[] => []),
+    prisma.circuit
+      .findMany({
+        orderBy: [{ name: "asc" }, { location: "asc" }],
+        take: 300,
+        select: { id: true, name: true, location: true }
+      })
+      .catch((): CircuitItem[] => [])
+  ]);
 
   type RaceItem = {
     id: string;
@@ -340,15 +374,29 @@ export default async function AdminRacesPage({
             <label className="mb-1 block text-xs font-semibold text-white/70">
               Saison
             </label>
-            <input
-              name="season"
-              type="number"
-              inputMode="numeric"
-              step={1}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="2026"
-              defaultValue={defaults.season}
-            />
+            {seasons.length > 0 ? (
+              <select
+                name="season"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                defaultValue={defaults.season || String(seasons[0]?.year ?? "")}
+              >
+                {seasons.map((s) => (
+                  <option key={s.year} value={String(s.year)}>
+                    {s.year}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                name="season"
+                type="number"
+                inputMode="numeric"
+                step={1}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                placeholder="2026"
+                defaultValue={defaults.season}
+              />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-white/70">
@@ -375,9 +423,33 @@ export default async function AdminRacesPage({
               defaultValue={defaults.name}
             />
           </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-white/70">
+              Rennstrecke
+            </label>
+            {circuits.length > 0 ? (
+              <select
+                name="circuitId"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                defaultValue={defaults.circuitId || ""}
+              >
+                <option value="">Manuell eingeben…</option>
+                {circuits.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.location ? ` · ${c.location}` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-xs text-white/60">
+                Keine Rennstrecken angelegt. Lege sie unter Admin → Rennstrecken an.
+              </div>
+            )}
+          </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-white/70">
-              Strecke
+              Strecke (manuell)
             </label>
             <input
               name="circuit"
@@ -387,7 +459,7 @@ export default async function AdminRacesPage({
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-white/70">
-              Ort
+              Ort (manuell)
             </label>
             <input
               name="location"

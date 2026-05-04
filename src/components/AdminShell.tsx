@@ -54,6 +54,18 @@ export async function AdminShell({ children }: { children: ReactNode }) {
             >
               Liga Farben
             </Link>
+            <Link
+              href="/admin/settings/seasons"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              Saisons
+            </Link>
+            <Link
+              href="/admin/settings/circuits"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              Rennstrecken
+            </Link>
           </div>
 
           <div className="mt-6 text-xs font-semibold uppercase tracking-wider text-white/60">
