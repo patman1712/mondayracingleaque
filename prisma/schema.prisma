@@ -35,11 +35,40 @@ model Driver {
   name      String
   number    Int?
   team      String?
+  teamId    String?
   country   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   results RaceResult[]
+  teamRef Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String?
+  logoPath  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participations TeamSeason[]
+  drivers Driver[]
+}
+
+model TeamSeason {
+  id           String   @id @default(cuid())
+  teamId       String
+  seasonId     String
+  color        String?
+  carImagePath String?
+  createdAt    DateTime @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, seasonId])
+  @@index([seasonId])
 }
 
 model Race {
@@ -106,6 +135,8 @@ model Season {
   placement SeasonPlacement @default(CALENDAR)
 
   createdAt DateTime @default(now())
+
+  teams TeamSeason[]
 
   @@unique([league, year, seasonNo, isTest])
 }

@@ -27,18 +27,24 @@ async function createDriver(
   "use server";
   const name = String(formData.get("name") ?? "").trim();
   const numberRaw = String(formData.get("number") ?? "").trim();
+  const teamId = String(formData.get("teamId") ?? "").trim();
   const team = String(formData.get("team") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
   if (!name) return;
 
   const number = numberRaw ? Number(numberRaw) : null;
 
+  const t = teamId
+    ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, name: true } }).catch(() => null)
+    : null;
+
   await prisma.driver.create({
     data: {
       league,
       name,
       number: Number.isFinite(number) ? (number as number) : null,
-      team: team || null,
+      teamId: t?.id ?? null,
+      team: t?.name ?? (team || null),
       country: country || null
     }
   });
@@ -84,15 +90,24 @@ export default async function AdminDriversPage({
     name: string;
     number: number | null;
     team: string | null;
+    teamId: string | null;
     country: string | null;
   };
 
   let drivers: DriverItem[] = [];
+  let teams: { id: string; name: string }[] = [];
   try {
     drivers = await prisma.driver.findMany({
       where: { league: l },
       orderBy: [{ name: "asc" }],
-      select: { id: true, name: true, number: true, team: true, country: true }
+      select: { id: true, name: true, number: true, team: true, teamId: true, country: true }
+    });
+  } catch {}
+  try {
+    teams = await prisma.team.findMany({
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true },
+      take: 500
     });
   } catch {}
 
@@ -128,9 +143,27 @@ export default async function AdminDriversPage({
             <label className="mb-1 block text-xs font-semibold text-white/70">
               Team
             </label>
+            <select
+              name="teamId"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              defaultValue=""
+            >
+              <option value="">Bitte wählen</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-white/70">
+              Team (Fallback, optional)
+            </label>
             <input
               name="team"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              placeholder="Nur falls Team nicht in der Liste ist"
             />
           </div>
           <div>

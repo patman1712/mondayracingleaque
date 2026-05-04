@@ -66,6 +66,12 @@ export async function AdminShell({ children }: { children: ReactNode }) {
             >
               Rennstrecken
             </Link>
+            <Link
+              href="/admin/settings/teams"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              Teams
+            </Link>
           </div>
 
           <div className="mt-6 text-xs font-semibold uppercase tracking-wider text-white/60">
