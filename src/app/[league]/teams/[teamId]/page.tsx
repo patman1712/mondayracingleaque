@@ -136,47 +136,39 @@ export default async function TeamDetailPage({
             <div className="absolute left-0 top-0 h-full w-[55%] bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
           </div>
 
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-24 sm:pb-28">
+            {carUrl ? (
+              <img
+                src={carUrl}
+                alt=""
+                className="h-[min(320px,34vh)] w-[min(980px,96vw)] object-contain drop-shadow-[0_30px_60px_rgba(0,0,0,0.55)] sm:h-[min(420px,40vh)]"
+              />
+            ) : (
+              <div className="flex h-[min(320px,34vh)] w-[min(980px,96vw)] items-center justify-center text-sm font-semibold text-white/35 sm:h-[min(420px,40vh)]">
+                CAR
+              </div>
+            )}
+          </div>
+
           <div className="absolute inset-0 flex items-end pb-8">
             <Container>
-              <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-4">
-                    {logoUrl ? (
-                      <img
-                        src={logoUrl}
-                        alt=""
-                        className="h-14 w-14 rounded-2xl bg-black/30 object-contain"
-                      />
-                    ) : (
-                      <div className="h-14 w-14 rounded-2xl bg-black/30" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="truncate text-3xl font-extrabold tracking-tight text-white">
-                        {team.name}
-                      </div>
-                      <div className="mt-2 text-sm text-white/70">
-                        {leagueLabel[l]}
-                      </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-4">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt=""
+                      className="h-14 w-14 rounded-2xl bg-black/30 object-contain"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-2xl bg-black/30" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-3xl font-extrabold tracking-tight text-white">
+                      {team.name}
                     </div>
-                  </div>
-                </div>
-
-                <div className="w-full md:w-[520px]">
-                  <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/20">
-                    <div className="p-4">
-                      <div className="h-[160px] w-full">
-                        {carUrl ? (
-                          <img
-                            src={carUrl}
-                            alt=""
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white/35">
-                            CAR
-                          </div>
-                        )}
-                      </div>
+                    <div className="mt-2 text-sm text-white/70">
+                      {leagueLabel[l]}
                     </div>
                   </div>
                 </div>
@@ -218,4 +210,3 @@ export default async function TeamDetailPage({
     </>
   );
 }
-
