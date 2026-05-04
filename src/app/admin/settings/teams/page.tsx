@@ -28,6 +28,15 @@ function extFromMime(mime: string) {
   return null;
 }
 
+function asUploadFile(v: unknown): File | null {
+  if (!v || typeof v !== "object") return null;
+  const f = v as { arrayBuffer?: unknown; size?: unknown; type?: unknown };
+  if (typeof f.arrayBuffer !== "function") return null;
+  if (typeof f.size !== "number") return null;
+  if (typeof f.type !== "string") return null;
+  return v as File;
+}
+
 async function writeUpload(fileName: string, file: File) {
   const root = dataRootDir();
   const uploads = path.join(root, "uploads");
@@ -76,7 +85,7 @@ async function createTeam(formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
   const color = String(formData.get("color") ?? "").trim();
-  const logo = formData.get("logo");
+  const logo = asUploadFile(formData.get("logo"));
 
   if (!name) redirect("/admin/settings/teams?error=invalid");
 
@@ -93,7 +102,7 @@ async function createTeam(formData: FormData) {
 
   if (!created) redirect("/admin/settings/teams?error=duplicate");
 
-  if (logo instanceof File && logo.size > 0) {
+  if (logo && logo.size > 0) {
     if (logo.size > 5_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(logo.type);
     if (!ext) redirect("/admin/settings/teams?error=image");
@@ -133,13 +142,13 @@ async function addParticipation(formData: FormData) {
   const teamId = String(formData.get("teamId") ?? "");
   const seasonId = String(formData.get("seasonId") ?? "");
   const color = String(formData.get("color") ?? "").trim();
-  const car = formData.get("car");
-  const heroBackground = formData.get("heroBackground");
+  const car = asUploadFile(formData.get("car"));
+  const heroBackground = asUploadFile(formData.get("heroBackground"));
 
   if (!teamId || !seasonId) redirect("/admin/settings/teams?error=invalid");
 
   let carImagePath: string | null = null;
-  if (car instanceof File && car.size > 0) {
+  if (car && car.size > 0) {
     if (car.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(car.type);
     if (!ext) redirect("/admin/settings/teams?error=image");
@@ -149,7 +158,7 @@ async function addParticipation(formData: FormData) {
   }
 
   let heroBackgroundPath: string | null = null;
-  if (heroBackground instanceof File && heroBackground.size > 0) {
+  if (heroBackground && heroBackground.size > 0) {
     if (heroBackground.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(heroBackground.type);
     if (!ext) redirect("/admin/settings/teams?error=image");
@@ -189,8 +198,8 @@ async function updateParticipation(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
   const color = String(formData.get("color") ?? "").trim();
-  const car = formData.get("car");
-  const heroBackground = formData.get("heroBackground");
+  const car = asUploadFile(formData.get("car"));
+  const heroBackground = asUploadFile(formData.get("heroBackground"));
   if (!id) return;
 
   const current = await prisma.teamSeason.findUnique({
@@ -201,7 +210,7 @@ async function updateParticipation(formData: FormData) {
 
   let carImagePath: string | null | undefined = undefined;
   let newCarPath: string | null = null;
-  if (car instanceof File && car.size > 0) {
+  if (car && car.size > 0) {
     if (car.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(car.type);
     if (!ext) redirect("/admin/settings/teams?error=image");
@@ -213,7 +222,7 @@ async function updateParticipation(formData: FormData) {
 
   let heroBackgroundPath: string | null | undefined = undefined;
   let newHeroPath: string | null = null;
-  if (heroBackground instanceof File && heroBackground.size > 0) {
+  if (heroBackground && heroBackground.size > 0) {
     if (heroBackground.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(heroBackground.type);
     if (!ext) redirect("/admin/settings/teams?error=image");
