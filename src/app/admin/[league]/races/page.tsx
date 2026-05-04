@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
+import fs from "node:fs";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,55 @@ const leagueEnum: Record<string, League> = {
   two: League.TWO,
   rookie: League.ROOKIE
 };
+
+function ensureDir(p: string) {
+  try {
+    fs.mkdirSync(p, { recursive: true });
+  } catch {}
+}
+
+function parseStartsAt(raw: string) {
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct;
+
+  const m = raw.match(
+    /^(\d{2})\.(\d{2})\.(\d{4})(?:,\s*|\s+)(\d{2}):(\d{2})$/
+  );
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, min] = m;
+  const d = new Date(
+    Number(yyyy),
+    Number(mm) - 1,
+    Number(dd),
+    Number(hh),
+    Number(min),
+    0,
+    0
+  );
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function dataRootDir() {
+  const railwayMount = "/app/data";
+  if (fs.existsSync(railwayMount)) return railwayMount;
+  return path.join(process.cwd(), "data");
+}
+
+function extFromMime(mime: string) {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return null;
+}
+
+async function writeRaceImage(fileName: string, file: File) {
+  const root = dataRootDir();
+  const uploads = path.join(root, "uploads");
+  ensureDir(uploads);
+  const abs = path.join(uploads, fileName);
+  const buf = Buffer.from(await file.arrayBuffer());
+  fs.writeFileSync(abs, buf);
+}
 
 const leagueLabel: Record<League, string> = {
   [League.ONE]: "MRL One",
@@ -27,6 +78,7 @@ async function createRace(
 ) {
   "use server";
 
+  await requireAdmin();
   const basePath = `/admin/${adminLeague}/races`;
   const season = Number(formData.get("season") ?? "");
   const round = Number(formData.get("round") ?? "");
@@ -40,11 +92,11 @@ async function createRace(
   }
   if (!startsAtRaw) redirect(`${basePath}?error=invalid`);
 
-  const startsAt = new Date(startsAtRaw);
-  if (Number.isNaN(startsAt.getTime())) redirect(`${basePath}?error=invalid`);
+  const startsAt = parseStartsAt(startsAtRaw);
+  if (!startsAt) redirect(`${basePath}?error=invalid`);
 
   try {
-    await prisma.race.create({
+    const created = await prisma.race.create({
       data: {
         league,
         season,
@@ -55,6 +107,19 @@ async function createRace(
         startsAt
       }
     });
+
+    const image = formData.get("image");
+    if (image instanceof File && image.size > 0) {
+      if (image.size > 5_000_000) redirect(`${basePath}?error=image`);
+      const ext = extFromMime(image.type);
+      if (!ext) redirect(`${basePath}?error=image`);
+      const fileName = `${created.id}.${ext}`;
+      await writeRaceImage(fileName, image);
+      await prisma.race.update({
+        where: { id: created.id },
+        data: { imagePath: fileName }
+      });
+    }
   } catch (e: unknown) {
     const code =
       typeof e === "object" && e !== null && "code" in e
@@ -79,12 +144,48 @@ async function createRace(
   redirect(`${basePath}?ok=1`);
 }
 
+async function updateRaceImage(adminLeague: string, formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const basePath = `/admin/${adminLeague}/races`;
+  const raceId = String(formData.get("raceId") ?? "");
+  const image = formData.get("image");
+  if (!raceId) redirect(`${basePath}?error=image`);
+  if (!(image instanceof File) || image.size === 0) redirect(`${basePath}?error=image`);
+  if (image.size > 5_000_000) redirect(`${basePath}?error=image`);
+  const ext = extFromMime(image.type);
+  if (!ext) redirect(`${basePath}?error=image`);
+  const fileName = `${raceId}.${ext}`;
+
+  await writeRaceImage(fileName, image);
+  await prisma.race.update({
+    where: { id: raceId },
+    data: { imagePath: fileName }
+  });
+
+  revalidatePath(`/admin/${adminLeague}/races`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+  redirect(`${basePath}?ok=1`);
+}
+
 async function deleteRace(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
+  const existing = await prisma.race
+    .findUnique({ where: { id }, select: { imagePath: true } })
+    .catch(() => null);
   await prisma.race.delete({ where: { id } });
+  if (existing?.imagePath) {
+    try {
+      const abs = path.join(dataRootDir(), "uploads", existing.imagePath);
+      fs.unlinkSync(abs);
+    } catch {}
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/one/races");
@@ -154,11 +255,14 @@ export default async function AdminRacesPage({
               ? "Diese Saison/Runde existiert bereits."
               : error === "invalid"
                 ? "Bitte alle Pflichtfelder korrekt ausfüllen."
+                : error === "image"
+                  ? "Bild-Upload fehlgeschlagen (nur JPG/PNG/WEBP, max. 5MB)."
                 : "Speichern fehlgeschlagen. Bitte erneut versuchen."}
           </div>
         ) : null}
         <form
           action={createRace.bind(null, league, l)}
+          encType="multipart/form-data"
           className="mt-4 grid gap-4 md:grid-cols-2"
         >
           <div>
@@ -221,6 +325,17 @@ export default async function AdminRacesPage({
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
             />
           </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-white/70">
+              Bild (optional)
+            </label>
+            <input
+              name="image"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            />
+          </div>
           <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
             Speichern
           </button>
@@ -256,6 +371,22 @@ export default async function AdminRacesPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <form
+                    action={updateRaceImage.bind(null, league)}
+                    encType="multipart/form-data"
+                    className="flex items-center gap-2"
+                  >
+                    <input type="hidden" name="raceId" value={r.id} />
+                    <input
+                      name="image"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="w-[190px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
+                    />
+                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                      Bild
+                    </button>
+                  </form>
                   <Link
                     href={`/admin/${league}/results/${r.id}`}
                     className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"

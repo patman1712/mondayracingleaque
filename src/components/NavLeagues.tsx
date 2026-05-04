@@ -30,6 +30,7 @@ type ScheduleCard = {
   round: number;
   date: string;
   live?: boolean;
+  imageUrl?: string | null;
 };
 
 type LeagueSchedule = {
@@ -232,6 +233,7 @@ export function NavLeagues() {
                             accent,
                             Boolean(card.live)
                           );
+                          const src = card.imageUrl || img;
 
                           return (
                             <Link
@@ -244,7 +246,7 @@ export function NavLeagues() {
                               </div>
                               <div className="relative mt-3 aspect-[16/10] overflow-hidden">
                                 <img
-                                  src={img}
+                                  src={src}
                                   alt=""
                                   className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                 />

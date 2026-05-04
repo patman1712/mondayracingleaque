@@ -46,6 +46,7 @@ model Race {
   circuit   String?
   location  String?
   startsAt  DateTime
+  imagePath String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -12,6 +12,11 @@ function formatDateRange(d: Date) {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
 }
 
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("league") ?? "";
@@ -26,21 +31,21 @@ export async function GET(req: Request) {
       .findFirst({
         where: { league, startsAt: { lt: now } },
         orderBy: { startsAt: "desc" },
-        select: { id: true, name: true, startsAt: true, round: true }
+        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
         where: { league, startsAt: { gt: now } },
         orderBy: { startsAt: "asc" },
-        select: { id: true, name: true, startsAt: true, round: true }
+        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
         where: { league, startsAt: { lte: now } },
         orderBy: { startsAt: "desc" },
-        select: { id: true, name: true, startsAt: true, round: true }
+        select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })
       .catch(() => null)
   ]);
@@ -59,7 +64,8 @@ export async function GET(req: Request) {
           id: previous.id,
           title: previous.name,
           round: previous.round,
-          date: formatDateRange(new Date(previous.startsAt))
+          date: formatDateRange(new Date(previous.startsAt)),
+          imageUrl: imageUrl(previous.imagePath)
         }
       : null,
     current: current
@@ -68,7 +74,8 @@ export async function GET(req: Request) {
           title: current.name,
           round: current.round,
           date: formatDateRange(new Date(current.startsAt)),
-          live: true
+          live: true,
+          imageUrl: imageUrl(current.imagePath)
         }
       : null,
     upcoming: upcoming
@@ -76,7 +83,8 @@ export async function GET(req: Request) {
           id: upcoming.id,
           title: upcoming.name,
           round: upcoming.round,
-          date: formatDateRange(new Date(upcoming.startsAt))
+          date: formatDateRange(new Date(upcoming.startsAt)),
+          imageUrl: imageUrl(upcoming.imagePath)
         }
       : null
   };
