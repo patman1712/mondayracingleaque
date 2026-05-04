@@ -41,6 +41,21 @@ function parseStartsAt(raw: string) {
     return Number.isNaN(d.getTime()) ? null : d;
   }
 
+  const isoComma = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:,\s*|\s+)(\d{2}):(\d{2})$/);
+  if (isoComma) {
+    const [, yyyy, mm, dd, hh, min] = isoComma;
+    const d = new Date(
+      Number(yyyy),
+      Number(mm) - 1,
+      Number(dd),
+      Number(hh),
+      Number(min),
+      0,
+      0
+    );
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
   const m = v.match(
     /^(\d{2})\.(\d{2})\.(\d{4})(?:,\s*|\s+)(\d{2}):(\d{2})$/
   );
@@ -89,6 +104,24 @@ async function writeRaceImage(fileName: string, file: File) {
   fs.writeFileSync(abs, buf);
 }
 
+function buildRaceName(input: {
+  season: number;
+  seasonNo: number;
+  seasonIsTest: boolean;
+  round: number;
+  circuit: string | null;
+  location: string | null;
+}) {
+  const parts: string[] = [];
+  if (input.seasonIsTest) parts.push("TEST");
+  parts.push(String(input.season));
+  parts.push(`Season ${input.seasonNo}`);
+  parts.push(`R${input.round}`);
+  if (input.circuit) parts.push(input.circuit);
+  if (input.location) parts.push(input.location);
+  return parts.join(" · ");
+}
+
 const leagueLabel: Record<League, string> = {
   [League.ONE]: "MRL One",
   [League.TWO]: "MRL Two",
@@ -132,7 +165,7 @@ async function createRace(
   const seasonIsTest = seasonFromKey?.[3] === "1";
   const round = Number.parseInt(roundRaw, 10);
 
-  if (!Number.isFinite(season) || !Number.isFinite(seasonNo) || !Number.isFinite(round) || !name) {
+  if (!Number.isFinite(season) || !Number.isFinite(seasonNo) || !Number.isFinite(round)) {
     returnQuery.set("error", "invalid");
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
@@ -151,9 +184,13 @@ async function createRace(
   try {
     let circuitNameToSave = circuit || null;
     let locationToSave = location || null;
+    let circuitImagePath: string | null = null;
     if (circuitId) {
       const c = await prisma.circuit
-        .findUnique({ where: { id: circuitId }, select: { name: true, location: true } })
+        .findUnique({
+          where: { id: circuitId },
+          select: { name: true, location: true, imagePath: true }
+        })
         .catch(() => null);
       if (!c) {
         returnQuery.set("error", "invalid");
@@ -161,6 +198,22 @@ async function createRace(
       }
       circuitNameToSave = c.name;
       locationToSave = c.location ?? null;
+      circuitImagePath = c.imagePath ?? null;
+    }
+
+    const nameToSave =
+      name ||
+      buildRaceName({
+        season,
+        seasonNo,
+        seasonIsTest,
+        round,
+        circuit: circuitNameToSave,
+        location: locationToSave
+      });
+    if (!nameToSave.trim()) {
+      returnQuery.set("error", "invalid");
+      redirect(`${basePath}?${returnQuery.toString()}`);
     }
 
     const created = await prisma.race.create({
@@ -170,7 +223,7 @@ async function createRace(
         seasonNo,
         seasonIsTest,
         round,
-        name,
+        name: nameToSave,
         circuitId: circuitId || null,
         circuit: circuitNameToSave,
         location: locationToSave,
@@ -195,6 +248,23 @@ async function createRace(
         where: { id: created.id },
         data: { imagePath: fileName }
       });
+    } else if (circuitImagePath) {
+      try {
+        const root = dataRootDir();
+        const uploads = path.join(root, "uploads");
+        const src = path.join(uploads, circuitImagePath);
+        if (fs.existsSync(src)) {
+          const ext = path.extname(circuitImagePath);
+          const destName = `${created.id}${ext}`;
+          const dest = path.join(uploads, destName);
+          ensureDir(uploads);
+          fs.copyFileSync(src, dest);
+          await prisma.race.update({
+            where: { id: created.id },
+            data: { imagePath: destName }
+          });
+        }
+      } catch {}
     }
   } catch (e: unknown) {
     const code =
@@ -260,7 +330,7 @@ async function deleteRace(formData: FormData) {
     .findUnique({ where: { id }, select: { imagePath: true } })
     .catch(() => null);
   await prisma.race.delete({ where: { id } });
-  if (existing?.imagePath) {
+  if (existing?.imagePath && !existing.imagePath.startsWith("circuit-")) {
     try {
       const abs = path.join(dataRootDir(), "uploads", existing.imagePath);
       fs.unlinkSync(abs);
@@ -468,12 +538,12 @@ export default async function AdminRacesPage({
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
-              Rennen
+              Rennen (optional)
             </label>
             <input
               name="name"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="Bahrain GP"
+              placeholder="Wird automatisch aus Saison/Runde/Strecke erstellt"
               defaultValue={defaults.name}
             />
           </div>
