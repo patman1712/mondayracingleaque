@@ -43,7 +43,7 @@ function formatRange(start: Date) {
   return `${s} – ${e}`.toUpperCase();
 }
 
-export default async function LeagueCalendarPage({
+export default async function LeagueArchivePage({
   params
 }: {
   params: Promise<{ league: string }>;
@@ -68,7 +68,7 @@ export default async function LeagueCalendarPage({
   let races: RaceItem[] = [];
   try {
     const seasons = await prisma.season.findMany({
-      where: { league: l, placement: "CALENDAR" },
+      where: { league: l, placement: "ARCHIVE" },
       select: { year: true, seasonNo: true, isTest: true },
       take: 200
     });
@@ -85,7 +85,7 @@ export default async function LeagueCalendarPage({
     races = await prisma.race.findMany({
       where: seasonOr.length ? { league: l, OR: seasonOr } : { league: l, id: "__none__" },
       orderBy: [{ startsAt: "asc" }],
-      take: 400,
+      take: 600,
       select: {
         id: true,
         season: true,
@@ -107,17 +107,17 @@ export default async function LeagueCalendarPage({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-2xl font-extrabold">
-              Rennkalender · {leagueLabel[l]}
+              Archiv · {leagueLabel[l]}
             </div>
             <div className="mt-2 text-sm text-white/70">
-              Aktuelle Seasons (im Admin steuerbar)
+              Saisons, die im Admin ins Archiv verschoben wurden
             </div>
           </div>
           <Link
-            href={`/${league}/archive`}
+            href={`/${league}/calendar`}
             className="rounded-lg border border-white/15 bg-black/20 px-4 py-2 text-sm font-semibold text-white hover:bg-black/30"
           >
-            Archiv ansehen
+            Zurück zum Kalender
           </Link>
         </div>
       </div>
@@ -125,7 +125,7 @@ export default async function LeagueCalendarPage({
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {races.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60 sm:col-span-2 lg:col-span-3">
-            Noch keine Rennen eingetragen.
+            Noch keine Archiv-Rennen vorhanden.
           </div>
         ) : (
           races.map((r) => (
@@ -175,3 +175,4 @@ export default async function LeagueCalendarPage({
     </Container>
   );
 }
+

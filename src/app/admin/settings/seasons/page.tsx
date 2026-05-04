@@ -2,6 +2,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { League } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -10,24 +11,32 @@ async function createSeason(formData: FormData) {
   const yearRaw = String(formData.get("year") ?? "").trim();
   const seasonNoRaw = String(formData.get("seasonNo") ?? "").trim();
   const leagueRaw = String(formData.get("league") ?? "").trim();
+  const placementRaw = String(formData.get("placement") ?? "").trim();
   const isTest = formData.get("isTest") === "on";
   const label = String(formData.get("label") ?? "").trim();
   const year = Number.parseInt(yearRaw, 10);
   const seasonNo = Number.parseInt(seasonNoRaw, 10);
   const league =
     leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
+  const placement = placementRaw === "ARCHIVE" ? "ARCHIVE" : "CALENDAR";
   if (!Number.isFinite(year) || !Number.isFinite(seasonNo) || !league) {
     redirect("/admin/settings/seasons?error=invalid");
   }
 
   try {
     await prisma.season.create({
-      data: { league, year, seasonNo, label: label || null, isTest }
+      data: { league, year, seasonNo, label: label || null, isTest, placement }
     });
   } catch {
     redirect("/admin/settings/seasons?error=duplicate");
   }
 
+  revalidatePath("/mrl-one/calendar");
+  revalidatePath("/mrl-two/calendar");
+  revalidatePath("/mrl-rookie/calendar");
+  revalidatePath("/mrl-one/archive");
+  revalidatePath("/mrl-two/archive");
+  revalidatePath("/mrl-rookie/archive");
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -36,6 +45,12 @@ async function deleteSeason(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.season.delete({ where: { id } }).catch(() => null);
+  revalidatePath("/mrl-one/calendar");
+  revalidatePath("/mrl-two/calendar");
+  revalidatePath("/mrl-rookie/calendar");
+  revalidatePath("/mrl-one/archive");
+  revalidatePath("/mrl-two/archive");
+  revalidatePath("/mrl-rookie/archive");
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -45,7 +60,7 @@ async function duplicateSeasonVariant(formData: FormData) {
   if (!id) return;
   const current = await prisma.season.findUnique({
     where: { id },
-    select: { league: true, year: true, seasonNo: true, label: true, isTest: true }
+    select: { league: true, year: true, seasonNo: true, label: true, isTest: true, placement: true }
   });
   if (!current) redirect("/admin/settings/seasons?error=invalid");
 
@@ -56,13 +71,38 @@ async function duplicateSeasonVariant(formData: FormData) {
         year: current.year,
         seasonNo: current.seasonNo,
         label: current.label,
-        isTest: !current.isTest
+        isTest: !current.isTest,
+        placement: current.placement
       }
     });
+    revalidatePath("/mrl-one/calendar");
+    revalidatePath("/mrl-two/calendar");
+    revalidatePath("/mrl-rookie/calendar");
+    revalidatePath("/mrl-one/archive");
+    revalidatePath("/mrl-two/archive");
+    revalidatePath("/mrl-rookie/archive");
     redirect("/admin/settings/seasons?ok=1");
   } catch {
     redirect("/admin/settings/seasons?error=duplicate");
   }
+}
+
+async function setPlacement(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  const placement = String(formData.get("placement") ?? "");
+  if (!id) return;
+  if (placement !== "CALENDAR" && placement !== "ARCHIVE") {
+    redirect("/admin/settings/seasons?error=invalid");
+  }
+  await prisma.season.update({ where: { id }, data: { placement } }).catch(() => null);
+  revalidatePath("/mrl-one/calendar");
+  revalidatePath("/mrl-two/calendar");
+  revalidatePath("/mrl-rookie/calendar");
+  revalidatePath("/mrl-one/archive");
+  revalidatePath("/mrl-two/archive");
+  revalidatePath("/mrl-rookie/archive");
+  redirect("/admin/settings/seasons?ok=1");
 }
 
 export default async function AdminSeasonsPage({
@@ -161,6 +201,19 @@ export default async function AdminSeasonsPage({
                 defaultValue={1}
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">
+                Anzeige
+              </label>
+              <select
+                name="placement"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                defaultValue="CALENDAR"
+              >
+                <option value="CALENDAR">Liga-Kalender</option>
+                <option value="ARCHIVE">Liga-Archiv</option>
+              </select>
+            </div>
             <div className="md:col-span-4">
               <label className="mb-1 block text-xs font-semibold text-white/70">
                 Label (optional)
@@ -213,8 +266,24 @@ export default async function AdminSeasonsPage({
                         Testseason
                       </div>
                     ) : null}
+                    {s.placement === "ARCHIVE" ? (
+                      <div className="mt-2 inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-xs font-semibold text-white/80">
+                        Archiv
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2">
+                    <form action={setPlacement}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <input
+                        type="hidden"
+                        name="placement"
+                        value={s.placement === "ARCHIVE" ? "CALENDAR" : "ARCHIVE"}
+                      />
+                      <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                        {s.placement === "ARCHIVE" ? "In Kalender" : "Ins Archiv"}
+                      </button>
+                    </form>
                     {canDuplicate ? (
                       <form action={duplicateSeasonVariant}>
                         <input type="hidden" name="id" value={s.id} />

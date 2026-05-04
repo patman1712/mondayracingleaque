@@ -13,6 +13,11 @@ enum League {
   ROOKIE
 }
 
+enum SeasonPlacement {
+  CALENDAR
+  ARCHIVE
+}
+
 model NewsPost {
   id          String    @id @default(cuid())
   title       String
@@ -95,6 +100,7 @@ model Season {
   seasonNo Int @default(1)
   label String?
   isTest Boolean @default(false)
+  placement SeasonPlacement @default(CALENDAR)
 
   createdAt DateTime @default(now())
 

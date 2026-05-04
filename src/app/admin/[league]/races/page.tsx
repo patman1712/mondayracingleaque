@@ -409,7 +409,13 @@ export default async function AdminRacesPage({
   const l = leagueEnum[league];
   if (!l) notFound();
 
-  type SeasonItem = { year: number; seasonNo: number; label: string | null; isTest: boolean };
+  type SeasonItem = {
+    year: number;
+    seasonNo: number;
+    label: string | null;
+    isTest: boolean;
+    placement: "CALENDAR" | "ARCHIVE";
+  };
   type CircuitItem = { id: string; name: string; location: string | null };
 
   const [seasons, circuits] = await Promise.all([
@@ -418,7 +424,7 @@ export default async function AdminRacesPage({
         where: { league: l },
         orderBy: [{ year: "desc" }, { seasonNo: "desc" }],
         take: 50,
-        select: { year: true, seasonNo: true, label: true, isTest: true }
+        select: { year: true, seasonNo: true, label: true, isTest: true, placement: true }
       })
       .catch((): SeasonItem[] => []),
     prisma.circuit
@@ -431,6 +437,8 @@ export default async function AdminRacesPage({
   ]);
 
   const defaultSeason =
+    seasons.find((s) => s.placement === "CALENDAR" && !s.isTest) ??
+    seasons.find((s) => s.placement === "CALENDAR") ??
     seasons.find((s) => !s.isTest) ??
     seasons[0] ??
     null;
@@ -511,6 +519,7 @@ export default async function AdminRacesPage({
                     key={`${s.year}-${s.seasonNo}-${s.isTest ? 1 : 0}`}
                     value={`${s.year}-${s.seasonNo}-${s.isTest ? 1 : 0}`}
                   >
+                    {s.placement === "ARCHIVE" ? "ARCHIV · " : ""}
                     {s.isTest ? "TEST · " : ""}
                     {s.year} · Season {s.seasonNo}
                   </option>
