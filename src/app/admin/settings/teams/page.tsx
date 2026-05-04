@@ -1,7 +1,7 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { League } from "@prisma/client";
+import { League, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import fs from "node:fs";
 import path from "node:path";
@@ -35,6 +35,14 @@ async function writeUpload(fileName: string, file: File) {
   const abs = path.join(uploads, fileName);
   const buf = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(abs, buf);
+}
+
+function deleteUpload(fileName: string | null | undefined) {
+  if (!fileName) return;
+  const abs = path.join(dataRootDir(), "uploads", fileName);
+  try {
+    fs.unlinkSync(abs);
+  } catch {}
 }
 
 function imageUrl(imagePath: string | null | undefined) {
@@ -150,8 +158,8 @@ async function addParticipation(formData: FormData) {
     heroBackgroundPath = fileName;
   }
 
-  await prisma.teamSeason
-    .create({
+  try {
+    await prisma.teamSeason.create({
       data: {
         teamId,
         seasonId,
@@ -159,8 +167,18 @@ async function addParticipation(formData: FormData) {
         carImagePath,
         heroBackgroundPath
       }
-    })
-    .catch(() => redirect("/admin/settings/teams?error=duplicate"));
+    });
+  } catch (e) {
+    deleteUpload(carImagePath);
+    deleteUpload(heroBackgroundPath);
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      redirect("/admin/settings/teams?error=duplicate");
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+      redirect("/admin/settings/teams?error=db");
+    }
+    redirect("/admin/settings/teams?error=save");
+  }
 
   revalidatePath("/admin/settings/teams");
   await revalidatePublicTeamsForSeason(seasonId, teamId);
@@ -182,6 +200,7 @@ async function updateParticipation(formData: FormData) {
   if (!current) redirect("/admin/settings/teams?error=invalid");
 
   let carImagePath: string | null | undefined = undefined;
+  let newCarPath: string | null = null;
   if (car instanceof File && car.size > 0) {
     if (car.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(car.type);
@@ -189,15 +208,11 @@ async function updateParticipation(formData: FormData) {
     const fileName = `team-car-${current.teamId}-${current.seasonId}-${Date.now()}.${ext}`;
     await writeUpload(fileName, car);
     carImagePath = fileName;
-    if (current.carImagePath) {
-      const abs = path.join(dataRootDir(), "uploads", current.carImagePath);
-      try {
-        fs.unlinkSync(abs);
-      } catch {}
-    }
+    newCarPath = fileName;
   }
 
   let heroBackgroundPath: string | null | undefined = undefined;
+  let newHeroPath: string | null = null;
   if (heroBackground instanceof File && heroBackground.size > 0) {
     if (heroBackground.size > 8_000_000) redirect("/admin/settings/teams?error=image");
     const ext = extFromMime(heroBackground.type);
@@ -205,22 +220,29 @@ async function updateParticipation(formData: FormData) {
     const fileName = `team-hero-${current.teamId}-${current.seasonId}-${Date.now()}.${ext}`;
     await writeUpload(fileName, heroBackground);
     heroBackgroundPath = fileName;
-    if (current.heroBackgroundPath) {
-      const abs = path.join(dataRootDir(), "uploads", current.heroBackgroundPath);
-      try {
-        fs.unlinkSync(abs);
-      } catch {}
-    }
+    newHeroPath = fileName;
   }
 
-  await prisma.teamSeason.update({
-    where: { id },
-    data: {
-      color: color || null,
-      ...(carImagePath !== undefined ? { carImagePath } : {}),
-      ...(heroBackgroundPath !== undefined ? { heroBackgroundPath } : {})
+  try {
+    await prisma.teamSeason.update({
+      where: { id },
+      data: {
+        color: color || null,
+        ...(carImagePath !== undefined ? { carImagePath } : {}),
+        ...(heroBackgroundPath !== undefined ? { heroBackgroundPath } : {})
+      }
+    });
+  } catch (e) {
+    deleteUpload(newCarPath);
+    deleteUpload(newHeroPath);
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+      redirect("/admin/settings/teams?error=db");
     }
-  });
+    redirect("/admin/settings/teams?error=save");
+  }
+
+  if (newCarPath && current.carImagePath) deleteUpload(current.carImagePath);
+  if (newHeroPath && current.heroBackgroundPath) deleteUpload(current.heroBackgroundPath);
 
   revalidatePath("/admin/settings/teams");
   await revalidatePublicTeamsForSeason(current.seasonId, current.teamId);
