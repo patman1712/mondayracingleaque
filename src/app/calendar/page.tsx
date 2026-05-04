@@ -78,7 +78,7 @@ export default async function CalendarPage({
 
   try {
     const races = await prisma.race.findMany({
-      where: { startsAt: { gte: monthStart, lt: monthEnd } },
+      where: { seasonIsTest: false, startsAt: { gte: monthStart, lt: monthEnd } },
       orderBy: [{ startsAt: "asc" }],
       take: 500,
       select: {
@@ -96,7 +96,7 @@ export default async function CalendarPage({
 
   try {
     const races = await prisma.race.findMany({
-      where: { startsAt: { gte: now } },
+      where: { seasonIsTest: false, startsAt: { gte: now } },
       orderBy: [{ startsAt: "asc" }],
       take: 18,
       select: {

@@ -44,7 +44,7 @@ export default async function HomePage() {
 
   try {
     races = await prisma.race.findMany({
-      where: { startsAt: { gte: now } },
+      where: { seasonIsTest: false, startsAt: { gte: now } },
       orderBy: { startsAt: "asc" },
       take: 6,
       select: {
@@ -61,17 +61,17 @@ export default async function HomePage() {
   try {
     const [one, two, rookie] = await Promise.all([
       prisma.race.findFirst({
-        where: { league: "ONE", startsAt: { gte: now } },
+        where: { league: "ONE", seasonIsTest: false, startsAt: { gte: now } },
         orderBy: { startsAt: "asc" },
         select: { name: true, startsAt: true }
       }),
       prisma.race.findFirst({
-        where: { league: "TWO", startsAt: { gte: now } },
+        where: { league: "TWO", seasonIsTest: false, startsAt: { gte: now } },
         orderBy: { startsAt: "asc" },
         select: { name: true, startsAt: true }
       }),
       prisma.race.findFirst({
-        where: { league: "ROOKIE", startsAt: { gte: now } },
+        where: { league: "ROOKIE", seasonIsTest: false, startsAt: { gte: now } },
         orderBy: { startsAt: "asc" },
         select: { name: true, startsAt: true }
       })

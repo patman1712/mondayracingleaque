@@ -42,6 +42,7 @@ model Race {
   league    League
   season    Int
   seasonNo  Int      @default(1)
+  seasonIsTest Boolean @default(false)
   round     Int
   name      String
   circuit   String?
@@ -53,7 +54,7 @@ model Race {
 
   results RaceResult[]
 
-  @@unique([league, season, seasonNo, round])
+  @@unique([league, season, seasonNo, seasonIsTest, round])
 }
 
 model RaceResult {
@@ -95,7 +96,7 @@ model Season {
 
   createdAt DateTime @default(now())
 
-  @@unique([league, year, seasonNo])
+  @@unique([league, year, seasonNo, isTest])
 }
 
 model Circuit {

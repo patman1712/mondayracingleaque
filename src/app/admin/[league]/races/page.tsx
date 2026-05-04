@@ -125,10 +125,11 @@ async function createRace(
   if (location) returnQuery.set("location", location);
   if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
 
-  const seasonFromKey = seasonKey.match(/^(\d{4})-(\d{1,2})$/);
+  const seasonFromKey = seasonKey.match(/^(\d{4})-(\d{1,2})-(0|1)$/);
   const season = Number.parseInt(seasonFromKey?.[1] ?? seasonRaw, 10);
   const seasonNoFallback = seasonNoRaw || "1";
   const seasonNo = Number.parseInt(seasonFromKey?.[2] ?? seasonNoFallback, 10);
+  const seasonIsTest = seasonFromKey?.[3] === "1";
   const round = Number.parseInt(roundRaw, 10);
 
   if (!Number.isFinite(season) || !Number.isFinite(seasonNo) || !Number.isFinite(round) || !name) {
@@ -167,6 +168,7 @@ async function createRace(
         league,
         season,
         seasonNo,
+        seasonIsTest,
         round,
         name,
         circuit: circuitNameToSave,
@@ -340,9 +342,16 @@ export default async function AdminRacesPage({
       .catch((): CircuitItem[] => [])
   ]);
 
+  const defaultSeason =
+    seasons.find((s) => !s.isTest) ??
+    seasons[0] ??
+    null;
+
   type RaceItem = {
     id: string;
     season: number;
+    seasonNo: number;
+    seasonIsTest: boolean;
     round: number;
     name: string;
     startsAt: Date;
@@ -353,9 +362,18 @@ export default async function AdminRacesPage({
   try {
     races = await prisma.race.findMany({
       where: { league: l },
-      orderBy: [{ season: "desc" }, { round: "asc" }],
+      orderBy: [{ season: "desc" }, { seasonNo: "desc" }, { seasonIsTest: "asc" }, { round: "asc" }],
       take: 120,
-      select: { id: true, season: true, round: true, name: true, startsAt: true, circuit: true }
+      select: {
+        id: true,
+        season: true,
+        seasonNo: true,
+        seasonIsTest: true,
+        round: true,
+        name: true,
+        startsAt: true,
+        circuit: true
+      }
     });
   } catch {}
 
@@ -397,11 +415,14 @@ export default async function AdminRacesPage({
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 defaultValue={
                   defaults.seasonKey ||
-                  `${seasons[0]?.year ?? new Date().getFullYear()}-${seasons[0]?.seasonNo ?? 1}`
+                  `${defaultSeason?.year ?? new Date().getFullYear()}-${defaultSeason?.seasonNo ?? 1}-${defaultSeason?.isTest ? 1 : 0}`
                 }
               >
                 {seasons.map((s) => (
-                  <option key={`${s.year}-${s.seasonNo}`} value={`${s.year}-${s.seasonNo}`}>
+                  <option
+                    key={`${s.year}-${s.seasonNo}-${s.isTest ? 1 : 0}`}
+                    value={`${s.year}-${s.seasonNo}-${s.isTest ? 1 : 0}`}
+                  >
                     {s.isTest ? "TEST · " : ""}
                     {s.year} · Season {s.seasonNo}
                   </option>
@@ -551,7 +572,7 @@ export default async function AdminRacesPage({
               >
                 <div className="min-w-0">
                   <div className="truncate font-semibold">
-                    Saison {r.season} · Runde {r.round} · {r.name}
+                    {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round} · {r.name}
                   </div>
                   <div className="mt-1 text-sm text-white/60">
                     {new Date(r.startsAt).toLocaleString("de-DE")}

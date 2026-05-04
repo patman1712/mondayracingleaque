@@ -29,21 +29,21 @@ export async function GET(req: Request) {
     getLeagueColors(),
     prisma.race
       .findFirst({
-        where: { league, startsAt: { lt: now } },
+        where: { league, seasonIsTest: false, startsAt: { lt: now } },
         orderBy: { startsAt: "desc" },
         select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
-        where: { league, startsAt: { gt: now } },
+        where: { league, seasonIsTest: false, startsAt: { gt: now } },
         orderBy: { startsAt: "asc" },
         select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })
       .catch(() => null),
     prisma.race
       .findFirst({
-        where: { league, startsAt: { lte: now } },
+        where: { league, seasonIsTest: false, startsAt: { lte: now } },
         orderBy: { startsAt: "desc" },
         select: { id: true, name: true, startsAt: true, round: true, imagePath: true }
       })

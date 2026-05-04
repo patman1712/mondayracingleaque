@@ -39,7 +39,7 @@ export default async function LeagueCalendarPage({
   let races: RaceItem[] = [];
   try {
     races = await prisma.race.findMany({
-      where: { league: l },
+      where: { league: l, seasonIsTest: false },
       orderBy: [{ startsAt: "asc" }],
       take: 200,
       select: {

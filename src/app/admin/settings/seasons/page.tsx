@@ -39,18 +39,30 @@ async function deleteSeason(formData: FormData) {
   redirect("/admin/settings/seasons?ok=1");
 }
 
-async function toggleTestSeason(formData: FormData) {
+async function duplicateSeasonVariant(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const current = await prisma.season
-    .findUnique({ where: { id }, select: { isTest: true } })
-    .catch(() => null);
-  if (!current) return;
-  await prisma.season
-    .update({ where: { id }, data: { isTest: !current.isTest } })
-    .catch(() => null);
-  redirect("/admin/settings/seasons?ok=1");
+  const current = await prisma.season.findUnique({
+    where: { id },
+    select: { league: true, year: true, seasonNo: true, label: true, isTest: true }
+  });
+  if (!current) redirect("/admin/settings/seasons?error=invalid");
+
+  try {
+    await prisma.season.create({
+      data: {
+        league: current.league,
+        year: current.year,
+        seasonNo: current.seasonNo,
+        label: current.label,
+        isTest: !current.isTest
+      }
+    });
+    redirect("/admin/settings/seasons?ok=1");
+  } catch {
+    redirect("/admin/settings/seasons?error=duplicate");
+  }
 }
 
 export default async function AdminSeasonsPage({
@@ -68,6 +80,16 @@ export default async function AdminSeasonsPage({
       take: 200
     })
     .catch(() => []);
+
+  const key = (s: { league: League; year: number; seasonNo: number }) =>
+    `${s.league}-${s.year}-${s.seasonNo}`;
+  const hasTest = new Set<string>();
+  const hasNormal = new Set<string>();
+  for (const s of seasons) {
+    const k = key(s);
+    if (s.isTest) hasTest.add(k);
+    else hasNormal.add(k);
+  }
 
   const leagueLabel: Record<League, string> = {
     [League.ONE]: "MRL One",
@@ -92,7 +114,7 @@ export default async function AdminSeasonsPage({
           {error ? (
             <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {error === "duplicate"
-                ? "Diese Saison (Liga/Jahr/Season) existiert bereits."
+                ? "Diese Saison-Variante existiert bereits."
                 : "Bitte Liga, Jahr und Season korrekt eingeben."}
             </div>
           ) : null}
@@ -170,6 +192,11 @@ export default async function AdminSeasonsPage({
               <div className="text-sm text-white/60">Noch keine Saisons.</div>
             ) : (
               seasons.map((s) => (
+                (() => {
+                  const k = key(s);
+                  const canDuplicate = s.isTest ? !hasNormal.has(k) : !hasTest.has(k);
+                  const dupLabel = s.isTest ? "Als normal" : "Als Test";
+                  return (
                 <div
                   key={s.id}
                   className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
@@ -188,12 +215,14 @@ export default async function AdminSeasonsPage({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
-                    <form action={toggleTestSeason}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                        Test
-                      </button>
-                    </form>
+                    {canDuplicate ? (
+                      <form action={duplicateSeasonVariant}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                          {dupLabel}
+                        </button>
+                      </form>
+                    ) : null}
                     <form action={deleteSeason}>
                       <input type="hidden" name="id" value={s.id} />
                       <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
@@ -202,6 +231,8 @@ export default async function AdminSeasonsPage({
                     </form>
                   </div>
                 </div>
+                  );
+                })()
               ))
             )}
           </div>
