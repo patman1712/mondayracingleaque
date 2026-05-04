@@ -66,9 +66,19 @@ function hexToRgba(hex: string, a: number) {
 
 function teamBg(color: string | null | undefined) {
   const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
-  const a = c ? hexToRgba(c, 0.22) : "rgba(255,255,255,0.06)";
-  const b = c ? hexToRgba(c, 0.04) : "rgba(255,255,255,0.02)";
-  return `linear-gradient(135deg, ${a}, ${b})`;
+  const a = c ? hexToRgba(c, 0.32) : "rgba(255,255,255,0.08)";
+  const b = c ? hexToRgba(c, 0.06) : "rgba(255,255,255,0.03)";
+  const d = c ? hexToRgba(c, 0.22) : "rgba(255,255,255,0.06)";
+  return `radial-gradient(900px circle at 20% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
+}
+
+function f1Dots() {
+  return {
+    backgroundImage:
+      "radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px), radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
+    backgroundSize: "8px 8px, 18px 18px",
+    backgroundPosition: "0 0, 2px 2px"
+  } as const;
 }
 
 function cardMeta(card: ScheduleCard) {
@@ -345,13 +355,20 @@ export function NavLeagues() {
                                 <Link
                                   key={t.id}
                                   href={`/${l.slug}/teams/${t.id}`}
-                                  className="group overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                                   style={{ backgroundImage: teamBg(t.color) }}
                                 >
-                                  <div className="p-4">
-                                    <div className="flex items-center justify-between gap-3">
+                                  <div className="absolute inset-0 opacity-30" style={f1Dots()} />
+                                  <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
+                                  <div
+                                    className="absolute left-0 top-0 h-[6px] w-full"
+                                    style={{ backgroundColor: t.color ?? "#ffffff" }}
+                                  />
+
+                                  <div className="relative p-4">
+                                    <div className="flex items-start justify-between gap-3">
                                       <div className="min-w-0">
-                                        <div className="truncate text-sm font-semibold text-white/85 group-hover:text-white">
+                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/90 group-hover:text-white">
                                           {t.name}
                                         </div>
                                       </div>
@@ -359,21 +376,22 @@ export function NavLeagues() {
                                         <img
                                           src={t.logoUrl}
                                           alt=""
-                                          className="h-10 w-10 rounded-xl bg-black/20 object-contain"
+                                          className="h-10 w-10 rounded-2xl bg-black/20 object-contain"
                                         />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-xl bg-black/20" />
+                                        <div className="h-10 w-10 rounded-2xl bg-black/20" />
                                       )}
                                     </div>
-                                    <div className="mt-4 h-[78px] overflow-hidden rounded-2xl bg-black/20">
+
+                                    <div className="mt-4 relative h-[88px] overflow-hidden">
                                       {t.carUrl ? (
                                         <img
                                           src={t.carUrl}
                                           alt=""
-                                          className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.02]"
+                                          className="absolute inset-x-0 bottom-0 mx-auto h-[102px] w-full object-contain transition duration-300 group-hover:scale-[1.03]"
                                         />
                                       ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-white/35">
+                                        <div className="flex h-[88px] w-full items-center justify-center text-[11px] font-semibold text-white/35">
                                           CAR
                                         </div>
                                       )}
