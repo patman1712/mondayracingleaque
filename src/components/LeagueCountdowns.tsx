@@ -54,16 +54,21 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
         const start = raceStartMs[idx];
         const remaining = start ? start - now : null;
         const startsAt = l.nextRace ? new Date(l.nextRace.startsAt) : null;
+        let title = l.nextRace ? l.nextRace.name : "";
         let place = "";
         if (l.nextRace) {
           const circuit = l.nextRace.circuit ?? "";
           const location = l.nextRace.location ?? "";
-          const nameHasCircuit = circuit ? l.nextRace.name.includes(circuit) : false;
-          if (nameHasCircuit) {
-            place = location;
-          } else {
-            place = [circuit, location].filter(Boolean).join(" · ");
+          place = [circuit, location].filter(Boolean).join(" · ");
+
+          if (circuit && title.includes("·")) {
+            const parts = title.split("·").map((p) => p.trim()).filter(Boolean);
+            const last = parts[parts.length - 1] ?? "";
+            if (parts.length > 1 && last.includes(circuit)) {
+              title = parts.slice(0, -1).join(" · ");
+            }
           }
+          if (!title) title = l.nextRace.name;
         }
 
         return (
@@ -81,7 +86,7 @@ export function LeagueCountdowns({ leagues }: { leagues: CountdownLeague[] }) {
               {l.nextRace ? (
                 <div className="mt-3">
                   <div className="truncate text-base font-semibold text-white">
-                    {l.nextRace.name}
+                    {title}
                   </div>
                   {place ? (
                     <div className="mt-1 truncate text-sm text-white/70">
