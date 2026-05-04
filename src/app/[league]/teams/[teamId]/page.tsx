@@ -193,37 +193,38 @@ export default async function TeamDetailPage({
                 backgroundImage: `linear-gradient(90deg, ${hexToRgba(accent, 0.95)}, ${hexToRgba(accent, 0.65)}, transparent)`
               }}
             />
-            <div className="relative py-5 sm:py-6">
-              <div className="absolute inset-0 bg-gradient-to-b from-black/55 to-black/80" />
-              <div className="absolute inset-0">
+            <div className="relative pb-7 pt-4 sm:pb-8 sm:pt-5">
+              <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/55 to-black/80" />
+              <div className="pointer-events-none absolute inset-0 z-0">
                 <div
-                  className="absolute left-0 top-1/2 hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
+                  className="absolute left-0 top-[44%] hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
                   style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-0 top-1/2 hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
+                  className="absolute left-0 top-[44%] hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
                   style={{ clipPath: "polygon(0 0, 100% 0, 94% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute right-0 top-1/2 hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
+                  className="absolute right-0 top-[44%] hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
                   style={{ clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute right-0 top-1/2 hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
+                  className="absolute right-0 top-[44%] hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
                   style={{ clipPath: "polygon(6% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-1/2 top-1/2 hidden h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95 sm:block"
+                  className="absolute left-1/2 top-[44%] hidden h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95 sm:block"
                   style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
                 />
                 <div
-                  className="absolute left-1/2 top-1/2 hidden h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95 sm:block"
+                  className="absolute left-1/2 top-[44%] hidden h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95 sm:block"
                   style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
                 />
               </div>
               <Container>
-                <div className="flex items-center justify-center gap-4">
-                  <div className="flex min-w-0 items-center justify-center gap-3">
+                <div className="relative z-10 -mt-1 sm:-mt-2">
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="flex min-w-0 items-center justify-center gap-3">
                     {logoUrl ? (
                       <Image
                         src={logoUrl}
@@ -245,10 +246,11 @@ export default async function TeamDetailPage({
                   </div>
                 ) : null}
                 {seasonLabel ? (
-                  <div className="mt-1 text-center text-[11px] font-semibold uppercase tracking-wider text-white/60 sm:text-xs">
+                  <div className="mt-2 text-center text-xs font-semibold uppercase tracking-wider text-white/80 drop-shadow-[0_8px_20px_rgba(0,0,0,0.8)] sm:text-sm">
                     {seasonLabel}
                   </div>
                 ) : null}
+                </div>
               </Container>
             </div>
           </div>
