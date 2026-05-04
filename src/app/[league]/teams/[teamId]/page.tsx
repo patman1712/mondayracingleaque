@@ -212,44 +212,46 @@ export default async function TeamDetailPage({
                   className="absolute right-0 top-[44%] hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
                   style={{ clipPath: "polygon(6% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
-                <div
-                  className="absolute left-1/2 top-[44%] hidden h-[14px] w-[56px] -translate-x-[150px] -translate-y-1/2 bg-white/95 sm:block"
-                  style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
-                />
-                <div
-                  className="absolute left-1/2 top-[44%] hidden h-[14px] w-[56px] translate-x-[94px] -translate-y-1/2 bg-white/95 sm:block"
-                  style={{ clipPath: "polygon(12% 0, 100% 0, 88% 100%, 0 100%)" }}
-                />
               </div>
               <Container>
                 <div className="relative z-10 -mt-1 sm:-mt-2">
                   <div className="flex items-center justify-center gap-4">
                     <div className="flex min-w-0 items-center justify-center gap-3">
-                    {logoUrl ? (
-                      <Image
-                        src={logoUrl}
-                        alt=""
-                        width={40}
-                        height={40}
-                        className="hidden rounded-xl bg-black/25 object-contain sm:block"
-                      />
-                    ) : null}
-                    <div className="truncate text-center text-2xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
-                      {team.name}
+                      {logoUrl ? (
+                        <Image
+                          src={logoUrl}
+                          alt=""
+                          width={40}
+                          height={40}
+                          className="hidden rounded-xl bg-black/25 object-contain sm:block"
+                        />
+                      ) : null}
+                      <div className="truncate text-center text-2xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
+                        {team.name}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {heroNames.length ? (
-                  <div className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:text-xs">
-                    {heroNames.join(" · ")}
-                  </div>
-                ) : null}
-                {seasonLabel ? (
-                  <div className="mt-2 text-center text-xs font-semibold uppercase tracking-wider text-white/80 drop-shadow-[0_8px_20px_rgba(0,0,0,0.8)] sm:text-sm">
-                    {seasonLabel}
-                  </div>
-                ) : null}
+                  {heroNames.length ? (
+                    <div className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:text-xs">
+                      {heroNames.join(" · ")}
+                    </div>
+                  ) : null}
+                  {seasonLabel ? (
+                    <div className="mt-2 flex items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wider text-white/80 drop-shadow-[0_8px_20px_rgba(0,0,0,0.8)] sm:text-sm">
+                      <span
+                        className="h-[10px] w-[48px] bg-white/90 sm:h-[12px] sm:w-[56px]"
+                        style={{ clipPath: "polygon(0 0, 100% 0, 88% 100%, 0 100%)" }}
+                      />
+                      <span className="text-center">
+                        {seasonLabel}
+                      </span>
+                      <span
+                        className="h-[10px] w-[48px] bg-white/90 sm:h-[12px] sm:w-[56px]"
+                        style={{ clipPath: "polygon(12% 0, 100% 0, 100% 100%, 0 100%)" }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </Container>
             </div>
