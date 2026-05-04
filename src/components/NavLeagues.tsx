@@ -193,7 +193,7 @@ export function NavLeagues() {
             <div
               className={[
                 "absolute left-1/2 top-full mt-2 -translate-x-1/2 transition",
-                "z-50",
+                "z-[60]",
                 isOpen
                   ? "pointer-events-auto translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-1 opacity-0"
@@ -353,9 +353,9 @@ export function NavLeagues() {
                             </Link>
                           </div>
 
-                          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {teams.length === 0 ? (
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60 sm:col-span-2 lg:col-span-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60 sm:col-span-2 lg:col-span-3">
                                 {loadingLeague === l.slug ? "Lädt..." : "Noch keine Teams"}
                               </div>
                             ) : (
@@ -411,7 +411,7 @@ export function NavLeagues() {
                                       )}
                                     </div>
 
-                                    <div className="mt-3 truncate text-center text-sm font-extrabold uppercase tracking-wide text-white/90 group-hover:text-white">
+                                    <div className="mt-3 px-1 text-center text-sm font-extrabold uppercase leading-tight tracking-wide text-white/90 group-hover:text-white">
                                       {t.name}
                                     </div>
                                   </div>

@@ -29,7 +29,7 @@ export function Header() {
       className={
         isHome
           ? "absolute inset-x-0 top-0 z-50 bg-black/35 backdrop-blur"
-          : "border-b border-white/10 bg-black/30 backdrop-blur"
+          : "relative z-50 border-b border-white/10 bg-black/30 backdrop-blur"
       }
     >
       <Container>
