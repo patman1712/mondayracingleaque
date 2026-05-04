@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
@@ -27,6 +27,7 @@ async function createRace(
 ) {
   "use server";
 
+  const basePath = `/admin/${adminLeague}/races`;
   const season = Number(formData.get("season") ?? "");
   const round = Number(formData.get("round") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -34,23 +35,34 @@ async function createRace(
   const location = String(formData.get("location") ?? "").trim();
   const startsAtRaw = String(formData.get("startsAt") ?? "").trim();
 
-  if (!Number.isFinite(season) || !Number.isFinite(round) || !name) return;
-  if (!startsAtRaw) return;
+  if (!Number.isFinite(season) || !Number.isFinite(round) || !name) {
+    redirect(`${basePath}?error=invalid`);
+  }
+  if (!startsAtRaw) redirect(`${basePath}?error=invalid`);
 
   const startsAt = new Date(startsAtRaw);
-  if (Number.isNaN(startsAt.getTime())) return;
+  if (Number.isNaN(startsAt.getTime())) redirect(`${basePath}?error=invalid`);
 
-  await prisma.race.create({
-    data: {
-      league,
-      season,
-      round,
-      name,
-      circuit: circuit || null,
-      location: location || null,
-      startsAt
-    }
-  });
+  try {
+    await prisma.race.create({
+      data: {
+        league,
+        season,
+        round,
+        name,
+        circuit: circuit || null,
+        location: location || null,
+        startsAt
+      }
+    });
+  } catch (e: unknown) {
+    const code =
+      typeof e === "object" && e !== null && "code" in e
+        ? (e as { code?: string }).code
+        : undefined;
+    if (code === "P2002") redirect(`${basePath}?error=duplicate`);
+    redirect(`${basePath}?error=save`);
+  }
 
   const publicSlug =
     league === League.ONE
@@ -64,6 +76,7 @@ async function createRace(
   revalidatePath(`/${publicSlug}/calendar`);
   revalidatePath("/calendar");
   revalidatePath("/");
+  redirect(`${basePath}?ok=1`);
 }
 
 async function deleteRace(formData: FormData) {
@@ -88,11 +101,17 @@ async function deleteRace(formData: FormData) {
 }
 
 export default async function AdminRacesPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ league: string }>;
+  searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
   await requireAdmin();
+
+  const sp = await searchParams;
+  const ok = sp.ok === "1";
+  const error = sp.error ?? null;
 
   const { league } = await params;
   const l = leagueEnum[league];
@@ -124,6 +143,20 @@ export default async function AdminRacesPage({
         <div className="text-base font-semibold">
           Rennkalender · {leagueLabel[l]}
         </div>
+        {ok ? (
+          <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            Gespeichert.
+          </div>
+        ) : null}
+        {error ? (
+          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {error === "duplicate"
+              ? "Diese Saison/Runde existiert bereits."
+              : error === "invalid"
+                ? "Bitte alle Pflichtfelder korrekt ausfüllen."
+                : "Speichern fehlgeschlagen. Bitte erneut versuchen."}
+          </div>
+        ) : null}
         <form
           action={createRace.bind(null, league, l)}
           className="mt-4 grid gap-4 md:grid-cols-2"
