@@ -1,7 +1,7 @@
 import { AdminShell } from "@/components/AdminShell";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/db";
-import { League, Prisma } from "@prisma/client";
+import { DriverRole, League, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
@@ -92,10 +92,10 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
   const current = await prisma.driver
     .findUnique({
       where: { id: driverId },
-      select: { id: true, league: true, portraitPath: true }
+      select: { id: true, portraitPath: true }
     })
     .catch(() => null);
-  if (!current || current.league !== league) notFound();
+  if (!current) notFound();
 
   let portraitPath: string | null | undefined = undefined;
   let newPortraitPath: string | null = null;
@@ -146,10 +146,10 @@ async function updateTotals(adminLeague: string, league: League, driverId: strin
   const current = await prisma.driver
     .findUnique({
       where: { id: driverId },
-      select: { id: true, league: true }
+      select: { id: true }
     })
     .catch(() => null);
-  if (!current || current.league !== league) notFound();
+  if (!current) notFound();
 
   const starts = asInt(String(formData.get("starts") ?? "0"), 0);
   const wins = asInt(String(formData.get("wins") ?? "0"), 0);
@@ -180,14 +180,17 @@ async function activateSeason(adminLeague: string, league: League, driverId: str
   const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null);
   if (!season || season.league !== league) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
 
-  const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { league: true } }).catch(() => null);
-  if (!driver || driver.league !== league) notFound();
+  const roleRaw = String(formData.get("role") ?? "").trim();
+  const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
+  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
+  const teamId = teamIdRaw ? teamIdRaw : null;
+  const t = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null) : null;
 
   await prisma.driverSeason
     .upsert({
       where: { driverId_seasonId: { driverId, seasonId } },
-      create: { driverId, seasonId },
-      update: {}
+      create: { driverId, seasonId, role, teamId: t?.id ?? null },
+      update: { role, teamId: t?.id ?? null }
     })
     .catch(() => null);
 
@@ -203,9 +206,6 @@ async function deactivateSeason(adminLeague: string, league: League, driverId: s
   await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "").trim();
   if (!seasonId) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
-
-  const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { league: true } }).catch(() => null);
-  if (!driver || driver.league !== league) notFound();
 
   await prisma.driverSeason.deleteMany({ where: { driverId, seasonId } }).catch(() => null);
 
@@ -226,8 +226,8 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
   const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null);
   if (!season || season.league !== league) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
 
-  const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { league: true } }).catch(() => null);
-  if (!driver || driver.league !== league) notFound();
+  const roleRaw = String(formData.get("role") ?? "").trim();
+  const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
 
   const teamIdRaw = String(formData.get("teamId") ?? "").trim();
   const teamId = teamIdRaw ? teamIdRaw : null;
@@ -247,6 +247,7 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
         driverId,
         seasonId,
         teamId: t?.id ?? null,
+        role,
         starts,
         wins,
         podiums,
@@ -256,6 +257,7 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
       },
       update: {
         teamId: t?.id ?? null,
+        role,
         starts,
         wins,
         podiums,
@@ -277,9 +279,9 @@ async function removePortrait(adminLeague: string, league: League, driverId: str
   "use server";
   await requireAdmin();
   const current = await prisma.driver
-    .findUnique({ where: { id: driverId }, select: { league: true, portraitPath: true } })
+    .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
     .catch(() => null);
-  if (!current || current.league !== league) notFound();
+  if (!current) notFound();
   await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: null } }).catch(() => null);
   if (current.portraitPath) deleteUpload(current.portraitPath);
   const pub = publicSlug[league];
@@ -310,7 +312,6 @@ export default async function AdminDriverDetailPage({
       where: { id: driverId },
       select: {
         id: true,
-        league: true,
         name: true,
         gamertag: true,
         number: true,
@@ -326,6 +327,7 @@ export default async function AdminDriverDetailPage({
           select: {
             seasonId: true,
             teamId: true,
+            role: true,
             starts: true,
             wins: true,
             podiums: true,
@@ -338,7 +340,7 @@ export default async function AdminDriverDetailPage({
     })
     .catch(() => null);
 
-  if (!driver || driver.league !== l) notFound();
+  if (!driver) notFound();
 
   const teams = await prisma.team
     .findMany({
@@ -605,6 +607,32 @@ export default async function AdminDriverDetailPage({
                         ))}
                     </select>
                   </div>
+                  <div className="min-w-[220px]">
+                    <label className="mb-1 block text-xs font-semibold text-white/70">Typ</label>
+                    <select
+                      name="role"
+                      defaultValue="MAIN"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                    >
+                      <option value="MAIN">Stammfahrer</option>
+                      <option value="RESERVE">Ersatzfahrer</option>
+                    </select>
+                  </div>
+                  <div className="min-w-[240px]">
+                    <label className="mb-1 block text-xs font-semibold text-white/70">Team</label>
+                    <select
+                      name="teamId"
+                      defaultValue=""
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                    >
+                      <option value="">(keins)</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <button className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
                     Aktivieren
                   </button>
@@ -621,6 +649,7 @@ export default async function AdminDriverDetailPage({
                         Saison {s.year} · Season {s.seasonNo}
                         {s.isTest ? " · TEST" : ""}
                         {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
+                        {active && row?.role === "RESERVE" ? " · Ersatzfahrer" : ""}
                         {!active ? " · inaktiv" : ""}
                       </summary>
 
@@ -629,6 +658,17 @@ export default async function AdminDriverDetailPage({
                           <>
                             <form action={updateSeason.bind(null, adminLeague, l, driver.id)} className="grid gap-4 md:grid-cols-3">
                               <input type="hidden" name="seasonId" value={s.id} />
+                              <div className="md:col-span-3">
+                                <label className="mb-1 block text-xs font-semibold text-white/70">Typ</label>
+                                <select
+                                  name="role"
+                                  defaultValue={row?.role ?? "MAIN"}
+                                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                                >
+                                  <option value="MAIN">Stammfahrer</option>
+                                  <option value="RESERVE">Ersatzfahrer</option>
+                                </select>
+                              </div>
                               <div className="md:col-span-3">
                                 <label className="mb-1 block text-xs font-semibold text-white/70">Team</label>
                                 <select

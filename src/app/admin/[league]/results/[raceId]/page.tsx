@@ -237,7 +237,7 @@ async function ocrImportResults(
   const race = await prisma.race
     .findUnique({
       where: { id: raceId },
-      select: { id: true, league: true, resultsImagePath: true }
+      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true, resultsImagePath: true }
     })
     .catch(() => null);
   if (!race || race.league !== league || !race.resultsImagePath) {
@@ -264,12 +264,39 @@ async function ocrImportResults(
     redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
   }
 
-  const drivers = await prisma.driver
-    .findMany({
-      where: { league },
-      select: { id: true, name: true }
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
     })
-    .catch(() => []);
+    .catch(() => null);
+
+  const driverRows = season
+    ? await prisma.driverSeason
+        .findMany({
+          where: { seasonId: season.id },
+          distinct: ["driverId"],
+          select: { driver: { select: { id: true, name: true } } },
+          take: 5000
+        })
+        .catch(() => [])
+    : await prisma.driverSeason
+        .findMany({
+          where: { season: { league } },
+          distinct: ["driverId"],
+          select: { driver: { select: { id: true, name: true } } },
+          take: 5000
+        })
+        .catch(() => []);
+
+  const drivers = driverRows.map((r) => r.driver);
   const driverByNorm = new Map<string, { id: string; name: string }>();
   for (const d of drivers) {
     driverByNorm.set(normalize(d.name), d);
@@ -376,11 +403,41 @@ export default async function AdminRaceResultsPage({
   let results: ResultItem[] = [];
 
   try {
-    drivers = await prisma.driver.findMany({
-      where: { league: l },
-      orderBy: [{ name: "asc" }],
-      select: { id: true, name: true }
-    });
+    const season = await prisma.season
+      .findUnique({
+        where: {
+          league_year_seasonNo_isTest: {
+            league: l,
+            year: race.season,
+            seasonNo: race.seasonNo,
+            isTest: race.seasonIsTest
+          }
+        },
+        select: { id: true }
+      })
+      .catch(() => null);
+
+    const rows = season
+      ? await prisma.driverSeason
+          .findMany({
+            where: { seasonId: season.id },
+            distinct: ["driverId"],
+            orderBy: [{ driver: { name: "asc" } }],
+            select: { driver: { select: { id: true, name: true } } },
+            take: 5000
+          })
+          .catch(() => [])
+      : await prisma.driverSeason
+          .findMany({
+            where: { season: { league: l } },
+            distinct: ["driverId"],
+            orderBy: [{ driver: { name: "asc" } }],
+            select: { driver: { select: { id: true, name: true } } },
+            take: 5000
+          })
+          .catch(() => []);
+
+    drivers = rows.map((r) => r.driver);
   } catch {}
 
   try {

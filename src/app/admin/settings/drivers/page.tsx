@@ -1,7 +1,7 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { League } from "@prisma/client";
+import { DriverRole, League } from "@prisma/client";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import fs from "node:fs";
@@ -67,16 +67,15 @@ async function createDriver(formData: FormData) {
   "use server";
   await requireAdmin();
 
-  const leagueRaw = String(formData.get("league") ?? "").trim();
-  const league =
-    leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
-  if (!league) return;
-
   const name = String(formData.get("name") ?? "").trim();
   const gamertag = String(formData.get("gamertag") ?? "").trim();
   const numberRaw = String(formData.get("number") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
   const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const roleRaw = String(formData.get("role") ?? "").trim();
+  const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
+  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
+  const teamId = teamIdRaw ? teamIdRaw : null;
   const portrait = asUploadFile(formData.get("portrait"));
   const startsRaw = String(formData.get("starts") ?? "").trim();
   const winsRaw = String(formData.get("wins") ?? "").trim();
@@ -99,9 +98,10 @@ async function createDriver(formData: FormData) {
     ? await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null)
     : null;
 
+  const t = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null) : null;
+
   const created = await prisma.driver.create({
     data: {
-      league,
       name,
       gamertag: gamertag || null,
       number: Number.isFinite(number) ? (number as number) : null,
@@ -125,15 +125,25 @@ async function createDriver(formData: FormData) {
     await prisma.driver.update({ where: { id: created.id }, data: { portraitPath: fileName } }).catch(() => null);
   }
 
-  if (season && season.league === league) {
-    await prisma.driverSeason.create({ data: { driverId: created.id, seasonId: season.id } }).catch(() => null);
+  if (season) {
+    await prisma.driverSeason
+      .create({ data: { driverId: created.id, seasonId: season.id, role, teamId: t?.id ?? null } })
+      .catch(() => null);
   }
 
   revalidatePath("/admin/settings/drivers");
-  revalidatePath(`/admin/${adminSlug[league]}/drivers`);
-  revalidatePath(`/admin/${adminSlug[league]}/drivers/${created.id}`);
-  revalidatePath(`/${publicSlug[league]}/drivers`);
-  revalidatePath(`/${publicSlug[league]}/drivers/${created.id}`);
+  revalidatePath("/admin/one/drivers");
+  revalidatePath("/admin/two/drivers");
+  revalidatePath("/admin/rookie/drivers");
+  revalidatePath(`/admin/one/drivers/${created.id}`);
+  revalidatePath(`/admin/two/drivers/${created.id}`);
+  revalidatePath(`/admin/rookie/drivers/${created.id}`);
+  revalidatePath("/mrl-one/drivers");
+  revalidatePath("/mrl-two/drivers");
+  revalidatePath("/mrl-rookie/drivers");
+  revalidatePath(`/mrl-one/drivers/${created.id}`);
+  revalidatePath(`/mrl-two/drivers/${created.id}`);
+  revalidatePath(`/mrl-rookie/drivers/${created.id}`);
 }
 
 export default async function AdminSettingsDriversPage() {
@@ -147,27 +157,20 @@ export default async function AdminSettingsDriversPage() {
     })
     .catch(() => []);
 
-  const activeConfig = await prisma.appConfig
+  const teams = await prisma.team
     .findMany({
-      where: { key: { in: ["activeSeasonId:ONE", "activeSeasonId:TWO", "activeSeasonId:ROOKIE"] } },
-      select: { key: true, value: true }
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true },
+      take: 500
     })
     .catch(() => []);
 
-  const activeByLeague: Partial<Record<League, string>> = {};
-  for (const row of activeConfig) {
-    if (row.key === "activeSeasonId:ONE") activeByLeague[League.ONE] = row.value;
-    if (row.key === "activeSeasonId:TWO") activeByLeague[League.TWO] = row.value;
-    if (row.key === "activeSeasonId:ROOKIE") activeByLeague[League.ROOKIE] = row.value;
-  }
-
   const drivers = await prisma.driver
     .findMany({
-      orderBy: [{ league: "asc" }, { name: "asc" }],
+      orderBy: [{ name: "asc" }],
       take: 2000,
       select: {
         id: true,
-        league: true,
         name: true,
         gamertag: true,
         number: true,
@@ -178,32 +181,7 @@ export default async function AdminSettingsDriversPage() {
     })
     .catch(() => []);
 
-  const seasonsByLeague: Record<League, typeof seasons> = {
-    [League.ONE]: seasons.filter((s) => s.league === League.ONE),
-    [League.TWO]: seasons.filter((s) => s.league === League.TWO),
-    [League.ROOKIE]: seasons.filter((s) => s.league === League.ROOKIE)
-  };
-
-  const defaultSeasonId: Partial<Record<League, string>> = {
-    [League.ONE]:
-      (activeByLeague[League.ONE] &&
-      seasonsByLeague[League.ONE].some((s) => s.id === activeByLeague[League.ONE] && s.placement === "CALENDAR")
-        ? activeByLeague[League.ONE]
-        : null) ??
-      seasonsByLeague[League.ONE].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.ONE][0]?.id,
-    [League.TWO]:
-      (activeByLeague[League.TWO] &&
-      seasonsByLeague[League.TWO].some((s) => s.id === activeByLeague[League.TWO] && s.placement === "CALENDAR")
-        ? activeByLeague[League.TWO]
-        : null) ??
-      seasonsByLeague[League.TWO].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.TWO][0]?.id,
-    [League.ROOKIE]:
-      (activeByLeague[League.ROOKIE] &&
-      seasonsByLeague[League.ROOKIE].some((s) => s.id === activeByLeague[League.ROOKIE] && s.placement === "CALENDAR")
-        ? activeByLeague[League.ROOKIE]
-        : null) ??
-      seasonsByLeague[League.ROOKIE].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.ROOKIE][0]?.id
-  };
+  const seasonById = new Map(seasons.map((s) => [s.id, s] as const));
 
   return (
     <AdminShell>
@@ -212,22 +190,9 @@ export default async function AdminSettingsDriversPage() {
           <div className="text-base font-semibold">Fahrer anlegen</div>
           <form action={createDriver} encType="multipart/form-data" className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-white/70">Liga</label>
-              <select
-                name="league"
-                defaultValue="ROOKIE"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              >
-                <option value="ONE">MRL One</option>
-                <option value="TWO">MRL Two</option>
-                <option value="ROOKIE">MRL Rookie</option>
-              </select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-semibold text-white/70">Aktiv in Saison</label>
               <select
                 name="seasonId"
-                defaultValue={defaultSeasonId[League.ROOKIE] ?? ""}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               >
                 <option value="">(keine)</option>
@@ -236,6 +201,33 @@ export default async function AdminSettingsDriversPage() {
                     {leagueLabel[s.league]} · Saison {s.year} · Season {s.seasonNo}
                     {s.isTest ? " · TEST" : ""}
                     {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">Typ</label>
+              <select
+                name="role"
+                defaultValue="MAIN"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              >
+                <option value="MAIN">Stammfahrer</option>
+                <option value="RESERVE">Ersatzfahrer</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-white/70">Team (optional)</label>
+              <select
+                name="teamId"
+                defaultValue=""
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              >
+                <option value="">(keins)</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
                   </option>
                 ))}
               </select>
@@ -354,30 +346,50 @@ export default async function AdminSettingsDriversPage() {
               <div className="text-sm text-white/60">Noch keine Fahrer.</div>
             ) : (
               drivers.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">
-                      {leagueLabel[d.league]} · {d.number ? `#${d.number} ` : ""}
-                      {d.name}
-                    </div>
-                    <div className="mt-1 text-sm text-white/60">
-                      {d.gamertag ? `${d.gamertag} · ` : ""}
-                      {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
-                      {d.seasons.length ? ` · ${d.seasons.length} Saison(en)` : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/admin/${adminSlug[d.league]}/drivers/${d.id}`}
-                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                (() => {
+                  const leagues = Array.from(
+                    new Set(
+                      d.seasons
+                        .map((s) => seasonById.get(s.seasonId)?.league ?? null)
+                        .filter((x): x is League => Boolean(x))
+                    )
+                  );
+                  return (
+                    <div
+                      key={d.id}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
                     >
-                      Details
-                    </Link>
-                  </div>
-                </div>
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {d.number ? `#${d.number} ` : ""}
+                          {d.name}
+                        </div>
+                        <div className="mt-1 text-sm text-white/60">
+                          {d.gamertag ? `${d.gamertag} · ` : ""}
+                          {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
+                          {leagues.length ? ` · Ligen: ${leagues.map((l) => leagueLabel[l]).join(", ")}` : ""}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {leagues.length ? (
+                          leagues.map((l) => (
+                            <Link
+                              key={l}
+                              href={`/admin/${adminSlug[l]}/drivers/${d.id}`}
+                              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                            >
+                              {leagueLabel[l]} · Details
+                            </Link>
+                          ))
+                        ) : (
+                          <div className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-white/60">
+                            Nicht aktiv
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
               ))
             )}
           </div>

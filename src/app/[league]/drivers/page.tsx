@@ -90,7 +90,7 @@ export default async function LeagueDriversPage({
     if (currentSeason) {
       const rows = await prisma.driverSeason
         .findMany({
-          where: { seasonId: currentSeason.id, driver: { league: l } },
+          where: { seasonId: currentSeason.id },
           orderBy: [{ driver: { name: "asc" } }],
           select: {
             driver: {
@@ -136,29 +136,36 @@ export default async function LeagueDriversPage({
     }
 
     if (!drivers.length) {
-      const rows = await prisma.driver.findMany({
-        where: { league: l },
-        orderBy: [{ name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          gamertag: true,
-          number: true,
-          team: true,
-          country: true,
-          portraitPath: true,
-          teamRef: { select: { color: true } }
-        }
-      });
-      drivers = rows.map((d) => ({
-        id: d.id,
-        name: d.name,
-        gamertag: d.gamertag ?? null,
-        number: d.number ?? null,
-        team: d.team ?? null,
-        country: d.country ?? null,
-        portraitPath: d.portraitPath ?? null,
-        accent: d.teamRef?.color ?? null
+      const rows = await prisma.driverSeason
+        .findMany({
+          where: { season: { league: l } },
+          distinct: ["driverId"],
+          orderBy: [{ driver: { name: "asc" } }],
+          select: {
+            driver: {
+              select: {
+                id: true,
+                name: true,
+                gamertag: true,
+                number: true,
+                country: true,
+                portraitPath: true
+              }
+            }
+          },
+          take: 5000
+        })
+        .catch(() => []);
+
+      drivers = rows.map((r) => ({
+        id: r.driver.id,
+        name: r.driver.name,
+        gamertag: r.driver.gamertag ?? null,
+        number: r.driver.number ?? null,
+        team: null,
+        country: r.driver.country ?? null,
+        portraitPath: r.driver.portraitPath ?? null,
+        accent: null
       }));
     }
   } catch {}

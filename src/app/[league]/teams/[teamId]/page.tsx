@@ -104,15 +104,16 @@ export default async function TeamDetailPage({
   const drivers = seasonIdForDrivers
     ? await prisma.driverSeason
         .findMany({
-          where: { seasonId: seasonIdForDrivers, teamId: team.id, driver: { league: l } },
-          orderBy: [{ driver: { number: "asc" } }, { driver: { name: "asc" } }],
+          where: { seasonId: seasonIdForDrivers, teamId: team.id },
+          orderBy: [{ role: "asc" }, { driver: { number: "asc" } }, { driver: { name: "asc" } }],
           select: {
+            role: true,
             driver: {
               select: { id: true, name: true, gamertag: true, number: true, country: true, portraitPath: true }
             }
           }
         })
-        .then((rows) => rows.map((r) => r.driver))
+        .then((rows) => rows)
         .catch(() => [])
     : [];
 
@@ -122,9 +123,12 @@ export default async function TeamDetailPage({
       ? `Saison ${fallbackParticipation.season.year} · Season ${fallbackParticipation.season.seasonNo}${fallbackParticipation.season.isTest ? " · TEST" : ""}`
       : null;
 
-  const driverTiles: Array<(typeof drivers)[number] | null> = [
-    drivers[0] ?? null,
-    drivers[1] ?? null
+  const mainDrivers = drivers.filter((d) => d.role === "MAIN").map((d) => d.driver);
+  const reserveDrivers = drivers.filter((d) => d.role === "RESERVE").map((d) => d.driver);
+
+  const driverTiles: Array<(typeof mainDrivers)[number] | null> = [
+    mainDrivers[0] ?? null,
+    mainDrivers[1] ?? null
   ];
 
   return (
@@ -342,6 +346,26 @@ export default async function TeamDetailPage({
             )
           )}
         </div>
+
+        {reserveDrivers.length ? (
+          <div className="mt-8">
+            <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
+              Ersatzfahrer
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {reserveDrivers.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/${league}/drivers/${d.id}`}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white"
+                >
+                  {d.number ? `#${d.number} ` : ""}
+                  {d.gamertag ?? d.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Container>
     </>
   );

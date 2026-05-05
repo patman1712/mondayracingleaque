@@ -18,6 +18,11 @@ enum SeasonPlacement {
   ARCHIVE
 }
 
+enum DriverRole {
+  MAIN
+  RESERVE
+}
+
 model NewsPost {
   id          String    @id @default(cuid())
   title       String
@@ -31,7 +36,6 @@ model NewsPost {
 
 model Driver {
   id        String   @id @default(cuid())
-  league    League
   gamertag  String?
   name      String
   number    Int?
@@ -58,6 +62,7 @@ model DriverSeason {
   driverId String
   seasonId String
   teamId   String?
+  role     DriverRole @default(MAIN)
   starts   Int @default(0)
   wins     Int @default(0)
   podiums  Int @default(0)

@@ -90,7 +90,6 @@ export default async function DriverDetailPage({
       where: { id: driverId },
       select: {
         id: true,
-        league: true,
         name: true,
         gamertag: true,
         number: true,
@@ -107,7 +106,15 @@ export default async function DriverDetailPage({
     })
     .catch(() => null);
 
-  if (!driver || driver.league !== l) notFound();
+  if (!driver) notFound();
+
+  const leagueMembership = await prisma.driverSeason
+    .findFirst({
+      where: { driverId: driver.id, season: { league: l } },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!leagueMembership) notFound();
 
   const currentSeasonRow =
     currentSeason?.id

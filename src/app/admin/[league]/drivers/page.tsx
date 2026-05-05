@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import Link from "next/link";
@@ -50,40 +51,75 @@ export default async function AdminDriversPage({
     name: string;
     gamertag: string | null;
     number: number | null;
-    team: string | null;
-    teamId: string | null;
     country: string | null;
     portraitPath: string | null;
-    starts: number;
-    wins: number;
-    podiums: number;
-    driverOfDay: number;
-    driverTitles: number;
-    constructorTitles: number;
+    role: "MAIN" | "RESERVE" | null;
+    teamName: string | null;
   };
 
   let drivers: DriverItem[] = [];
   try {
-    drivers = await prisma.driver.findMany({
-      where: { league: l },
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        gamertag: true,
-        number: true,
-        team: true,
-        teamId: true,
-        country: true,
-        portraitPath: true,
-        starts: true,
-        wins: true,
-        podiums: true,
-        driverOfDay: true,
-        driverTitles: true,
-        constructorTitles: true
-      }
-    });
+    const activeSeason = await getActiveSeason({
+      league: l,
+      select: { id: true }
+    }).catch(() => null);
+
+    const rows = activeSeason
+      ? await prisma.driverSeason
+          .findMany({
+            where: { seasonId: activeSeason.id },
+            distinct: ["driverId"],
+            orderBy: [{ role: "asc" }, { driver: { name: "asc" } }],
+            select: {
+              role: true,
+              teamRef: { select: { name: true } },
+              driver: {
+                select: {
+                  id: true,
+                  name: true,
+                  gamertag: true,
+                  number: true,
+                  country: true,
+                  portraitPath: true
+                }
+              }
+            },
+            take: 2000
+          })
+          .catch(() => [])
+      : await prisma.driverSeason
+          .findMany({
+            where: { season: { league: l } },
+            distinct: ["driverId"],
+            orderBy: [{ driver: { name: "asc" } }],
+            select: {
+              role: true,
+              teamRef: { select: { name: true } },
+              driver: {
+                select: {
+                  id: true,
+                  name: true,
+                  gamertag: true,
+                  number: true,
+                  country: true,
+                  portraitPath: true
+                }
+              }
+            },
+            take: 2000
+          })
+          .catch(() => []);
+
+    drivers = rows.map((r) => ({
+      id: r.driver.id,
+      name: r.driver.name,
+      gamertag: r.driver.gamertag ?? null,
+      number: r.driver.number ?? null,
+      country: r.driver.country ?? null,
+      portraitPath: r.driver.portraitPath ?? null,
+      role: r.role ?? null,
+      teamName: r.teamRef?.name ?? null
+    }));
   } catch {}
 
   return (
@@ -106,7 +142,8 @@ export default async function AdminDriversPage({
                     {d.name}
                   </div>
                   <div className="mt-1 text-sm text-white/60">
-                    {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
+                    {(d.role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer")}{d.teamName ? ` · ${d.teamName}` : ""}{" "}
+                    {d.country ? `· ${d.country}` : ""}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
