@@ -11,7 +11,6 @@ const leagueLinks = [
 ];
 
 const sectionLinks = [
-  { key: "drivers", label: "Fahrer" },
   { key: "races", label: "Rennkalender" },
   { key: "results", label: "Ergebnisse" },
   { key: "standings", label: "WM Stand" }
@@ -72,6 +71,12 @@ export async function AdminShell({ children }: { children: ReactNode }) {
             >
               Teams
             </Link>
+            <Link
+              href="/admin/settings/drivers"
+              className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              Fahrer
+            </Link>
           </div>
 
           <div className="mt-6 text-xs font-semibold uppercase tracking-wider text-white/60">
@@ -82,6 +87,12 @@ export async function AdminShell({ children }: { children: ReactNode }) {
               <div key={l.slug}>
                 <div className="px-3 text-sm font-semibold">{l.label}</div>
                 <div className="mt-1 space-y-1">
+                  <Link
+                    href={`/admin/${l.slug}/drivers`}
+                    className="block rounded-lg px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                  >
+                    Fahrer
+                  </Link>
                   {sectionLinks.map((s) => (
                     <Link
                       key={s.key}
