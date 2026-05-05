@@ -35,9 +35,9 @@ function hexToRgba(hex: string, a: number) {
 
 function teamBg(color: string | null | undefined) {
   const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
-  const a = c ? hexToRgba(c, 0.32) : "rgba(255,255,255,0.08)";
-  const b = c ? hexToRgba(c, 0.06) : "rgba(255,255,255,0.03)";
-  const d = c ? hexToRgba(c, 0.22) : "rgba(255,255,255,0.06)";
+  const a = c ? hexToRgba(c, 0.58) : "rgba(255,255,255,0.10)";
+  const b = c ? hexToRgba(c, 0.14) : "rgba(255,255,255,0.05)";
+  const d = c ? hexToRgba(c, 0.42) : "rgba(255,255,255,0.08)";
   return `radial-gradient(900px circle at 20% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
 }
 
@@ -247,7 +247,7 @@ export default async function RaceDetailPage({
                 <Link
                   key={d.id}
                   href={`/${league}/drivers/${d.id}`}
-                  className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                  className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-black/10"
                   style={{ backgroundImage: teamBg(d.accent) }}
                 >
                   <div
@@ -258,7 +258,7 @@ export default async function RaceDetailPage({
                     className="absolute left-0 top-0 h-[4px] w-full"
                     style={{ backgroundColor: d.accent ?? "#ffffff" }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/65" />
                   {d.portraitUrl ? (
                     <div className="absolute inset-y-0 right-0 w-[62%] p-2">
                       <div className="relative h-full w-full">
