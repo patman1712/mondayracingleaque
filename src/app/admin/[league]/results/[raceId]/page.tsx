@@ -41,6 +41,15 @@ function extFromMime(mime: string) {
   return null;
 }
 
+function asUploadFile(v: unknown): File | null {
+  if (!v || typeof v !== "object") return null;
+  const f = v as { arrayBuffer?: unknown; size?: unknown; type?: unknown };
+  if (typeof f.arrayBuffer !== "function") return null;
+  if (typeof f.size !== "number") return null;
+  if (typeof f.type !== "string") return null;
+  return v as File;
+}
+
 async function writeUpload(fileName: string, file: File) {
   const root = dataRootDir();
   const uploads = path.join(root, "uploads");
@@ -48,6 +57,14 @@ async function writeUpload(fileName: string, file: File) {
   const abs = path.join(uploads, fileName);
   const buf = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(abs, buf);
+}
+
+function deleteUpload(fileName: string | null | undefined) {
+  if (!fileName) return;
+  const abs = path.join(dataRootDir(), "uploads", fileName);
+  try {
+    fs.unlinkSync(abs);
+  } catch {}
 }
 
 function imageUrl(imagePath: string | null | undefined) {
@@ -154,6 +171,71 @@ function parseOcrToRows(raw: string) {
         continue;
       }
     }
+  }
+
+  const uniqueByPos = new Map<number, (typeof rows)[number]>();
+  for (const r of rows) {
+    if (!uniqueByPos.has(r.position)) uniqueByPos.set(r.position, r);
+  }
+  return Array.from(uniqueByPos.values()).sort((a, b) => a.position - b.position).slice(0, 30);
+}
+
+function parseTimeToMs(s: string) {
+  const raw = s.trim();
+  const m = raw.match(/^(\d+):(\d{2})\.(\d{3})$/);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3]);
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return (min * 60 + sec) * 1000 + ms;
+}
+
+function parseOcrToClassificationRows(raw: string) {
+  const lines = raw
+    .split(/\r?\n/g)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const rows: Array<{
+    position: number;
+    driver: string;
+    grid: number | null;
+    stops: number | null;
+    bestTime: string | null;
+    timeText: string | null;
+    status?: string | null;
+  }> = [];
+
+  for (const line of lines) {
+    const cleaned = line
+      .replace(/[|]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    const m = cleaned.match(
+      /^(\d{1,2})\s+(.+?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d+:\d{2}\.\d{3})\s+([+\d:\.]+|DNF|DSQ|DNS|RET)\s*$/i
+    );
+    if (!m) continue;
+
+    const position = Number(m[1]);
+    const driver = m[2].trim();
+    const grid = Number(m[3]);
+    const stops = Number(m[4]);
+    const bestTime = m[5].trim();
+    const timeText = m[6].trim().toUpperCase();
+    if (!Number.isFinite(position) || !driver) continue;
+
+    const status = ["DNF", "DSQ", "DNS", "RET"].includes(timeText) ? timeText : null;
+    rows.push({
+      position,
+      driver,
+      grid: Number.isFinite(grid) ? grid : null,
+      stops: Number.isFinite(stops) ? stops : null,
+      bestTime: bestTime || null,
+      timeText: timeText || null,
+      status
+    });
   }
 
   const uniqueByPos = new Map<number, (typeof rows)[number]>();
@@ -352,32 +434,59 @@ async function updateRaceDetails(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
-async function uploadResultsImage(
+async function uploadResultsImages(
   adminLeague: string,
+  league: League,
   raceId: string,
   formData: FormData
 ) {
   "use server";
   await requireAdmin();
 
-  const image = formData.get("image");
-  if (!(image instanceof File) || image.size <= 0) return;
-  if (image.size > 8_000_000) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=image`);
-  }
-  const ext = extFromMime(image.type);
-  if (!ext) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=image`);
-  }
-  const fileName = `results-${raceId}-${Date.now()}.${ext}`;
-  await writeUpload(fileName, image);
-
-  await prisma.race
-    .update({
-      where: { id: raceId },
-      data: { resultsImagePath: fileName, resultsOcrText: null }
-    })
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true, resultsImagePath: true } })
     .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const replaceImages = formData.get("replaceImages") === "on";
+
+  const files = formData
+    .getAll("images")
+    .map((v) => asUploadFile(v))
+    .filter((x): x is File => Boolean(x))
+    .filter((f) => f.size > 0);
+
+  if (files.length === 0) return;
+
+  if (replaceImages) {
+    const existing = await prisma.raceResultImage
+      .findMany({ where: { raceId }, select: { id: true, imagePath: true }, take: 100 })
+      .catch(() => []);
+    await prisma.raceResultImage.deleteMany({ where: { raceId } }).catch(() => null);
+    for (const e of existing) deleteUpload(e.imagePath);
+  }
+
+  const createdPaths: string[] = [];
+  for (let i = 0; i < Math.min(files.length, 6); i++) {
+    const image = files[i];
+    if (image.size > 8_000_000) continue;
+    const ext = extFromMime(image.type);
+    if (!ext) continue;
+    const fileName = `results-${raceId}-${Date.now()}-${i}.${ext}`;
+    await writeUpload(fileName, image);
+    createdPaths.push(fileName);
+    await prisma.raceResultImage.create({ data: { raceId, imagePath: fileName } }).catch(() => null);
+  }
+
+  const first = createdPaths[0] ?? null;
+  if (first) {
+    await prisma.race
+      .update({
+        where: { id: raceId },
+        data: { resultsImagePath: first }
+      })
+      .catch(() => null);
+  }
 
   const cfg = await resolveLeagueByAdminSlug(adminLeague);
   const pub =
@@ -391,6 +500,211 @@ async function uploadResultsImage(
           : null);
   if (pub) revalidatePath(`/${pub}/races/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
+async function ocrImportResultsFromImages(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const replace = formData.get("replace") === "on";
+
+  const race = await prisma.race
+    .findUnique({
+      where: { id: raceId },
+      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true }
+    })
+    .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!season) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const imgs = await prisma.raceResultImage
+    .findMany({
+      where: { raceId },
+      orderBy: [{ createdAt: "asc" }],
+      select: { imagePath: true },
+      take: 20
+    })
+    .catch(() => []);
+  if (imgs.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=image`);
+
+  const uploadsDir = path.join(dataRootDir(), "uploads");
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng");
+
+  const texts: string[] = [];
+  for (const img of imgs) {
+    const abs = path.join(uploadsDir, img.imagePath);
+    const rel = path.relative(uploadsDir, abs);
+    if (rel.startsWith("..") || path.isAbsolute(rel) || !fs.existsSync(abs)) continue;
+    const res = await worker.recognize(abs);
+    const text = (res.data.text ?? "").trim();
+    if (text) texts.push(text);
+  }
+  await worker.terminate();
+
+  const combined = texts.join("\n\n");
+  if (!combined) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
+
+  await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: combined } }).catch(() => null);
+
+  const entryDrivers = await prisma.raceEntry
+    .findMany({
+      where: { raceId, participates: true },
+      select: { driver: { select: { id: true, name: true } } },
+      take: 5000
+    })
+    .catch((): Array<{ driver: { id: string; name: string } }> => []);
+
+  const eligibleDrivers = entryDrivers.map((e) => e.driver);
+  if (eligibleDrivers.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=entries`);
+
+  const driverByNorm = new Map<string, { id: string; name: string }>();
+  for (const d of eligibleDrivers) {
+    const k = normalize(d.name);
+    if (!k) continue;
+    if (driverByNorm.has(k)) continue;
+    driverByNorm.set(k, d);
+  }
+
+  function findDriverId(name: string) {
+    const n = normalize(name);
+    if (driverByNorm.has(n)) return driverByNorm.get(n)!.id;
+    for (const [k, v] of driverByNorm) {
+      if (k.includes(n) || n.includes(k)) return v.id;
+    }
+    return null;
+  }
+
+  const parsed = parseOcrToClassificationRows(combined);
+  const pointsParsed = parsed.length === 0 ? parseOcrToRows(combined) : [];
+  if (parsed.length === 0 && pointsParsed.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
+
+  if (replace) {
+    await prisma.raceResult.deleteMany({ where: { raceId } }).catch(() => null);
+  }
+
+  const existing = replace
+    ? new Map<string, { points: number; fastestLap: boolean }>()
+    : new Map(
+        (
+          await prisma.raceResult
+            .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true }, take: 5000 })
+            .catch(() => [])
+        ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
+      );
+
+  if (parsed.length) {
+    const bestMs = Math.min(
+      ...parsed
+        .map((r) => (r.bestTime ? parseTimeToMs(r.bestTime) : null))
+        .filter((x): x is number => typeof x === "number")
+    );
+    const fastestNorm = Number.isFinite(bestMs) ? bestMs : null;
+
+    const usedPos = new Set<number>();
+    for (const row of parsed) {
+      if (usedPos.has(row.position)) continue;
+      usedPos.add(row.position);
+      const driverId = findDriverId(row.driver);
+      if (!driverId) continue;
+
+      const current = existing.get(driverId) ?? null;
+      const points = current ? current.points : 0;
+      const fastestLap =
+        row.bestTime && fastestNorm !== null && parseTimeToMs(row.bestTime) === fastestNorm ? true : current?.fastestLap ?? false;
+
+      await prisma.raceResult
+        .upsert({
+          where: { raceId_driverId: { raceId, driverId } },
+          create: {
+            raceId,
+            driverId,
+            position: row.position,
+            points,
+            grid: row.grid,
+            stops: row.stops,
+            bestTime: row.bestTime,
+            timeText: row.timeText,
+            status: row.status ?? null,
+            fastestLap
+          },
+          update: {
+            position: row.position,
+            points,
+            grid: row.grid,
+            stops: row.stops,
+            bestTime: row.bestTime,
+            timeText: row.timeText,
+            status: row.status ?? null,
+            fastestLap
+          }
+        })
+        .catch(() => null);
+    }
+  } else {
+    for (const row of pointsParsed) {
+      const driverId = findDriverId(row.driver);
+      if (!driverId) continue;
+      const current = existing.get(driverId) ?? null;
+      const points = current ? current.points : row.points;
+      await prisma.raceResult
+        .upsert({
+          where: { raceId_driverId: { raceId, driverId } },
+          create: { raceId, driverId, position: row.position, points, status: row.status ?? null, fastestLap: current?.fastestLap ?? false },
+          update: { position: row.position, points, status: row.status ?? null }
+        })
+        .catch(() => null);
+    }
+  }
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  const cfg = await resolveLeagueByAdminSlug(adminLeague);
+  const pub =
+    cfg?.publicSlug ??
+    (adminLeague === "one"
+      ? "mrl-one"
+      : adminLeague === "two"
+        ? "mrl-two"
+        : adminLeague === "rookie"
+          ? "mrl-rookie"
+          : null);
+  if (pub) revalidatePath(`/${pub}/races/${raceId}`);
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
@@ -677,7 +991,12 @@ export default async function AdminRaceResultsPage({
         startsAt: true,
         twitchChannel: true,
         resultsImagePath: true,
-        resultsOcrText: true
+        resultsOcrText: true,
+        resultImages: {
+          select: { id: true, imagePath: true, createdAt: true },
+          orderBy: [{ createdAt: "asc" }],
+          take: 50
+        }
       }
     })
     .catch(() => null);
@@ -690,6 +1009,10 @@ export default async function AdminRaceResultsPage({
     driverId: string;
     position: number;
     points: number;
+    grid: number | null;
+    stops: number | null;
+    bestTime: string | null;
+    timeText: string | null;
     status: string | null;
     fastestLap: boolean;
     driver: { name: string };
@@ -750,6 +1073,10 @@ export default async function AdminRaceResultsPage({
         driverId: true,
         position: true,
         points: true,
+        grid: true,
+        stops: true,
+        bestTime: true,
+        timeText: true,
         status: true,
         fastestLap: true,
         driver: { select: { name: true } }
@@ -894,39 +1221,61 @@ export default async function AdminRaceResultsPage({
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="text-base font-semibold">Ergebnis-Upload</div>
         <div className="mt-2 text-sm text-white/70">
-          Bild hochladen, dann OCR ausführen und Ergebnisse automatisch eintragen.
+          Mehrere Bilder hochladen (max. 6), dann OCR ausführen und Ergebnisse automatisch eintragen.
         </div>
 
-        <form action={uploadResultsImage.bind(null, league, raceId)} encType="multipart/form-data" className="mt-6 grid gap-4 md:grid-cols-2">
+        <form
+          action={uploadResultsImages.bind(null, league, l, raceId)}
+          encType="multipart/form-data"
+          className="mt-6 grid gap-4 md:grid-cols-2"
+        >
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
-              Ergebnis-Bild
+              Ergebnis-Bilder
             </label>
             <input
-              name="image"
+              name="images"
               type="file"
+              multiple
               accept="image/png,image/jpeg,image/webp"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-white/80 md:col-span-2">
+            <input type="checkbox" name="replaceImages" className="h-4 w-4" />{" "}
+            Vorhandene Bilder ersetzen
+          </label>
           <button className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
             Hochladen
           </button>
         </form>
 
-        {race.resultsImagePath ? (
+        {race.resultsImagePath || race.resultImages.length ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-              <img src={imageUrl(race.resultsImagePath) ?? ""} alt="" className="w-full" />
+              {race.resultImages.length ? (
+                <div className="grid grid-cols-2 gap-2 p-2">
+                  {race.resultImages.map((img) => (
+                    <img
+                      key={img.id}
+                      src={imageUrl(img.imagePath) ?? ""}
+                      alt=""
+                      className="h-[160px] w-full rounded-lg bg-black/20 object-cover"
+                    />
+                  ))}
+                </div>
+              ) : race.resultsImagePath ? (
+                <img src={imageUrl(race.resultsImagePath) ?? ""} alt="" className="w-full" />
+              ) : null}
             </div>
             <div className="space-y-3">
-              <form action={ocrImportResults.bind(null, league, l, raceId)}>
+              <form action={ocrImportResultsFromImages.bind(null, league, l, raceId)}>
                 <label className="flex items-center gap-2 text-sm text-white/80">
                   <input type="checkbox" name="replace" className="h-4 w-4" />{" "}
                   Vorhandene Ergebnisse ersetzen
                 </label>
                 <button className="mt-3 w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-                  OCR aus Bild → Ergebnisse eintragen
+                  OCR aus Bildern → Ergebnisse eintragen
                 </button>
               </form>
 
@@ -1111,6 +1460,12 @@ export default async function AdminRaceResultsPage({
                   <div className="truncate font-semibold">
                     P{r.position} · {r.driver.name} · {r.points.toFixed(0)} P
                     {r.fastestLap ? " · FL" : ""}
+                  </div>
+                  <div className="mt-1 text-xs text-white/60">
+                    {r.grid !== null ? `Grid ${r.grid}` : "Grid -"}
+                    {r.stops !== null ? ` · Stops ${r.stops}` : " · Stops -"}
+                    {r.bestTime ? ` · Best ${r.bestTime}` : ""}
+                    {r.timeText ? ` · Time ${r.timeText}` : ""}
                   </div>
                   {entryByDriverId.get(r.driverId)?.team?.name ? (
                     <div className="mt-1 text-sm text-white/60">

@@ -158,9 +158,21 @@ model Race {
 
   circuitRef Circuit? @relation(fields: [circuitId], references: [id], onDelete: SetNull)
   results RaceResult[]
+  resultImages RaceResultImage[]
   entries RaceEntry[]
 
   @@unique([league, season, seasonNo, seasonIsTest, round])
+}
+
+model RaceResultImage {
+  id        String   @id @default(cuid())
+  raceId    String
+  imagePath String
+  createdAt DateTime @default(now())
+
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@index([raceId])
 }
 
 model RaceEntry {
@@ -186,6 +198,10 @@ model RaceResult {
   driverId   String
   position   Int
   points     Float
+  grid       Int?
+  stops      Int?
+  bestTime   String?
+  timeText   String?
   status     String?
   fastestLap Boolean  @default(false)
   createdAt  DateTime @default(now())
