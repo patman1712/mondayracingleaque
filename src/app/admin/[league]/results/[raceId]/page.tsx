@@ -199,6 +199,31 @@ function parseOcrToClassificationRows(raw: string) {
     .map((l) => l.trim())
     .filter(Boolean);
 
+  function normalizeBestTime(tok: string) {
+    const t = tok.trim().replace(/[^0-9:.]/g, "");
+    const m1 = t.match(/^(\d+):(\d{2})\.(\d{3})$/);
+    if (m1) return `${Number(m1[1])}:${m1[2]}.${m1[3]}`;
+    const m2 = t.match(/^(\d{3,})\.(\d{3})$/);
+    if (m2) {
+      const pre = m2[1];
+      const ms = m2[2];
+      const min = pre.slice(0, -2);
+      const sec = pre.slice(-2);
+      return `${Number(min)}:${sec}.${ms}`;
+    }
+    return null;
+  }
+
+  function normalizeTimeText(tok: string) {
+    let t = tok.trim().toUpperCase().replace(/[^0-9A-Z+:.]/g, "");
+    if (!t) return null;
+    t = t.replace(/:\.(\d{2})\.(\d{3})$/, ":$1.$2");
+    if (["DNF", "DSQ", "DNS", "RET"].includes(t)) return t;
+    if (/^\+\d+(?::\d{2})?\.\d{3}$/.test(t)) return t;
+    if (/^\d+:\d{2}\.\d{3}$/.test(t)) return t;
+    return null;
+  }
+
   const rows: Array<{
     position: number;
     driver: string;
@@ -209,33 +234,98 @@ function parseOcrToClassificationRows(raw: string) {
     status?: string | null;
   }> = [];
 
+  let inferredPos = 0;
+
   for (const line of lines) {
     const cleaned = line
       .replace(/[|]+/g, " ")
       .replace(/\s{2,}/g, " ")
       .trim();
+    const tokens = cleaned.split(/\s+/g).filter(Boolean);
+    if (tokens.length < 3) continue;
 
-    const m = cleaned.match(
-      /^(\d{1,2})\s+(.+?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d+:\d{2}\.\d{3})\s+([+\d:\.]+|DNF|DSQ|DNS|RET)\s*$/i
-    );
-    if (!m) continue;
+    let pos: number | null = null;
+    for (let i = 0; i < Math.min(tokens.length, 3); i++) {
+      const m = tokens[i].match(/^(\d{1,2})$/);
+      if (m) {
+        const n = Number(m[1]);
+        if (Number.isFinite(n) && n >= 1 && n <= 30) {
+          pos = n;
+          break;
+        }
+      }
+    }
 
-    const position = Number(m[1]);
-    const driver = m[2].trim();
-    const grid = Number(m[3]);
-    const stops = Number(m[4]);
-    const bestTime = m[5].trim();
-    const timeText = m[6].trim().toUpperCase();
-    if (!Number.isFinite(position) || !driver) continue;
+    let timeIdx = -1;
+    let timeText: string | null = null;
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const t = normalizeTimeText(tokens[i]);
+      if (t) {
+        timeIdx = i;
+        timeText = t;
+        break;
+      }
+    }
 
-    const status = ["DNF", "DSQ", "DNS", "RET"].includes(timeText) ? timeText : null;
+    let bestIdx = -1;
+    let bestTime: string | null = null;
+    const bestScanEnd = timeIdx >= 0 ? timeIdx - 1 : tokens.length - 1;
+    for (let i = bestScanEnd; i >= 0; i--) {
+      const bt = normalizeBestTime(tokens[i]);
+      if (bt) {
+        bestIdx = i;
+        bestTime = bt;
+        break;
+      }
+    }
+    if (!bestTime) continue;
+
+    const used = new Set<number>();
+    if (timeIdx >= 0) used.add(timeIdx);
+    if (bestIdx >= 0) used.add(bestIdx);
+
+    const numeric: number[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (used.has(i)) continue;
+      const m = tokens[i].match(/^(\d{1,2})$/);
+      if (!m) continue;
+      const n = Number(m[1]);
+      if (!Number.isFinite(n)) continue;
+      if (pos !== null && n === pos) continue;
+      numeric.push(n);
+    }
+
+    const grid = numeric.length >= 1 ? numeric[0] : null;
+    const stops = numeric.length >= 2 ? numeric[1] : null;
+
+    const driverTokens: string[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (used.has(i)) continue;
+      const t = tokens[i];
+      if (pos !== null && i < 3 && t === String(pos)) continue;
+      if (/^[\[\]\{\}\(\)]+$/.test(t)) continue;
+      if (/^[\-–—]+$/.test(t)) continue;
+      if (/^[A-Z]{1,3}$/.test(t)) continue;
+      if (/^\d{1,2}$/.test(t)) continue;
+      if (/^[^\p{L}0-9]+$/u.test(t)) continue;
+      driverTokens.push(t);
+    }
+
+    const driverRaw = driverTokens.join(" ").replace(/\b\d+([A-Za-z])/g, "$1").replace(/\s{2,}/g, " ").trim();
+    if (!driverRaw) continue;
+
+    const status = timeText && ["DNF", "DSQ", "DNS", "RET"].includes(timeText) ? timeText : null;
+
+    const position = pos ?? Math.min(30, inferredPos + 1);
+    inferredPos = position;
+
     rows.push({
       position,
-      driver,
-      grid: Number.isFinite(grid) ? grid : null,
-      stops: Number.isFinite(stops) ? stops : null,
-      bestTime: bestTime || null,
-      timeText: timeText || null,
+      driver: driverRaw,
+      grid,
+      stops,
+      bestTime,
+      timeText,
       status
     });
   }
@@ -589,6 +679,8 @@ async function ocrImportResultsFromImages(
         ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
       );
 
+  let matched = 0;
+
   if (parsed.length) {
     const bestTimes = parsed
       .map((r) => (r.bestTime ? parseTimeToMs(r.bestTime) : null))
@@ -602,6 +694,7 @@ async function ocrImportResultsFromImages(
       usedPos.add(row.position);
       const driverId = findDriverId(row.driver);
       if (!driverId) continue;
+      matched++;
 
       const current = existing.get(driverId) ?? null;
       const points = current ? current.points : 0;
@@ -640,6 +733,7 @@ async function ocrImportResultsFromImages(
     for (const row of pointsParsed) {
       const driverId = findDriverId(row.driver);
       if (!driverId) continue;
+      matched++;
       const current = existing.get(driverId) ?? null;
       const points = current ? current.points : row.points;
       await prisma.raceResult
@@ -650,6 +744,16 @@ async function ocrImportResultsFromImages(
         })
         .catch(() => null);
     }
+  }
+
+  if (matched === 0) {
+    await prisma.race
+      .update({
+        where: { id: raceId },
+        data: { resultsOcrText: combined + "\n\nIMPORT: 0 Matches (Namen stimmen nicht mit teilnehmenden Fahrern überein)" }
+      })
+      .catch(() => null);
+    redirect(`/admin/${adminLeague}/results/${raceId}?error=nomatch`);
   }
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
@@ -1056,12 +1160,14 @@ export default async function AdminRaceResultsPage({
           Mehrere Bilder hochladen (max. 6), dann OCR ausführen und Ergebnisse automatisch eintragen.
         </div>
 
-        {error && ["image", "ocr", "entries", "invalid"].includes(error) ? (
+        {error && ["image", "ocr", "entries", "invalid", "nomatch"].includes(error) ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
             {error === "entries"
               ? "Bitte zuerst im Fahrerfeld die Fahrer auf „Nimmt teil“ setzen, dann OCR ausführen."
               : error === "image"
                 ? "Keine gültigen Ergebnisbilder gefunden."
+                : error === "nomatch"
+                  ? "Import hat keinen Fahrer zugeordnet. Meist stimmt der Name aus der OCR nicht mit den teilnehmenden Fahrern überein."
                 : error === "ocr"
                   ? "OCR konnte keine verwertbaren Zeilen erkennen."
                   : "Ungültige Anfrage."}
