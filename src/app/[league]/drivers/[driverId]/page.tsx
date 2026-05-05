@@ -204,91 +204,125 @@ export default async function DriverDetailPage({
 
   return (
     <>
-      <div className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0" style={heroBg(accent)} />
-        <div className="absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/80" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
-        <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
+      <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen overflow-hidden border-b border-white/10">
+        <div className="relative h-[560px] sm:h-[660px] lg:h-[760px]">
+          <div className="absolute inset-0" style={heroBg(accent)} />
+          <div
+            className="absolute inset-0 opacity-25"
+            style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/85" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
+          <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
 
-        <Container>
-          <div className="relative py-10 sm:py-14">
-            {portraitUrl ? (
-              <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[min(520px,46vw)] sm:block">
-                <Image
-                  src={portraitUrl}
-                  alt=""
-                  fill
-                  sizes="(max-width: 1024px) 46vw, 520px"
-                  className="object-contain object-bottom drop-shadow-[0_28px_70px_rgba(0,0,0,0.6)]"
-                  quality={80}
-                />
-              </div>
-            ) : null}
+          {portraitUrl ? (
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-full sm:w-[min(720px,52vw)]">
+              <Image
+                src={portraitUrl}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 52vw, 720px"
+                className="object-contain object-bottom drop-shadow-[0_32px_90px_rgba(0,0,0,0.65)]"
+                quality={80}
+                priority
+              />
+            </div>
+          ) : null}
 
-            <div className="relative z-10 max-w-[720px]">
-              {teamLogoUrl ? (
-                <Image
-                  src={teamLogoUrl}
-                  alt=""
-                  width={160}
-                  height={48}
-                  unoptimized
-                  className="h-9 w-auto object-contain"
-                />
-              ) : null}
+          <Container>
+            <div className="relative z-10 flex h-full items-end pb-10 sm:pb-14">
+              <div className="w-full max-w-[820px]">
+                {teamLogoUrl ? (
+                  <Image
+                    src={teamLogoUrl}
+                    alt=""
+                    width={180}
+                    height={54}
+                    unoptimized
+                    className="h-10 w-auto object-contain sm:h-11"
+                  />
+                ) : null}
 
-              <div className="mt-6 flex items-end gap-5">
-                <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
-                  {driver.number ?? "—"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <div className="hidden sm:block">
-                      <div className="h-[56px] w-[52px] bg-white/90" style={{ clipPath: "polygon(0 0, 100% 0, 68% 100%, 0 100%)" }} />
-                      <div className="-mt-2 h-[10px] w-[58px] bg-white/80" style={{ clipPath: "polygon(0 0, 100% 0, 74% 100%, 0 100%)" }} />
+                <div className="mt-6 flex items-end gap-5">
+                  <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
+                    {driver.number ?? "—"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div
+                          className="h-[46px] w-[42px] bg-white/90 sm:h-[72px] sm:w-[54px]"
+                          style={{ clipPath: "polygon(0 0, 100% 0, 66% 100%, 0 100%)" }}
+                        />
+                        <div
+                          className="-mt-2 h-[9px] w-[48px] bg-white/80 sm:h-[11px] sm:w-[64px]"
+                          style={{ clipPath: "polygon(0 0, 100% 0, 72% 100%, 0 100%)" }}
+                        />
+                      </div>
+
+                      <div className="min-w-0 font-racing text-5xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_12px_34px_rgba(0,0,0,0.7)] sm:text-6xl lg:text-7xl">
+                        {displayName}
+                      </div>
+
+                      <div>
+                        <div
+                          className="h-[46px] w-[42px] bg-white/90 sm:h-[72px] sm:w-[54px]"
+                          style={{ clipPath: "polygon(34% 0, 100% 0, 100% 100%, 0 100%)" }}
+                        />
+                        <div
+                          className="-mt-2 h-[9px] w-[48px] bg-white/80 sm:h-[11px] sm:w-[64px]"
+                          style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)" }}
+                        />
+                      </div>
                     </div>
 
-                    <div className="min-w-0 font-racing text-5xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.65)] sm:text-6xl">
-                      {displayName}
-                    </div>
-
-                    <div className="hidden sm:block">
-                      <div className="h-[56px] w-[52px] bg-white/90" style={{ clipPath: "polygon(32% 0, 100% 0, 100% 100%, 0 100%)" }} />
-                      <div className="-mt-2 h-[10px] w-[58px] bg-white/80" style={{ clipPath: "polygon(26% 0, 100% 0, 100% 100%, 0 100%)" }} />
+                    <div className="mt-4 grid gap-2 text-sm font-semibold text-white/80 sm:grid-cols-2 sm:gap-x-6">
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
+                          Saison
+                        </div>
+                        <div className="text-right">
+                          {currentSeasonLabel ?? "—"}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
+                          Team
+                        </div>
+                        <div className="truncate text-right">
+                          {seasonTeam?.teamRef?.name ?? driver.teamRef?.name ?? "—"}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
+                          Land
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {countryToFlagEmoji(driver.country) ? (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
+                              {countryToFlagEmoji(driver.country)}
+                            </span>
+                          ) : null}
+                          <span className="uppercase">
+                            {(driver.country ?? "—").trim()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
+                          Name
+                        </div>
+                        <div className="truncate text-right">
+                          {driver.name}
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/75">
-                    {currentSeasonLabel ? (
-                      <span className="rounded-md bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
-                        {currentSeasonLabel}
-                      </span>
-                    ) : null}
-                    {countryToFlagEmoji(driver.country) ? (
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
-                        {countryToFlagEmoji(driver.country)}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {portraitUrl ? (
-                    <div className="pointer-events-none relative mt-8 h-[340px] w-full sm:hidden">
-                      <Image
-                        src={portraitUrl}
-                        alt=""
-                        fill
-                        sizes="100vw"
-                        className="object-contain object-bottom drop-shadow-[0_28px_70px_rgba(0,0,0,0.6)]"
-                        quality={80}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </div>
-          </div>
-        </Container>
+          </Container>
+        </div>
       </div>
 
       <Container>
@@ -298,13 +332,11 @@ export default async function DriverDetailPage({
               <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
                 Aktuelle Saison
               </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {stat("Rennstarts", currentSeasonRow?.starts ?? 0)}
                 {stat("Siege", currentSeasonRow?.wins ?? 0)}
                 {stat("Podien", currentSeasonRow?.podiums ?? 0)}
                 {stat("Fahrer des Tages", currentSeasonRow?.driverOfDay ?? 0)}
-                {stat("Fahrer WM Titel", currentSeasonRow?.driverTitles ?? 0)}
-                {stat("Konstrukteurs WM Titel", currentSeasonRow?.constructorTitles ?? 0)}
               </div>
             </div>
             <div>
