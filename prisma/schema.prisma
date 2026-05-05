@@ -103,8 +103,20 @@ model Team {
   updatedAt DateTime @updatedAt
 
   participations TeamSeason[]
+  leagues TeamLeague[]
   driverSeasons DriverSeason[]
   drivers Driver[]
+}
+
+model TeamLeague {
+  teamId    String
+  league    League
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, league])
+  @@index([league])
 }
 
 model TeamSeason {

@@ -10,6 +10,48 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type LeagueMeta = {
+  league: League;
+  adminSlug: string;
+  publicSlug: string;
+  name: string;
+  isActive: boolean;
+};
+
+const fallbackLeagues: LeagueMeta[] = [
+  {
+    league: League.ONE,
+    adminSlug: "one",
+    publicSlug: "mrl-one",
+    name: "MRL One",
+    isActive: true
+  },
+  {
+    league: League.TWO,
+    adminSlug: "two",
+    publicSlug: "mrl-two",
+    name: "MRL Two",
+    isActive: true
+  },
+  {
+    league: League.ROOKIE,
+    adminSlug: "rookie",
+    publicSlug: "mrl-rookie",
+    name: "MRL Rookie",
+    isActive: true
+  }
+];
+
+async function listLeagueMeta(): Promise<LeagueMeta[]> {
+  const rows = await prisma.leagueConfig
+    .findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { league: true, adminSlug: true, publicSlug: true, name: true, isActive: true }
+    })
+    .catch(() => []);
+  return rows.length ? rows : fallbackLeagues;
+}
+
 function ensureDir(p: string) {
   try {
     fs.mkdirSync(p, { recursive: true });
@@ -61,17 +103,6 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-async function publicSlugForLeague(league: League): Promise<string | null> {
-  const row = await prisma.leagueConfig
-    .findUnique({ where: { league }, select: { publicSlug: true } })
-    .catch(() => null);
-  if (row?.publicSlug) return row.publicSlug;
-  if (league === League.ONE) return "mrl-one";
-  if (league === League.TWO) return "mrl-two";
-  if (league === League.ROOKIE) return "mrl-rookie";
-  return null;
-}
-
 async function createTeam(formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
@@ -114,9 +145,18 @@ async function revalidatePublicTeam(teamId: string) {
       take: 200
     })
     .catch(() => []);
-  const leagues = Array.from(new Set(rows.map((r) => r.season.league)));
+  const assigned = await prisma.teamLeague
+    .findMany({ where: { teamId }, select: { league: true }, take: 100 })
+    .catch(() => []);
+
+  const leagues = new Set<League>();
+  for (const r of rows) leagues.add(r.season.league);
+  for (const r of assigned) leagues.add(r.league);
+
+  const meta = await listLeagueMeta();
+  const byLeague = new Map(meta.map((m) => [m.league, m.publicSlug] as const));
   for (const l of leagues) {
-    const slug = await publicSlugForLeague(l);
+    const slug = byLeague.get(l);
     if (!slug) continue;
     revalidatePath(`/${slug}/teams`);
     revalidatePath(`/${slug}/teams/${teamId}`);
@@ -174,6 +214,69 @@ async function updateTeam(formData: FormData) {
   redirect("/admin/settings/teams?ok=1");
 }
 
+async function updateTeamLeagues(formData: FormData) {
+  "use server";
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  if (!teamId) redirect("/admin/settings/teams?error=invalid");
+
+  const selectedRaw = formData.getAll("leagues").map((v) => String(v).trim());
+  const selected = Array.from(
+    new Set(
+      selectedRaw.filter((v): v is League =>
+        Object.prototype.hasOwnProperty.call(League, v)
+      )
+    )
+  );
+
+  const current = await prisma.teamLeague
+    .findMany({ where: { teamId }, select: { league: true }, take: 50 })
+    .catch(() => []);
+  const currentSet = new Set(current.map((r) => r.league));
+  const nextSet = new Set(selected);
+
+  const toRemove = Array.from(currentSet).filter((l) => !nextSet.has(l));
+
+  if (toRemove.length) {
+    const inUseTeamSeasons = await prisma.teamSeason
+      .findFirst({
+        where: { teamId, season: { league: { in: toRemove } } },
+        select: { id: true }
+      })
+      .catch(() => null);
+    if (inUseTeamSeasons) redirect("/admin/settings/teams?error=team-in-use");
+
+    const inUseDriverSeasons = await prisma.driverSeason
+      .findFirst({
+        where: { teamId, season: { league: { in: toRemove } } },
+        select: { id: true }
+      })
+      .catch(() => null);
+    if (inUseDriverSeasons) redirect("/admin/settings/teams?error=team-in-use");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.teamLeague.deleteMany({ where: { teamId } });
+    if (selected.length) {
+      await tx.teamLeague.createMany({
+        data: selected.map((league) => ({ teamId, league }))
+      });
+    }
+  });
+
+  const meta = await listLeagueMeta();
+  const byLeague = new Map(meta.map((m) => [m.league, m] as const));
+  const affectedLeagues = new Set<League>([...currentSet, ...nextSet]);
+  for (const l of affectedLeagues) {
+    const m = byLeague.get(l);
+    if (!m) continue;
+    revalidatePath(`/admin/${m.adminSlug}/teams`);
+    revalidatePath(`/${m.publicSlug}/teams`);
+    revalidatePath(`/${m.publicSlug}/teams/${teamId}`);
+  }
+  revalidatePath("/admin/settings/teams");
+  redirect("/admin/settings/teams?ok=1");
+}
+
 async function removeTeamLogo(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
@@ -218,11 +321,18 @@ export default async function AdminTeamsPage({
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
 
+  const leagueMeta = await listLeagueMeta();
   const teams = await prisma.team
     .findMany({
       orderBy: [{ name: "asc" }],
       take: 200,
-      select: { id: true, name: true, color: true, logoPath: true }
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        logoPath: true,
+        leagues: { select: { league: true } }
+      }
     })
     .catch(() => []);
 
@@ -390,27 +500,55 @@ export default async function AdminTeamsPage({
                   </div>
                 </form>
 
+                <form action={updateTeamLeagues} className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                  <input type="hidden" name="teamId" value={t.id} />
+                  <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                    Ligen
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {leagueMeta.map((lm) => {
+                      const checked = t.leagues.some((x) => x.league === lm.league);
+                      return (
+                        <label
+                          key={lm.league}
+                          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80"
+                        >
+                          <input
+                            type="checkbox"
+                            name="leagues"
+                            value={lm.league}
+                            defaultChecked={checked}
+                            className="h-4 w-4"
+                          />
+                          <span className={lm.isActive ? "" : "text-white/50"}>
+                            {lm.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="text-xs text-white/55">
+                      Nur zugewiesene Teams stehen dann in der Liga zur Auswahl.
+                    </div>
+                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                      Ligen speichern
+                    </button>
+                  </div>
+                </form>
+
                 <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
                   Saison-Zuweisungen und Designs verwaltest du pro Liga:
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Link
-                      href="/admin/one/teams"
-                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                    >
-                      MRL One
-                    </Link>
-                    <Link
-                      href="/admin/two/teams"
-                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                    >
-                      MRL Two
-                    </Link>
-                    <Link
-                      href="/admin/rookie/teams"
-                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                    >
-                      MRL Rookie
-                    </Link>
+                    {leagueMeta.map((lm) => (
+                      <Link
+                        key={lm.league}
+                        href={`/admin/${lm.adminSlug}/teams`}
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                      >
+                        {lm.name}
+                      </Link>
+                    ))}
                   </div>
                 </div>
               </div>

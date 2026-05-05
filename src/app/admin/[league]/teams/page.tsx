@@ -111,6 +111,13 @@ async function addParticipation(formData: FormData) {
   }
 
   try {
+    await prisma.teamLeague
+      .upsert({
+        where: { teamId_league: { teamId, league } },
+        create: { teamId, league },
+        update: {}
+      })
+      .catch(() => null);
     await prisma.teamSeason.create({
       data: {
         teamId,
@@ -303,6 +310,7 @@ export default async function AdminLeagueTeamsPage({
 
   const teams = await prisma.team
     .findMany({
+      where: { leagues: { some: { league: l } } },
       orderBy: [{ name: "asc" }],
       take: 200,
       select: { id: true, name: true, color: true }

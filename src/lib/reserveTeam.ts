@@ -20,5 +20,12 @@ export async function ensureReserveTeam(league: League) {
     update: {},
     select: { id: true, name: true }
   });
+  await prisma.teamLeague
+    .upsert({
+      where: { teamId_league: { teamId: team.id, league } },
+      create: { teamId: team.id, league },
+      update: {}
+    })
+    .catch(() => null);
   return team;
 }

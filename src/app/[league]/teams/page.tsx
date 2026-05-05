@@ -86,18 +86,19 @@ export default async function LeagueTeamsPage({
   }
 
   if (!teams.length) {
-    const rows = await prisma.team
+    const rows = await prisma.teamLeague
       .findMany({
-        orderBy: [{ name: "asc" }],
-        take: 200,
-        select: { id: true, name: true, color: true, logoPath: true }
+        where: { league: l },
+        orderBy: [{ team: { name: "asc" } }],
+        take: 400,
+        select: { team: { select: { id: true, name: true, color: true, logoPath: true } } }
       })
       .catch(() => []);
-    teams = rows.map((t) => ({
-      id: t.id,
-      name: t.name,
-      color: t.color ?? null,
-      logoPath: t.logoPath ?? null,
+    teams = rows.map((r) => ({
+      id: r.team.id,
+      name: r.team.name,
+      color: r.team.color ?? null,
+      logoPath: r.team.logoPath ?? null,
       carPath: null
     }));
   }

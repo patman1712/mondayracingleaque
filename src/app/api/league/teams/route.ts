@@ -48,14 +48,16 @@ export async function GET(req: Request) {
   }
 
   if (!rows.length) {
-    const teams = await prisma.team
+    const teams = await prisma.teamLeague
       .findMany({
-        orderBy: [{ name: "asc" }],
-        take: 200,
-        select: { id: true, name: true, color: true, logoPath: true }
+        where: { league },
+        orderBy: [{ team: { name: "asc" } }],
+        take: 400,
+        select: { team: { select: { id: true, name: true, color: true, logoPath: true } } }
       })
       .catch(() => []);
     const ordered = teams
+      .map((t) => t.team)
       .map((t) => ({
         id: t.id,
         name: t.name,
@@ -80,6 +82,11 @@ export async function GET(req: Request) {
   }
 
   if (seasonId) {
+    const assigned = await prisma.teamLeague
+      .findMany({ where: { league }, select: { teamId: true }, take: 1000 })
+      .catch(() => []);
+    const assignedTeamIds = new Set(assigned.map((r) => r.teamId));
+
     const ds = await prisma.driverSeason
       .findMany({
         where: { seasonId, teamId: { not: null } },
@@ -110,6 +117,7 @@ export async function GET(req: Request) {
     for (const r of ds) {
       if (!r.teamRef) continue;
       if (byId.has(r.teamRef.id)) continue;
+      if (!assignedTeamIds.has(r.teamRef.id)) continue;
       byId.set(r.teamRef.id, {
         id: r.teamRef.id,
         name: r.teamRef.name,

@@ -194,6 +194,16 @@ async function activateSeason(adminLeague: string, league: League, driverId: str
         ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null)
         : null;
 
+  if (t?.id) {
+    await prisma.teamLeague
+      .upsert({
+        where: { teamId_league: { teamId: t.id, league } },
+        create: { teamId: t.id, league },
+        update: {}
+      })
+      .catch(() => null);
+  }
+
   await prisma.driverSeason
     .upsert({
       where: { driverId_seasonId: { driverId, seasonId } },
@@ -249,6 +259,16 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
       : teamId
         ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null)
         : null;
+
+  if (t?.id) {
+    await prisma.teamLeague
+      .upsert({
+        where: { teamId_league: { teamId: t.id, league } },
+        create: { teamId: t.id, league },
+        update: {}
+      })
+      .catch(() => null);
+  }
 
   const starts = asInt(String(formData.get("starts") ?? "0"), 0);
   const wins = asInt(String(formData.get("wins") ?? "0"), 0);
@@ -362,13 +382,32 @@ export default async function AdminDriverDetailPage({
 
   if (!driver) notFound();
 
-  const teams = await prisma.team
+  const assignedTeams = await prisma.teamLeague
     .findMany({
-      orderBy: [{ name: "asc" }],
-      select: { id: true, name: true },
-      take: 500
+      where: { league: l },
+      orderBy: [{ team: { name: "asc" } }],
+      select: { team: { select: { id: true, name: true } } },
+      take: 1000
     })
     .catch(() => []);
+
+  const extraTeamIds = Array.from(
+    new Set(driver.seasons.map((s) => s.teamId).filter((x): x is string => Boolean(x)))
+  );
+  const assignedTeamIds = new Set(assignedTeams.map((r) => r.team.id));
+  const missingIds = extraTeamIds.filter((id) => !assignedTeamIds.has(id));
+
+  const extraTeams = missingIds.length
+    ? await prisma.team
+        .findMany({
+          where: { id: { in: missingIds } },
+          select: { id: true, name: true },
+          take: 200
+        })
+        .catch(() => [])
+    : [];
+
+  const teams = [...assignedTeams.map((r) => r.team), ...extraTeams].sort((a, b) => a.name.localeCompare(b.name));
 
   const seasons = await prisma.season
     .findMany({
