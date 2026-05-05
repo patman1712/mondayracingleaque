@@ -548,33 +548,58 @@ async function ocrImportResultsFromImages(
     .catch(() => []);
   if (imgs.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=image`);
 
+  await prisma.race
+    .update({ where: { id: raceId }, data: { resultsOcrText: `OCR läuft… (${new Date().toLocaleString("de-DE")})` } })
+    .catch(() => null);
+
   const uploadsDir = path.join(dataRootDir(), "uploads");
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng");
 
-  const texts: string[] = [];
-  for (const img of imgs) {
-    const abs = path.join(uploadsDir, img.imagePath);
-    const rel = path.relative(uploadsDir, abs);
-    if (rel.startsWith("..") || path.isAbsolute(rel) || !fs.existsSync(abs)) continue;
-    const res = await worker.recognize(abs);
-    const text = (res.data.text ?? "").trim();
-    if (text) texts.push(text);
+  let worker: { recognize: (p: string) => Promise<{ data?: { text?: string | null } }>; terminate?: () => Promise<unknown> } | null =
+    null;
+  let combined = "";
+
+  try {
+    const { createWorker } = await import("tesseract.js");
+    worker = await createWorker("eng");
+    if (!worker) throw new Error("OCR worker not available");
+
+    const texts: string[] = [];
+    for (const img of imgs) {
+      const abs = path.join(uploadsDir, img.imagePath);
+      const rel = path.relative(uploadsDir, abs);
+      if (rel.startsWith("..") || path.isAbsolute(rel) || !fs.existsSync(abs)) continue;
+      try {
+        const res = await worker.recognize(abs);
+        const text = String(res?.data?.text ?? "").trim();
+        if (text) texts.push(text);
+      } catch {}
+    }
+    combined = texts.join("\n\n").trim();
+  } catch (e) {
+    const msg = typeof e === "object" && e && "message" in e ? String((e as { message?: unknown }).message ?? "") : String(e ?? "");
+    const safe = msg.replace(/\s+/g, " ").slice(0, 160);
+    await prisma.race
+      .update({ where: { id: raceId }, data: { resultsOcrText: safe ? `OCR Fehler: ${safe}` : "OCR Fehler" } })
+      .catch(() => null);
+    redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
+  } finally {
+    if (worker) await worker.terminate?.().catch(() => null);
   }
-  await worker.terminate();
 
-  const combined = texts.join("\n\n");
-  if (!combined) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
+  if (!combined) {
+    await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: "OCR: Kein Text erkannt." } }).catch(() => null);
+    redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
+  }
 
   await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: combined } }).catch(() => null);
 
-  const entryDrivers = await prisma.raceEntry
+  const entryDrivers: Array<{ driver: { id: string; name: string } }> = await prisma.raceEntry
     .findMany({
       where: { raceId, participates: true },
       select: { driver: { select: { id: true, name: true } } },
       take: 5000
     })
-    .catch((): Array<{ driver: { id: string; name: string } }> => []);
+    .catch(() => []);
 
   const eligibleDrivers = entryDrivers.map((e) => e.driver);
   if (eligibleDrivers.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=entries`);
@@ -615,12 +640,11 @@ async function ocrImportResultsFromImages(
       );
 
   if (parsed.length) {
-    const bestMs = Math.min(
-      ...parsed
-        .map((r) => (r.bestTime ? parseTimeToMs(r.bestTime) : null))
-        .filter((x): x is number => typeof x === "number")
-    );
-    const fastestNorm = Number.isFinite(bestMs) ? bestMs : null;
+    const bestTimes = parsed
+      .map((r) => (r.bestTime ? parseTimeToMs(r.bestTime) : null))
+      .filter((x): x is number => typeof x === "number");
+    const bestMs = bestTimes.length ? Math.min(...bestTimes) : null;
+    const fastestNorm = bestMs !== null && Number.isFinite(bestMs) ? bestMs : null;
 
     const usedPos = new Set<number>();
     for (const row of parsed) {
@@ -682,149 +706,6 @@ async function ocrImportResultsFromImages(
   revalidatePath(`/admin/${adminLeague}/results`);
   revalidatePath(`/admin/${adminLeague}/standings`);
 
-  const slugs =
-    (await prisma.leagueConfig
-      .findMany({ select: { publicSlug: true } })
-      .catch(() => [])) ?? [];
-  const list =
-    slugs.length > 0
-      ? slugs
-      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
-  for (const l of list) {
-    revalidatePath(`/${l.publicSlug}/results`);
-    revalidatePath(`/${l.publicSlug}/standings`);
-  }
-
-  const cfg = await resolveLeagueByAdminSlug(adminLeague);
-  const pub =
-    cfg?.publicSlug ??
-    (adminLeague === "one"
-      ? "mrl-one"
-      : adminLeague === "two"
-        ? "mrl-two"
-        : adminLeague === "rookie"
-          ? "mrl-rookie"
-          : null);
-  if (pub) revalidatePath(`/${pub}/races/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
-}
-
-async function ocrImportResults(
-  adminLeague: string,
-  league: League,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-
-  const replace = formData.get("replace") === "on";
-
-  const race = await prisma.race
-    .findUnique({
-      where: { id: raceId },
-      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true, resultsImagePath: true }
-    })
-    .catch(() => null);
-  if (!race || race.league !== league || !race.resultsImagePath) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
-  }
-
-  const uploadsDir = path.join(dataRootDir(), "uploads");
-  const abs = path.join(uploadsDir, race.resultsImagePath);
-  const rel = path.relative(uploadsDir, abs);
-  if (rel.startsWith("..") || path.isAbsolute(rel) || !fs.existsSync(abs)) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
-  }
-
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng");
-  const res = await worker.recognize(abs);
-  await worker.terminate();
-  const text = (res.data.text ?? "").trim();
-
-  await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: text } }).catch(() => null);
-
-  const parsed = parseOcrToRows(text);
-  if (parsed.length === 0) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
-  }
-
-  const season = await prisma.season
-    .findUnique({
-      where: {
-        league_year_seasonNo_isTest: {
-          league,
-          year: race.season,
-          seasonNo: race.seasonNo,
-          isTest: race.seasonIsTest
-        }
-      },
-      select: { id: true }
-    })
-    .catch(() => null);
-
-  const driverRows: DriverRow[] = season
-    ? await prisma.driverSeason
-        .findMany({
-          where: { seasonId: season.id },
-          distinct: ["driverId"],
-          select: driverSelect,
-          take: 5000
-        })
-        .catch((): DriverRow[] => [])
-    : await prisma.driverSeason
-        .findMany({
-          where: { season: { league } },
-          distinct: ["driverId"],
-          select: driverSelect,
-          take: 5000
-        })
-        .catch((): DriverRow[] => []);
-
-  const drivers = driverRows.map((r) => r.driver);
-  const driverByNorm = new Map<string, { id: string; name: string }>();
-  for (const d of drivers) {
-    driverByNorm.set(normalize(d.name), d);
-  }
-
-  function findDriverId(name: string) {
-    const n = normalize(name);
-    if (driverByNorm.has(n)) return driverByNorm.get(n)!.id;
-    for (const [k, v] of driverByNorm) {
-      if (k.includes(n) || n.includes(k)) return v.id;
-    }
-    return null;
-  }
-
-  if (replace) {
-    await prisma.raceResult.deleteMany({ where: { raceId } }).catch(() => null);
-  }
-
-  for (const row of parsed) {
-    const driverId = findDriverId(row.driver);
-    if (!driverId) continue;
-    await prisma.raceResult.upsert({
-      where: { raceId_driverId: { raceId, driverId } },
-      create: {
-        raceId,
-        driverId,
-        position: row.position,
-        points: row.points,
-        status: row.status ?? null,
-        fastestLap: false
-      },
-      update: {
-        position: row.position,
-        points: row.points,
-        status: row.status ?? null
-      }
-    });
-  }
-
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  revalidatePath(`/admin/${adminLeague}/results`);
-  revalidatePath(`/admin/${adminLeague}/standings`);
   const slugs =
     (await prisma.leagueConfig
       .findMany({ select: { publicSlug: true } })
