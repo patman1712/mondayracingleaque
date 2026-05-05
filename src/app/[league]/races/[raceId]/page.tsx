@@ -67,6 +67,66 @@ export default async function RaceDetailPage({
   const hero = imageUrl(race.imagePath) ?? imageUrl(race.circuitRef?.imagePath ?? null);
   const subLine = [race.location, race.circuit].filter(Boolean).join(" · ");
 
+  const entries = await prisma.raceEntry
+    .findMany({
+      where: { raceId: race.id, participates: true },
+      orderBy: [{ driver: { name: "asc" } }],
+      select: {
+        driverId: true,
+        driver: { select: { id: true, name: true, number: true, country: true, portraitPath: true } },
+        teamId: true,
+        team: { select: { id: true, name: true, color: true } }
+      },
+      take: 5000
+    })
+    .catch(() => []);
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league: l,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+
+  const driverIds = entries.map((e) => e.driverId);
+  const driverSeasonRows = season?.id && driverIds.length
+    ? await prisma.driverSeason
+        .findMany({
+          where: { seasonId: season.id, driverId: { in: driverIds } },
+          select: { driverId: true, role: true, teamRef: { select: { name: true, color: true } } },
+          take: 5000
+        })
+        .catch(() => [])
+    : [];
+
+  const dsByDriverId = new Map(driverSeasonRows.map((r) => [r.driverId, r] as const));
+
+  const field = entries.map((e) => {
+    const ds = dsByDriverId.get(e.driverId) ?? null;
+    const role = ds?.role ?? "MAIN";
+    const roleLabel = role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer";
+    const accent = e.team?.color ?? ds?.teamRef?.color ?? null;
+    return {
+      id: e.driver.id,
+      name: e.driver.name,
+      number: e.driver.number ?? null,
+      country: e.driver.country ?? null,
+      portraitUrl: imageUrl(e.driver.portraitPath) ?? null,
+      role,
+      roleLabel,
+      teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
+      raceTeamName: e.team?.name ?? null,
+      accent
+    };
+  });
+
   type ResultRow = {
     id: string;
     position: number;
@@ -142,6 +202,61 @@ export default async function RaceDetailPage({
       </div>
 
       <Container>
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-5 py-4">
+            <div className="text-lg font-semibold">Fahrerfeld</div>
+            <div className="mt-1 text-sm text-white/70">
+              {field.length ? `${field.length} Fahrer` : "Noch nicht gepflegt"}
+            </div>
+          </div>
+
+          {field.length === 0 ? (
+            <div className="px-5 py-5 text-sm text-white/60">
+              Fahrerfeld ist noch nicht eingetragen.
+            </div>
+          ) : (
+            <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+              {field.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/${league}/drivers/${d.id}`}
+                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                >
+                  <div
+                    className="absolute left-0 top-0 h-[4px] w-full"
+                    style={{ backgroundColor: d.accent ?? "#ffffff" }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/70" />
+                  {d.portraitUrl ? (
+                    <div className="absolute inset-y-0 right-0 w-[62%] p-2">
+                      <div className="relative h-full w-full">
+                        <img
+                          src={d.portraitUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="relative p-5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                      {d.roleLabel}
+                      {d.country ? ` · ${d.country}` : ""}
+                      {d.number ? ` · #${d.number}` : ""}
+                    </div>
+                    <div className="mt-2 truncate text-lg font-extrabold text-white">
+                      {d.name}
+                    </div>
+                    <div className="mt-2 text-sm text-white/70">
+                      {d.raceTeamName ? `Team: ${d.raceTeamName}` : d.teamName ? `Team: ${d.teamName}` : ""}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
         {showResults ? (
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-5 py-4">
