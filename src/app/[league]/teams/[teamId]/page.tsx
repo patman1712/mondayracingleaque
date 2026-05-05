@@ -99,7 +99,7 @@ export default async function TeamDetailPage({
   const drivers = seasonIdForDrivers
     ? await prisma.driverSeason
         .findMany({
-          where: { seasonId: seasonIdForDrivers, teamId: team.id },
+          where: { seasonId: seasonIdForDrivers, teamId: team.id, driver: { status: "ACTIVE" } },
           orderBy: [{ role: "asc" }, { driver: { number: "asc" } }, { driver: { name: "asc" } }],
           select: {
             role: true,

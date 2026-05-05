@@ -80,7 +80,7 @@ export default async function LeagueDriversPage({
     if (currentSeason) {
       const rows = await prisma.driverSeason
         .findMany({
-          where: { seasonId: currentSeason.id },
+          where: { seasonId: currentSeason.id, driver: { status: "ACTIVE" } },
           orderBy: [{ driver: { name: "asc" } }],
           select: {
             driver: {
@@ -142,7 +142,7 @@ export default async function LeagueDriversPage({
 
       const rows = await prisma.driverSeason
         .findMany({
-          where: { season: { league: l } },
+          where: { season: { league: l }, driver: { status: "ACTIVE" } },
           distinct: ["driverId"],
           orderBy: [{ driver: { name: "asc" } }],
           select,

@@ -2,7 +2,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { ensureReserveTeam } from "@/lib/reserveTeam";
-import { DriverRole, League } from "@prisma/client";
+import { DriverRole, DriverStatus, League } from "@prisma/client";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -87,6 +87,7 @@ async function createDriver(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const gamertag = String(formData.get("gamertag") ?? "").trim();
+  const statusRaw = String(formData.get("status") ?? "").trim();
   const numberRaw = String(formData.get("number") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
   const portrait = asUploadFile(formData.get("portrait"));
@@ -97,7 +98,9 @@ async function createDriver(formData: FormData) {
   const driverTitlesRaw = String(formData.get("driverTitles") ?? "").trim();
   const constructorTitlesRaw = String(formData.get("constructorTitles") ?? "").trim();
 
-  if (!name) return;
+  if (!gamertag) return;
+  const finalName = name || gamertag;
+  const status = statusRaw === "RETIRED" ? DriverStatus.RETIRED : DriverStatus.ACTIVE;
 
   const number = numberRaw ? Number(numberRaw) : null;
   const starts = startsRaw ? Number(startsRaw) : 0;
@@ -109,8 +112,9 @@ async function createDriver(formData: FormData) {
 
   const created = await prisma.driver.create({
     data: {
-      name,
-      gamertag: gamertag || null,
+      name: finalName,
+      gamertag,
+      status,
       number: Number.isFinite(number) ? (number as number) : null,
       country: country || null,
       starts: Number.isFinite(starts) ? (starts as number) : 0,
@@ -241,6 +245,7 @@ export default async function AdminSettingsDriversPage() {
         id: true,
         name: true,
         gamertag: true,
+        status: true,
         number: true,
         country: true,
         team: true,
@@ -264,22 +269,33 @@ export default async function AdminSettingsDriversPage() {
           <div className="text-base font-semibold">Fahrer anlegen</div>
           <form action={createDriver} encType="multipart/form-data" className="mt-4 grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2 text-sm text-white/60">
-              Fahrer wird nur 1x global angelegt. Ligen/Saisons + Stamm/Ersatz + Team stellst du danach unter dem Fahrer ein.
+              Fahrer wird nur 1x global angelegt. Gamertag reicht, alle anderen Felder sind optional. Ligen/Saisons + Stamm/Ersatz + Team stellst du danach unter dem Fahrer ein.
             </div>
 
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-white/70">Name</label>
-              <input
-                name="name"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              />
-            </div>
             <div className="md:col-span-2">
               <label className="mb-1 block text-xs font-semibold text-white/70">Gamertag</label>
               <input
                 name="gamertag"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-white/70">Name (optional)</label>
+              <input
+                name="name"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">Status</label>
+              <select
+                name="status"
+                defaultValue="ACTIVE"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              >
+                <option value="ACTIVE">Aktiv</option>
+                <option value="RETIRED">In Rente</option>
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-white/70">Nationalität</label>
@@ -397,6 +413,7 @@ export default async function AdminSettingsDriversPage() {
                         <div className="truncate font-semibold">
                           {d.number ? `#${d.number} ` : ""}
                           {d.name}
+                          {d.status === "RETIRED" ? " · (Rente)" : ""}
                         </div>
                         <div className="mt-1 text-sm text-white/60">
                           {d.gamertag ? `${d.gamertag} · ` : ""}
@@ -529,6 +546,12 @@ export default async function AdminSettingsDriversPage() {
                         </details>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/admin/settings/drivers/${d.id}`}
+                          className="rounded-lg bg-mrl-red px-3 py-2 text-xs font-semibold text-white"
+                        >
+                          Bearbeiten
+                        </Link>
                         {activeLeagues.length ? (
                           activeLeagues
                             .map((l) => {

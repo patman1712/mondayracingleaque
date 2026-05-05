@@ -255,8 +255,7 @@ export function NavLeagues() {
               onMouseLeave={() => scheduleClose()}
             >
               <div
-                className="max-h-[70vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl"
-                style={{ scrollbarGutter: "stable" }}
+                className="h-[70vh] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl"
               >
                 <div className="flex items-center justify-between px-2 py-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
@@ -268,7 +267,7 @@ export function NavLeagues() {
                   />
                 </div>
 
-                <div className="grid gap-3 p-2 md:grid-cols-[240px_1fr]">
+                <div className="grid h-[calc(70vh-56px)] gap-3 overflow-hidden p-2 md:grid-cols-[240px_1fr]">
                   <div className="grid gap-2">
                     {sub.map((s) => {
                       const isActive = active === s.key;
@@ -308,7 +307,7 @@ export function NavLeagues() {
                   </div>
 
                   {wide ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="h-full overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-4">
                       {active === "calendar" ? (
                         <>
                           <div className="flex items-center justify-between">
@@ -411,7 +410,7 @@ export function NavLeagues() {
                                 {loadingLeague === l.slug ? "Lädt..." : "Noch keine Teams"}
                               </div>
                             ) : (
-                              teams.slice(0, 8).map((t) => (
+                              teams.map((t) => (
                                 <Link
                                   key={t.id}
                                   href={`/${l.slug}/teams/${t.id}`}

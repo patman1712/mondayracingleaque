@@ -54,7 +54,7 @@ export async function GET(req: Request) {
 
   const rows = await prisma.driverSeason
     .findMany({
-      where: { seasonId: currentSeason.id },
+      where: { seasonId: currentSeason.id, driver: { status: "ACTIVE" } },
       orderBy: [{ role: "asc" }, { driver: { name: "asc" } }],
       select
     })
