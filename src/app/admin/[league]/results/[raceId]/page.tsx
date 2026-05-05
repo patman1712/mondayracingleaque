@@ -7,6 +7,7 @@ import { League, Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { RaceDriverField } from "@/components/RaceDriverField";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -1224,6 +1225,18 @@ export default async function AdminRaceResultsPage({
           Mehrere Bilder hochladen (max. 6), dann OCR ausführen und Ergebnisse automatisch eintragen.
         </div>
 
+        {error && ["image", "ocr", "entries", "invalid"].includes(error) ? (
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
+            {error === "entries"
+              ? "Bitte zuerst im Fahrerfeld die Fahrer auf „Nimmt teil“ setzen, dann OCR ausführen."
+              : error === "image"
+                ? "Keine gültigen Ergebnisbilder gefunden."
+                : error === "ocr"
+                  ? "OCR konnte keine verwertbaren Zeilen erkennen."
+                  : "Ungültige Anfrage."}
+          </div>
+        ) : null}
+
         <form
           action={uploadResultsImages.bind(null, league, l, raceId)}
           encType="multipart/form-data"
@@ -1245,9 +1258,12 @@ export default async function AdminRaceResultsPage({
             <input type="checkbox" name="replaceImages" className="h-4 w-4" />{" "}
             Vorhandene Bilder ersetzen
           </label>
-          <button className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
+          <FormSubmitButton
+            className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+            pendingText="Hochladen…"
+          >
             Hochladen
-          </button>
+          </FormSubmitButton>
         </form>
 
         {race.resultsImagePath || race.resultImages.length ? (
@@ -1274,9 +1290,12 @@ export default async function AdminRaceResultsPage({
                   <input type="checkbox" name="replace" className="h-4 w-4" />{" "}
                   Vorhandene Ergebnisse ersetzen
                 </label>
-                <button className="mt-3 w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                <FormSubmitButton
+                  className="mt-3 w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white"
+                  pendingText="OCR läuft…"
+                >
                   OCR aus Bildern → Ergebnisse eintragen
-                </button>
+                </FormSubmitButton>
               </form>
 
               {race.resultsOcrText ? (
