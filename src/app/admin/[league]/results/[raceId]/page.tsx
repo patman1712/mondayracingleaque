@@ -241,10 +241,22 @@ function parseOcrToClassificationRows(raw: string) {
     let t = tok.trim().toUpperCase().replace(/[^0-9A-Z+:.]/g, "");
     if (!t) return null;
     t = t.replace(/:\.(\d{2})\.(\d{3})$/, ":$1.$2");
+    t = t.replace(/\+(\d+):\.(\d{2})\.(\d{3})$/, "+$1:$2.$3");
     if (["DNF", "DSQ", "DNS", "RET"].includes(t)) return t;
     if (/^\+\d+(?::\d{2})?\.\d{3}$/.test(t)) return t;
     if (/^\d+:\d{2}\.\d{3}$/.test(t)) return t;
     return null;
+  }
+
+  function classifyTime(t: string | null) {
+    if (!t) return "none" as const;
+    if (t.startsWith("+")) return "gap" as const;
+    if (["DNF", "DSQ", "DNS", "RET"].includes(t)) return "status" as const;
+    const ms = parseTimeToMs(t);
+    if (ms === null) return "other" as const;
+    const min = Math.floor(ms / 60000);
+    if (min >= 5) return "race" as const;
+    return "lap" as const;
   }
 
   const rows: Array<{
@@ -334,13 +346,38 @@ function parseOcrToClassificationRows(raw: string) {
       driverTokens.push(t);
     }
 
-    const driverRaw = driverTokens.join(" ").replace(/\b\d+([A-Za-z])/g, "$1").replace(/\s{2,}/g, " ").trim();
+    const driverRaw = driverTokens
+      .join(" ")
+      .replace(/\b10([A-Za-z])/g, "O$1")
+      .replace(/\b\d+([A-Za-z])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
     if (!driverRaw) continue;
     const driverNorm = normalize(driverRaw);
     if (driverNorm.length < 4) continue;
     if (!bestTime && !timeText && grid === null && stops === null) continue;
 
-    const status = timeText && ["DNF", "DSQ", "DNS", "RET"].includes(timeText) ? timeText : null;
+    let best = bestTime;
+    let time = timeText;
+
+    const bestKind = classifyTime(best);
+    const timeKind = classifyTime(time);
+
+    if (!best && time && timeKind === "lap") {
+      best = time;
+      time = null;
+    } else if (best && !time && bestKind === "race") {
+      time = best;
+      best = null;
+    } else if (best && time) {
+      if ((bestKind === "race" || bestKind === "gap") && timeKind === "lap") {
+        const tmp = best;
+        best = time;
+        time = tmp;
+      }
+    }
+
+    const status = time && ["DNF", "DSQ", "DNS", "RET"].includes(time) ? time : null;
 
     const position = pos ?? Math.min(30, inferredPos + 1);
     inferredPos = position;
@@ -350,8 +387,8 @@ function parseOcrToClassificationRows(raw: string) {
       driver: driverRaw,
       grid,
       stops,
-      bestTime,
-      timeText,
+      bestTime: best,
+      timeText: time,
       status
     });
   }
