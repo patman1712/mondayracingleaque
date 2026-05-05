@@ -281,21 +281,31 @@ export default async function TeamDetailPage({
               <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/75" />
               <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
 
-              <div className="relative p-6">
-                  <div className="pointer-events-none absolute -top-8 right-3 font-racing text-[120px] font-bold leading-none tracking-[0.08em] text-white/15 sm:text-[150px]">
-                    {d.number ?? "—"}
-                  </div>
+              <div className="relative min-h-[260px] p-6 sm:min-h-[300px]">
+                <div className="pointer-events-none absolute right-4 top-2 font-racing text-[96px] font-bold leading-none tracking-[0.08em] text-white/20 sm:text-[120px]">
+                  {d.number ?? "—"}
+                </div>
 
-                  <div className="relative">
-                    <div className="mt-2 truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
+                <div className="relative flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
                       {d.gamertag ?? d.name}
                     </div>
                   </div>
+                  {d.country && /^[A-Za-z]{2}$/.test(d.country) ? (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[18px]">
+                      {String.fromCodePoint(
+                        0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(0) - 65,
+                        0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(1) - 65
+                      )}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="pointer-events-none absolute bottom-0 right-0 h-[96%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">
                   <div className="absolute inset-0 bg-gradient-to-l from-white/60 to-transparent" />
                 </div>
-                <div className="pointer-events-none absolute bottom-0 right-3 h-[92%] w-[52%]">
+                <div className="pointer-events-none absolute bottom-0 right-3 h-[88%] w-[56%]">
                   {d?.portraitPath ? (
                     <Image
                       src={imageUrl(d.portraitPath) ?? ""}
@@ -322,7 +332,7 @@ export default async function TeamDetailPage({
                 <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/75" />
                 <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
 
-                <div className="relative p-6">
+                <div className="relative min-h-[260px] p-6 sm:min-h-[300px]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-[11px] font-semibold uppercase tracking-wider text-white/70">

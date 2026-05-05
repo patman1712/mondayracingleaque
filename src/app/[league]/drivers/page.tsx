@@ -23,6 +23,15 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 function hexToRgba(hex: string, a: number) {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return `rgba(255,255,255,${a})`;
@@ -176,38 +185,50 @@ export default async function LeagueDriversPage({
             <Link
               key={d.id}
               href={`/${league}/drivers/${d.id}`}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
-              style={{ backgroundImage: cardBg(d.accent) }}
+              className="group relative rounded-2xl"
             >
               <div
-                className="absolute inset-0 opacity-25"
-                style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
-              <div className="absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? "#ffffff" }} />
+                className="relative min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[460px]"
+                style={{ backgroundImage: cardBg(d.accent) }}
+              >
+                <div
+                  className="absolute inset-0 opacity-25"
+                  style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/75" />
+                <div className="absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? "#ffffff" }} />
 
-              <div className="relative p-6">
-                <div className="pointer-events-none absolute -top-6 right-3 font-racing text-[110px] font-bold leading-none tracking-[0.08em] text-white/15 sm:text-[140px]">
+                <div className="pointer-events-none absolute right-4 top-2 font-racing text-[96px] font-bold leading-none tracking-[0.08em] text-white/20 sm:text-[120px]">
                   {d.number ?? "—"}
                 </div>
-                <div className="relative min-w-0">
-                  <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
-                    {d.gamertag ? d.gamertag : d.name}
-                  </div>
-                </div>
 
-                <div className="relative mt-5 h-[200px] overflow-hidden">
-                  {d.portraitPath ? (
-                    <img
-                      src={imageUrl(d.portraitPath) ?? ""}
-                      alt=""
-                      className="absolute inset-x-0 bottom-0 mx-auto h-[220px] w-full object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-[200px] w-full items-center justify-center text-xs font-semibold text-white/35">
-                      PORTRAIT
+                <div className="relative p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
+                        {d.gamertag ? d.gamertag : d.name}
+                      </div>
                     </div>
-                  )}
+                    {countryToFlagEmoji(d.country) ? (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[18px]">
+                        {countryToFlagEmoji(d.country)}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="relative mt-6 h-[280px] sm:h-[320px]">
+                    {d.portraitPath ? (
+                      <img
+                        src={imageUrl(d.portraitPath) ?? ""}
+                        alt=""
+                        className="absolute inset-x-0 bottom-0 mx-auto h-[300px] w-full object-contain sm:h-[350px]"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
+                        PORTRAIT
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </Link>
