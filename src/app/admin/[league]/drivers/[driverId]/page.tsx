@@ -364,6 +364,28 @@ export default async function AdminDriverDetailPage({
   const activeSeasonIds = new Set(seasonRows.map((s) => s.seasonId));
   const portraitUrl = imageUrl(driver.portraitPath);
 
+  const seasonTotals = seasonRows.reduce(
+    (acc, r) => {
+      acc.starts += r.starts;
+      acc.wins += r.wins;
+      acc.podiums += r.podiums;
+      acc.driverOfDay += r.driverOfDay;
+      acc.driverTitles += r.driverTitles;
+      acc.constructorTitles += r.constructorTitles;
+      return acc;
+    },
+    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+  );
+
+  const totalComputed = {
+    starts: seasonTotals.starts + driver.starts,
+    wins: seasonTotals.wins + driver.wins,
+    podiums: seasonTotals.podiums + driver.podiums,
+    driverOfDay: seasonTotals.driverOfDay + driver.driverOfDay,
+    driverTitles: seasonTotals.driverTitles + driver.driverTitles,
+    constructorTitles: seasonTotals.constructorTitles + driver.constructorTitles
+  };
+
   return (
     <AdminShell>
       <div className="space-y-6">
@@ -496,32 +518,61 @@ export default async function AdminDriverDetailPage({
               <summary className="cursor-pointer text-sm font-semibold text-white/85">
                 Gesamt-Stats
               </summary>
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                Gesamt = Summe aller Saison-Stats + Manuell
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Rennstarts</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.starts}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Siege</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.wins}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Podien</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.podiums}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Fahrer des Tages</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.driverOfDay}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Fahrer WM Titel</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.driverTitles}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Konstrukteurs WM Titel</div>
+                    <div className="mt-1 text-lg font-extrabold text-white/90">{totalComputed.constructorTitles}</div>
+                  </div>
+                </div>
+              </div>
               <form
                 action={updateTotals.bind(null, adminLeague, l, driver.id)}
                 className="mt-4 grid gap-4 md:grid-cols-3"
               >
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Rennstarts</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Rennstarts (Manuell)</label>
                   <input name="starts" defaultValue={driver.starts} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Siege</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Siege (Manuell)</label>
                   <input name="wins" defaultValue={driver.wins} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Podien</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Podien (Manuell)</label>
                   <input name="podiums" defaultValue={driver.podiums} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer des Tages</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer des Tages (Manuell)</label>
                   <input name="driverOfDay" defaultValue={driver.driverOfDay} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer WM Titel</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer WM Titel (Manuell)</label>
                   <input name="driverTitles" defaultValue={driver.driverTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Konstrukteurs WM Titel</label>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Konstrukteurs WM Titel (Manuell)</label>
                   <input name="constructorTitles" defaultValue={driver.constructorTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div className="md:col-span-3">

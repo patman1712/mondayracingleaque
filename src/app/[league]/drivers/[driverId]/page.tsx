@@ -110,6 +110,43 @@ export default async function DriverDetailPage({
 
   if (!driver || driver.league !== l) notFound();
 
+  const seasonStats = await prisma.driverSeason
+    .findMany({
+      where: { driverId: driver.id },
+      select: {
+        starts: true,
+        wins: true,
+        podiums: true,
+        driverOfDay: true,
+        driverTitles: true,
+        constructorTitles: true
+      },
+      take: 500
+    })
+    .catch(() => []);
+
+  const sum = seasonStats.reduce(
+    (acc, r) => {
+      acc.starts += r.starts;
+      acc.wins += r.wins;
+      acc.podiums += r.podiums;
+      acc.driverOfDay += r.driverOfDay;
+      acc.driverTitles += r.driverTitles;
+      acc.constructorTitles += r.constructorTitles;
+      return acc;
+    },
+    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+  );
+
+  const totals = {
+    starts: sum.starts + driver.starts,
+    wins: sum.wins + driver.wins,
+    podiums: sum.podiums + driver.podiums,
+    driverOfDay: sum.driverOfDay + driver.driverOfDay,
+    driverTitles: sum.driverTitles + driver.driverTitles,
+    constructorTitles: sum.constructorTitles + driver.constructorTitles
+  };
+
   const seasonTeam = currentSeason
     ? await prisma.driverSeason
         .findUnique({
@@ -214,12 +251,12 @@ export default async function DriverDetailPage({
             Stats
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {stat("Rennstarts", driver.starts)}
-            {stat("Siege", driver.wins)}
-            {stat("Podien", driver.podiums)}
-            {stat("Fahrer des Tages", driver.driverOfDay)}
-            {stat("Fahrer WM Titel", driver.driverTitles)}
-            {stat("Konstrukteurs WM Titel", driver.constructorTitles)}
+            {stat("Rennstarts", totals.starts)}
+            {stat("Siege", totals.wins)}
+            {stat("Podien", totals.podiums)}
+            {stat("Fahrer des Tages", totals.driverOfDay)}
+            {stat("Fahrer WM Titel", totals.driverTitles)}
+            {stat("Konstrukteurs WM Titel", totals.constructorTitles)}
           </div>
         </div>
       </Container>
