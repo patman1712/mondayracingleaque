@@ -175,6 +175,7 @@ export default async function DriverDetailPage({
         .findUnique({
           where: { driverId_seasonId: { driverId: driver.id, seasonId: currentSeason.id } },
           select: {
+            role: true,
             teamRef: {
               select: {
                 name: true,
@@ -196,14 +197,21 @@ export default async function DriverDetailPage({
   const leagueKey = l === League.ONE ? "ONE" : l === League.TWO ? "TWO" : "ROOKIE";
   const fallback = leagueColors?.[leagueKey] ?? "#E10600";
 
-  const accent =
-    seasonTeam?.teamRef?.participations?.[0]?.color ??
-    seasonTeam?.teamRef?.color ??
-    driver.teamRef?.color ??
-    fallback;
+  const isReserve = seasonTeam?.role === "RESERVE";
+
+  const accent = isReserve
+    ? seasonTeam?.teamRef?.participations?.[0]?.color ??
+      seasonTeam?.teamRef?.color ??
+      fallback
+    : seasonTeam?.teamRef?.participations?.[0]?.color ??
+      seasonTeam?.teamRef?.color ??
+      driver.teamRef?.color ??
+      fallback;
 
   const portraitUrl = imageUrl(driver.portraitPath);
-  const teamLogoUrl = imageUrl(seasonTeam?.teamRef?.logoPath ?? driver.teamRef?.logoPath);
+  const teamLogoUrl = isReserve
+    ? imageUrl(seasonTeam?.teamRef?.logoPath)
+    : imageUrl(seasonTeam?.teamRef?.logoPath ?? driver.teamRef?.logoPath);
   const currentSeasonLabel = currentSeason
     ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`
     : null;
