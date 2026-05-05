@@ -215,17 +215,23 @@ export default async function DriverDetailPage({
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
           <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
 
-          <div className="pointer-events-none absolute right-6 top-6 z-0 font-racing text-[160px] font-bold leading-none tracking-[0.08em] text-white/10 sm:right-10 sm:top-8 sm:text-[220px]">
+          {countryToFlagEmoji(driver.country) ? (
+            <div className="pointer-events-none absolute left-5 top-5 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[26px] sm:left-7 sm:top-7 sm:h-12 sm:w-12 sm:text-[28px]">
+              {countryToFlagEmoji(driver.country)}
+            </div>
+          ) : null}
+
+          <div className="pointer-events-none absolute right-4 top-2 z-0 font-racing text-[220px] font-bold leading-none tracking-[0.08em] text-white/10 sm:right-8 sm:top-2 sm:text-[320px]">
             {driver.number ?? "—"}
           </div>
 
           {portraitUrl ? (
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-full sm:w-[min(720px,52vw)]">
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 w-full -translate-x-1/2 sm:w-[min(900px,72vw)]">
               <Image
                 src={portraitUrl}
                 alt=""
                 fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 52vw, 720px"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 72vw, 900px"
                 className="object-contain object-bottom drop-shadow-[0_32px_90px_rgba(0,0,0,0.65)]"
                 quality={80}
                 priority
@@ -298,21 +304,6 @@ export default async function DriverDetailPage({
                     </div>
                   ) : null}
 
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/70">
-                    <span className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-extrabold text-white/80">
-                      {driver.name}
-                    </span>
-                    {seasonTeam?.teamRef?.name ?? driver.teamRef?.name ? (
-                      <span className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-extrabold text-white/80">
-                        {seasonTeam?.teamRef?.name ?? driver.teamRef?.name}
-                      </span>
-                    ) : null}
-                    {countryToFlagEmoji(driver.country) ? (
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
-                        {countryToFlagEmoji(driver.country)}
-                      </span>
-                    ) : null}
-                  </div>
                 </div>
               </Container>
             </div>
