@@ -88,6 +88,12 @@ export async function AdminShell({ children }: { children: ReactNode }) {
                 <div className="px-3 text-sm font-semibold">{l.label}</div>
                 <div className="mt-1 space-y-1">
                   <Link
+                    href={`/admin/${l.slug}/settings`}
+                    className="block rounded-lg px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                  >
+                    Einstellungen
+                  </Link>
+                  <Link
                     href={`/admin/${l.slug}/drivers`}
                     className="block rounded-lg px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
                   >
