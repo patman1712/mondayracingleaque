@@ -306,6 +306,7 @@ function parseOcrToClassificationRows(raw: string) {
       if (/^[\[\]\{\}\(\)]+$/.test(t)) continue;
       if (/^[\-–—]+$/.test(t)) continue;
       if (/^[A-Z]{1,3}$/.test(t)) continue;
+      if (/^[A-Za-z]$/.test(t)) continue;
       if (/^\d{1,2}$/.test(t)) continue;
       if (/^[^\p{L}0-9]+$/u.test(t)) continue;
       driverTokens.push(t);
@@ -633,10 +634,10 @@ async function ocrImportResultsFromImages(
 
   await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: combined } }).catch(() => null);
 
-  const entryDrivers: Array<{ driver: { id: string; name: string } }> = await prisma.raceEntry
+  const entryDrivers: Array<{ driver: { id: string; name: string; gamertag: string | null } }> = await prisma.raceEntry
     .findMany({
       where: { raceId, participates: true },
-      select: { driver: { select: { id: true, name: true } } },
+      select: { driver: { select: { id: true, name: true, gamertag: true } } },
       take: 5000
     })
     .catch(() => []);
@@ -644,12 +645,14 @@ async function ocrImportResultsFromImages(
   const eligibleDrivers = entryDrivers.map((e) => e.driver);
   if (eligibleDrivers.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=entries`);
 
-  const driverByNorm = new Map<string, { id: string; name: string }>();
+  const driverByNorm = new Map<string, { id: string; name: string; gamertag: string | null }>();
   for (const d of eligibleDrivers) {
-    const k = normalize(d.name);
-    if (!k) continue;
-    if (driverByNorm.has(k)) continue;
-    driverByNorm.set(k, d);
+    const keys = [normalize(d.name), d.gamertag ? normalize(d.gamertag) : ""].filter(Boolean);
+    for (const k of keys) {
+      if (!k) continue;
+      if (driverByNorm.has(k)) continue;
+      driverByNorm.set(k, d);
+    }
   }
 
   function findDriverId(name: string) {
