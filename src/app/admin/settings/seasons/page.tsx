@@ -6,6 +6,16 @@ import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
+const publicSlug: Record<League, string> = {
+  [League.ONE]: "mrl-one",
+  [League.TWO]: "mrl-two",
+  [League.ROOKIE]: "mrl-rookie"
+};
+
+function activeKey(league: League) {
+  return `activeSeasonId:${league}`;
+}
+
 async function createSeason(formData: FormData) {
   "use server";
   const yearRaw = String(formData.get("year") ?? "").trim();
@@ -40,10 +50,44 @@ async function createSeason(formData: FormData) {
   redirect("/admin/settings/seasons?ok=1");
 }
 
+async function setActiveSeason(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "");
+  const leagueRaw = String(formData.get("league") ?? "");
+  const league =
+    leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
+  if (!id || !league) redirect("/admin/settings/seasons?error=invalid");
+
+  const season = await prisma.season
+    .findUnique({ where: { id }, select: { id: true, league: true, placement: true } })
+    .catch(() => null);
+  if (!season || season.league !== league) redirect("/admin/settings/seasons?error=invalid");
+  if (season.placement !== "CALENDAR") redirect("/admin/settings/seasons?error=not_calendar");
+
+  await prisma.appConfig.upsert({
+    where: { key: activeKey(league) },
+    create: { key: activeKey(league), value: season.id },
+    update: { value: season.id }
+  });
+
+  revalidatePath(`/${publicSlug[league]}/calendar`);
+  revalidatePath(`/${publicSlug[league]}/archive`);
+  revalidatePath(`/${publicSlug[league]}/teams`);
+  revalidatePath(`/${publicSlug[league]}/drivers`);
+  redirect("/admin/settings/seasons?ok=1");
+}
+
 async function deleteSeason(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const season = await prisma.season.findUnique({ where: { id }, select: { league: true } }).catch(() => null);
+  if (season) {
+    const cfg = await prisma.appConfig.findUnique({ where: { key: activeKey(season.league) } }).catch(() => null);
+    if (cfg?.value === id) {
+      await prisma.appConfig.delete({ where: { key: activeKey(season.league) } }).catch(() => null);
+    }
+  }
   await prisma.season.delete({ where: { id } }).catch(() => null);
   revalidatePath("/mrl-one/calendar");
   revalidatePath("/mrl-two/calendar");
@@ -121,6 +165,20 @@ export default async function AdminSeasonsPage({
     })
     .catch(() => []);
 
+  const activeConfig = await prisma.appConfig
+    .findMany({
+      where: { key: { in: [activeKey(League.ONE), activeKey(League.TWO), activeKey(League.ROOKIE)] } },
+      select: { key: true, value: true }
+    })
+    .catch(() => []);
+
+  const activeByLeague: Partial<Record<League, string>> = {};
+  for (const row of activeConfig) {
+    if (row.key === activeKey(League.ONE)) activeByLeague[League.ONE] = row.value;
+    if (row.key === activeKey(League.TWO)) activeByLeague[League.TWO] = row.value;
+    if (row.key === activeKey(League.ROOKIE)) activeByLeague[League.ROOKIE] = row.value;
+  }
+
   const key = (s: { league: League; year: number; seasonNo: number }) =>
     `${s.league}-${s.year}-${s.seasonNo}`;
   const hasTest = new Set<string>();
@@ -155,6 +213,8 @@ export default async function AdminSeasonsPage({
             <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {error === "duplicate"
                 ? "Diese Saison-Variante existiert bereits."
+                : error === "not_calendar"
+                  ? "Als aktuelle Saison kann nur eine Saison im Liga-Kalender gesetzt werden."
                 : "Bitte Liga, Jahr und Season korrekt eingeben."}
             </div>
           ) : null}
@@ -261,6 +321,11 @@ export default async function AdminSeasonsPage({
                     {s.label ? (
                       <div className="mt-1 text-sm text-white/60">{s.label}</div>
                     ) : null}
+                    {activeByLeague[s.league] === s.id ? (
+                      <div className="mt-2 inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-100">
+                        Aktuelle Saison
+                      </div>
+                    ) : null}
                     {s.isTest ? (
                       <div className="mt-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-100">
                         Testseason
@@ -273,6 +338,16 @@ export default async function AdminSeasonsPage({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
+                    <form action={setActiveSeason}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <input type="hidden" name="league" value={s.league} />
+                      <button
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={activeByLeague[s.league] === s.id}
+                      >
+                        {activeByLeague[s.league] === s.id ? "Aktuell" : "Als aktuell"}
+                      </button>
+                    </form>
                     <form action={setPlacement}>
                       <input type="hidden" name="id" value={s.id} />
                       <input

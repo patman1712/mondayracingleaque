@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import fs from "node:fs";
@@ -436,7 +437,17 @@ export default async function AdminRacesPage({
       .catch((): CircuitItem[] => [])
   ]);
 
+  const activeSeason = await getActiveSeason({
+    league: l,
+    select: { year: true, seasonNo: true, isTest: true }
+  }).catch(() => null);
+
   const defaultSeason =
+    (activeSeason
+      ? seasons.find(
+          (s) => s.year === activeSeason.year && s.seasonNo === activeSeason.seasonNo && s.isTest === activeSeason.isTest
+        )
+      : null) ??
     seasons.find((s) => s.placement === "CALENDAR" && !s.isTest) ??
     seasons.find((s) => s.placement === "CALENDAR") ??
     seasons.find((s) => !s.isTest) ??

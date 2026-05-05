@@ -1,4 +1,5 @@
 import { Container } from "@/components/Container";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { getLeagueColors } from "@/lib/leagueColors";
 import { League } from "@prisma/client";
@@ -78,13 +79,10 @@ export default async function DriverDetailPage({
   const l = leagueEnum[league];
   if (!l) notFound();
 
-  const currentSeason = await prisma.season
-    .findFirst({
-      where: { league: l, placement: "CALENDAR" },
-      orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
-      select: { id: true }
-    })
-    .catch(() => null);
+  const currentSeason = await getActiveSeason({
+    league: l,
+    select: { id: true, year: true, seasonNo: true, isTest: true, label: true }
+  }).catch(() => null);
 
   const driver = await prisma.driver
     .findUnique({
@@ -109,6 +107,23 @@ export default async function DriverDetailPage({
     .catch(() => null);
 
   if (!driver || driver.league !== l) notFound();
+
+  const currentSeasonRow =
+    currentSeason?.id
+      ? await prisma.driverSeason
+          .findUnique({
+            where: { driverId_seasonId: { driverId: driver.id, seasonId: currentSeason.id } },
+            select: {
+              starts: true,
+              wins: true,
+              podiums: true,
+              driverOfDay: true,
+              driverTitles: true,
+              constructorTitles: true
+            }
+          })
+          .catch(() => null)
+      : null;
 
   const seasonStats = await prisma.driverSeason
     .findMany({
@@ -181,6 +196,9 @@ export default async function DriverDetailPage({
 
   const portraitUrl = imageUrl(driver.portraitPath);
   const teamLogoUrl = imageUrl(seasonTeam?.teamRef?.logoPath ?? driver.teamRef?.logoPath);
+  const currentSeasonLabel = currentSeason
+    ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`
+    : null;
 
   return (
     <>
@@ -189,6 +207,10 @@ export default async function DriverDetailPage({
         <div className="absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/80" />
         <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
+        <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[44px] bg-white/90 opacity-95 sm:block" style={{ clipPath: "polygon(0 0, 100% 0, 72% 100%, 0 100%)" }} />
+        <div className="pointer-events-none absolute inset-y-0 left-[34px] hidden w-[10px] bg-white/80 opacity-90 sm:block" style={{ clipPath: "polygon(0 0, 100% 0, 58% 100%, 0 100%)" }} />
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[44px] bg-white/90 opacity-95 sm:block" style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)" }} />
+        <div className="pointer-events-none absolute inset-y-0 right-[34px] hidden w-[10px] bg-white/80 opacity-90 sm:block" style={{ clipPath: "polygon(42% 0, 100% 0, 100% 100%, 0 100%)" }} />
 
         <Container>
           <div className="relative py-10 sm:py-14">
@@ -213,6 +235,11 @@ export default async function DriverDetailPage({
                       {driver.gamertag ? (
                         <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-extrabold uppercase tracking-wider text-white/85">
                           {driver.gamertag}
+                        </span>
+                      ) : null}
+                      {currentSeasonLabel ? (
+                        <span className="rounded-md bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
+                          {currentSeasonLabel}
                         </span>
                       ) : null}
                       {countryToFlagEmoji(driver.country) ? (
@@ -247,16 +274,33 @@ export default async function DriverDetailPage({
 
       <Container>
         <div className="mt-8">
-          <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
-            Stats
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {stat("Rennstarts", totals.starts)}
-            {stat("Siege", totals.wins)}
-            {stat("Podien", totals.podiums)}
-            {stat("Fahrer des Tages", totals.driverOfDay)}
-            {stat("Fahrer WM Titel", totals.driverTitles)}
-            {stat("Konstrukteurs WM Titel", totals.constructorTitles)}
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
+                Aktuelle Saison
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {stat("Rennstarts", currentSeasonRow?.starts ?? 0)}
+                {stat("Siege", currentSeasonRow?.wins ?? 0)}
+                {stat("Podien", currentSeasonRow?.podiums ?? 0)}
+                {stat("Fahrer des Tages", currentSeasonRow?.driverOfDay ?? 0)}
+                {stat("Fahrer WM Titel", currentSeasonRow?.driverTitles ?? 0)}
+                {stat("Konstrukteurs WM Titel", currentSeasonRow?.constructorTitles ?? 0)}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
+                Gesamt
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {stat("Rennstarts", totals.starts)}
+                {stat("Siege", totals.wins)}
+                {stat("Podien", totals.podiums)}
+                {stat("Fahrer des Tages", totals.driverOfDay)}
+                {stat("Fahrer WM Titel", totals.driverTitles)}
+                {stat("Konstrukteurs WM Titel", totals.constructorTitles)}
+              </div>
+            </div>
           </div>
         </div>
       </Container>

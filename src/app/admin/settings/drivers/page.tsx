@@ -147,6 +147,20 @@ export default async function AdminSettingsDriversPage() {
     })
     .catch(() => []);
 
+  const activeConfig = await prisma.appConfig
+    .findMany({
+      where: { key: { in: ["activeSeasonId:ONE", "activeSeasonId:TWO", "activeSeasonId:ROOKIE"] } },
+      select: { key: true, value: true }
+    })
+    .catch(() => []);
+
+  const activeByLeague: Partial<Record<League, string>> = {};
+  for (const row of activeConfig) {
+    if (row.key === "activeSeasonId:ONE") activeByLeague[League.ONE] = row.value;
+    if (row.key === "activeSeasonId:TWO") activeByLeague[League.TWO] = row.value;
+    if (row.key === "activeSeasonId:ROOKIE") activeByLeague[League.ROOKIE] = row.value;
+  }
+
   const drivers = await prisma.driver
     .findMany({
       orderBy: [{ league: "asc" }, { name: "asc" }],
@@ -172,10 +186,22 @@ export default async function AdminSettingsDriversPage() {
 
   const defaultSeasonId: Partial<Record<League, string>> = {
     [League.ONE]:
+      (activeByLeague[League.ONE] &&
+      seasonsByLeague[League.ONE].some((s) => s.id === activeByLeague[League.ONE] && s.placement === "CALENDAR")
+        ? activeByLeague[League.ONE]
+        : null) ??
       seasonsByLeague[League.ONE].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.ONE][0]?.id,
     [League.TWO]:
+      (activeByLeague[League.TWO] &&
+      seasonsByLeague[League.TWO].some((s) => s.id === activeByLeague[League.TWO] && s.placement === "CALENDAR")
+        ? activeByLeague[League.TWO]
+        : null) ??
       seasonsByLeague[League.TWO].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.TWO][0]?.id,
     [League.ROOKIE]:
+      (activeByLeague[League.ROOKIE] &&
+      seasonsByLeague[League.ROOKIE].some((s) => s.id === activeByLeague[League.ROOKIE] && s.placement === "CALENDAR")
+        ? activeByLeague[League.ROOKIE]
+        : null) ??
       seasonsByLeague[League.ROOKIE].find((s) => s.placement === "CALENDAR")?.id ?? seasonsByLeague[League.ROOKIE][0]?.id
   };
 
@@ -360,4 +386,3 @@ export default async function AdminSettingsDriversPage() {
     </AdminShell>
   );
 }
-

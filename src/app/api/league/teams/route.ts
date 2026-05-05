@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { League, Prisma } from "@prisma/client";
 
 function leagueFromSlug(slug: string): League | null {
@@ -19,13 +20,10 @@ export async function GET(req: Request) {
   const league = leagueFromSlug(slug);
   if (!league) return new Response("Bad league", { status: 400 });
 
-  const currentSeason = await prisma.season
-    .findFirst({
-      where: { league, placement: "CALENDAR" },
-      orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
-      select: { id: true, year: true, seasonNo: true, isTest: true }
-    })
-    .catch(() => null);
+  const currentSeason = await getActiveSeason({
+    league,
+    select: { id: true, year: true, seasonNo: true, isTest: true }
+  }).catch(() => null);
 
   const select = {
     id: true,
@@ -89,4 +87,3 @@ export async function GET(req: Request) {
     { headers: { "cache-control": "no-store" } }
   );
 }
-

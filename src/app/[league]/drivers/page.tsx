@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { League } from "@prisma/client";
 import Link from "next/link";
@@ -81,13 +82,10 @@ export default async function LeagueDriversPage({
 
   let drivers: DriverItem[] = [];
   try {
-    const currentSeason = await prisma.season
-      .findFirst({
-        where: { league: l, placement: "CALENDAR" },
-        orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
-        select: { id: true }
-      })
-      .catch(() => null);
+    const currentSeason = await getActiveSeason({
+      league: l,
+      select: { id: true }
+    }).catch(() => null);
 
     if (currentSeason) {
       const rows = await prisma.driverSeason

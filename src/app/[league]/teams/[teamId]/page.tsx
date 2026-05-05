@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
+import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { League } from "@prisma/client";
 import Image from "next/image";
@@ -61,13 +62,10 @@ export default async function TeamDetailPage({
     .catch(() => null);
   if (!team) notFound();
 
-  const currentSeason = await prisma.season
-    .findFirst({
-      where: { league: l, placement: "CALENDAR" },
-      orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
-      select: { id: true, year: true, seasonNo: true, isTest: true }
-    })
-    .catch(() => null);
+  const currentSeason = await getActiveSeason({
+    league: l,
+    select: { id: true, year: true, seasonNo: true, isTest: true }
+  }).catch(() => null);
 
   const participation = currentSeason
     ? await prisma.teamSeason
