@@ -87,7 +87,7 @@ export default async function TeamDetailPage({
             color: true,
             carImagePath: true,
             heroBackgroundPath: true,
-            season: { select: { year: true, seasonNo: true, isTest: true } }
+            season: { select: { id: true, year: true, seasonNo: true, isTest: true } }
           }
         })
         .catch(() => null)
@@ -101,15 +101,22 @@ export default async function TeamDetailPage({
   const logoUrl = imageUrl(team.logoPath);
   const accent = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : "#e10600";
 
-  const drivers = await prisma.driver
-    .findMany({
-      where: currentSeason
-        ? { league: l, teamId: team.id, seasons: { some: { seasonId: currentSeason.id } } }
-        : { league: l, teamId: team.id },
-      orderBy: [{ number: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, gamertag: true, number: true, country: true, portraitPath: true }
-    })
-    .catch(() => []);
+  const seasonIdForDrivers = currentSeason?.id ?? fallbackParticipation?.season.id ?? null;
+
+  const drivers = seasonIdForDrivers
+    ? await prisma.driverSeason
+        .findMany({
+          where: { seasonId: seasonIdForDrivers, teamId: team.id, driver: { league: l } },
+          orderBy: [{ driver: { number: "asc" } }, { driver: { name: "asc" } }],
+          select: {
+            driver: {
+              select: { id: true, name: true, gamertag: true, number: true, country: true, portraitPath: true }
+            }
+          }
+        })
+        .then((rows) => rows.map((r) => r.driver))
+        .catch(() => [])
+    : [];
 
   const seasonLabel = currentSeason
     ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`

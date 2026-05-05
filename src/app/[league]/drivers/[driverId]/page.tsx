@@ -103,33 +103,47 @@ export default async function DriverDetailPage({
         driverOfDay: true,
         driverTitles: true,
         constructorTitles: true,
-        teamRef: {
-          select: {
-            name: true,
-            color: true,
-            logoPath: true,
-            participations: currentSeason
-              ? { where: { seasonId: currentSeason.id }, select: { color: true }, take: 1 }
-              : { select: { color: true }, take: 1 }
-          }
-        }
+        teamRef: { select: { name: true, color: true, logoPath: true } }
       }
     })
     .catch(() => null);
 
   if (!driver || driver.league !== l) notFound();
 
+  const seasonTeam = currentSeason
+    ? await prisma.driverSeason
+        .findUnique({
+          where: { driverId_seasonId: { driverId: driver.id, seasonId: currentSeason.id } },
+          select: {
+            teamRef: {
+              select: {
+                name: true,
+                color: true,
+                logoPath: true,
+                participations: {
+                  where: { seasonId: currentSeason.id },
+                  select: { color: true },
+                  take: 1
+                }
+              }
+            }
+          }
+        })
+        .catch(() => null)
+    : null;
+
   const leagueColors = await getLeagueColors().catch(() => null);
   const leagueKey = l === League.ONE ? "ONE" : l === League.TWO ? "TWO" : "ROOKIE";
   const fallback = leagueColors?.[leagueKey] ?? "#E10600";
 
   const accent =
-    driver.teamRef?.participations?.[0]?.color ??
+    seasonTeam?.teamRef?.participations?.[0]?.color ??
+    seasonTeam?.teamRef?.color ??
     driver.teamRef?.color ??
     fallback;
 
   const portraitUrl = imageUrl(driver.portraitPath);
-  const teamLogoUrl = imageUrl(driver.teamRef?.logoPath);
+  const teamLogoUrl = imageUrl(seasonTeam?.teamRef?.logoPath ?? driver.teamRef?.logoPath);
 
   return (
     <>

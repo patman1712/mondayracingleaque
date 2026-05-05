@@ -101,18 +101,17 @@ export default async function LeagueDriversPage({
                 name: true,
                 gamertag: true,
                 number: true,
-                team: true,
                 country: true,
                 portraitPath: true,
-                teamRef: {
-                  select: {
-                    color: true,
-                    participations: {
-                      where: { seasonId: currentSeason.id },
-                      select: { color: true },
-                      take: 1
-                    }
-                  }
+              }
+            },
+            teamRef: {
+              select: {
+                color: true,
+                participations: {
+                  where: { seasonId: currentSeason.id },
+                  select: { color: true },
+                  take: 1
                 }
               }
             }
@@ -122,14 +121,14 @@ export default async function LeagueDriversPage({
 
       const out: DriverItem[] = [];
       for (const r of rows) {
-        const t = r.driver.teamRef;
+        const t = r.teamRef;
         const accent = t?.participations?.[0]?.color ?? t?.color ?? null;
         out.push({
           id: r.driver.id,
           name: r.driver.name,
           gamertag: r.driver.gamertag ?? null,
           number: r.driver.number ?? null,
-          team: r.driver.team ?? null,
+          team: null,
           country: r.driver.country ?? null,
           portraitPath: r.driver.portraitPath ?? null,
           accent
@@ -165,7 +164,6 @@ export default async function LeagueDriversPage({
       }));
     }
   } catch {}
-
   return (
     <Container>
       <div className="mt-10">
@@ -174,6 +172,7 @@ export default async function LeagueDriversPage({
         </div>
         <div className="mt-2 text-sm text-white/70">Fahrerübersicht</div>
       </div>
+
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {drivers.length === 0 ? (
