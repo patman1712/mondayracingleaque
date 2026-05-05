@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { TeamSeasonAddForm } from "@/components/TeamSeasonAddForm";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -304,7 +305,7 @@ export default async function AdminLeagueTeamsPage({
     .findMany({
       orderBy: [{ name: "asc" }],
       take: 200,
-      select: { id: true, name: true }
+      select: { id: true, name: true, color: true }
     })
     .catch(() => []);
 
@@ -370,69 +371,12 @@ export default async function AdminLeagueTeamsPage({
         {seasonId ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
             <div className="text-base font-semibold">Team zur Saison hinzufügen</div>
-            <form
+            <TeamSeasonAddForm
+              leagueSlug={leagueSlug}
+              seasonId={seasonId}
+              availableTeams={availableTeams}
               action={addParticipation}
-              encType="multipart/form-data"
-              className="mt-4 grid gap-4 md:grid-cols-3"
-            >
-              <input type="hidden" name="league" value={leagueSlug} />
-              <input type="hidden" name="seasonId" value={seasonId} />
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-white/70">
-                  Team
-                </label>
-                <select
-                  name="teamId"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                  defaultValue=""
-                >
-                  <option value="">Bitte wählen</option>
-                  {availableTeams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-white/70">
-                  Farbe (optional)
-                </label>
-                <input
-                  name="color"
-                  type="color"
-                  defaultValue="#e10600"
-                  className="h-10 w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-white/70">
-                  Auto-Design Upload (PNG/JPG/WEBP)
-                </label>
-                <input
-                  name="car"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                />
-              </div>
-              <div className="md:col-span-3">
-                <label className="mb-1 block text-xs font-semibold text-white/70">
-                  Hero Background Upload (PNG/JPG/WEBP)
-                </label>
-                <input
-                  name="heroBackground"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                />
-              </div>
-              <div className="flex items-end">
-                <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-                  Hinzufügen
-                </button>
-              </div>
-            </form>
+            />
           </div>
         ) : null}
 
