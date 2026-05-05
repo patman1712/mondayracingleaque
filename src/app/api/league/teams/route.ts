@@ -14,6 +14,10 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function isReserveTeamName(name: string) {
+  return name.toLowerCase().includes("ersatzfahrer");
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("league") ?? "";
@@ -36,6 +40,7 @@ export async function GET(req: Request) {
   type Row = Prisma.TeamSeasonGetPayload<{ select: typeof select }>;
 
   let rows: Row[] = [];
+  const seasonId: string | null = currentSeason?.id ?? null;
   if (currentSeason) {
     rows = await prisma.teamSeason
       .findMany({
@@ -54,17 +59,84 @@ export async function GET(req: Request) {
         select: { id: true, name: true, color: true, logoPath: true }
       })
       .catch(() => []);
+    const ordered = teams
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        color: t.color,
+        logoUrl: imageUrl(t.logoPath),
+        carUrl: null
+      }))
+      .sort((a, b) => {
+        const ar = isReserveTeamName(a.name) ? 1 : 0;
+        const br = isReserveTeamName(b.name) ? 1 : 0;
+        if (ar !== br) return ar - br;
+        return a.name.localeCompare(b.name);
+      });
     return Response.json(
       {
         league,
         season: currentSeason ? { year: currentSeason.year, seasonNo: currentSeason.seasonNo, isTest: currentSeason.isTest } : null,
-        teams: teams.map((t) => ({
-          id: t.id,
-          name: t.name,
-          color: t.color,
-          logoUrl: imageUrl(t.logoPath),
-          carUrl: null
-        }))
+        teams: ordered
+      },
+      { headers: { "cache-control": "no-store" } }
+    );
+  }
+
+  if (seasonId) {
+    const ds = await prisma.driverSeason
+      .findMany({
+        where: { seasonId, teamId: { not: null } },
+        distinct: ["teamId"],
+        select: {
+          teamId: true,
+          teamRef: { select: { id: true, name: true, color: true, logoPath: true } }
+        },
+        take: 500
+      })
+      .catch(() => []);
+
+    const byId = new Map<
+      string,
+      { id: string; name: string; color: string | null; logoUrl: string | null; carUrl: string | null }
+    >();
+
+    for (const r of rows) {
+      byId.set(r.team.id, {
+        id: r.team.id,
+        name: r.team.name,
+        color: r.color ?? r.team.color ?? null,
+        logoUrl: imageUrl(r.team.logoPath),
+        carUrl: imageUrl(r.carImagePath)
+      });
+    }
+
+    for (const r of ds) {
+      if (!r.teamRef) continue;
+      if (byId.has(r.teamRef.id)) continue;
+      byId.set(r.teamRef.id, {
+        id: r.teamRef.id,
+        name: r.teamRef.name,
+        color: r.teamRef.color ?? null,
+        logoUrl: imageUrl(r.teamRef.logoPath),
+        carUrl: null
+      });
+    }
+
+    const ordered = Array.from(byId.values()).sort((a, b) => {
+      const ar = isReserveTeamName(a.name) ? 1 : 0;
+      const br = isReserveTeamName(b.name) ? 1 : 0;
+      if (ar !== br) return ar - br;
+      return a.name.localeCompare(b.name);
+    });
+
+    return Response.json(
+      {
+        league,
+        season: rows[0]
+          ? { year: rows[0].season.year, seasonNo: rows[0].season.seasonNo, isTest: rows[0].season.isTest }
+          : null,
+        teams: ordered
       },
       { headers: { "cache-control": "no-store" } }
     );
