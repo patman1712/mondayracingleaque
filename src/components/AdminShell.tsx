@@ -99,6 +99,12 @@ export async function AdminShell({ children }: { children: ReactNode }) {
                   >
                     Fahrer
                   </Link>
+                  <Link
+                    href={`/admin/${l.slug}/teams`}
+                    className="block rounded-lg px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                  >
+                    Teams
+                  </Link>
                   {sectionLinks.map((s) => (
                     <Link
                       key={s.key}
