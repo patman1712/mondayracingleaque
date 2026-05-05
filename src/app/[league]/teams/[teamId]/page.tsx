@@ -109,9 +109,11 @@ export default async function TeamDetailPage({
 
   const drivers = await prisma.driver
     .findMany({
-      where: { league: l, teamId: team.id },
+      where: currentSeason
+        ? { league: l, teamId: team.id, seasons: { some: { seasonId: currentSeason.id } } }
+        : { league: l, teamId: team.id },
       orderBy: [{ number: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, number: true, country: true }
+      select: { id: true, name: true, number: true, country: true, portraitPath: true }
     })
     .catch(() => []);
 
@@ -270,12 +272,14 @@ export default async function TeamDetailPage({
         </div>
 
         <div className="mt-4 grid gap-5 md:grid-cols-2">
-          {driverTiles.map((d, idx) => (
-            <div
-              key={d?.id ?? `empty-${idx}`}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
-              style={{ backgroundImage: heroBg(color) }}
-            >
+          {driverTiles.map((d, idx) =>
+            d ? (
+              <Link
+                key={d.id}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                style={{ backgroundImage: heroBg(color) }}
+                href={`/${league}/drivers/${d.id}`}
+              >
               <div
                 className="absolute inset-0 opacity-25"
                 style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
@@ -313,12 +317,52 @@ export default async function TeamDetailPage({
                   {d?.country ?? ""}
                 </div>
 
-                <div className="pointer-events-none absolute bottom-0 right-0 h-[92%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">
+                <div className="pointer-events-none absolute bottom-0 right-0 h-[96%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">
                   <div className="absolute inset-0 bg-gradient-to-l from-white/60 to-transparent" />
                 </div>
+                <div className="pointer-events-none absolute bottom-0 right-3 h-[92%] w-[52%]">
+                  {d?.portraitPath ? (
+                    <Image
+                      src={imageUrl(d.portraitPath) ?? ""}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 42vw, 320px"
+                      className="object-contain object-bottom drop-shadow-[0_20px_50px_rgba(0,0,0,0.55)]"
+                      quality={80}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+              </Link>
+            ) : (
+              <div
+                key={`empty-${idx}`}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                style={{ backgroundImage: heroBg(color) }}
+              >
+                <div
+                  className="absolute inset-0 opacity-25"
+                  style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/75" />
+                <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
+
+                <div className="relative p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                        {team.name}
+                      </div>
+                      <div className="mt-3 text-2xl font-extrabold leading-[1.05] text-white">
+                        TBA
+                      </div>
+                    </div>
+                    <div className="text-3xl font-extrabold text-white/85">—</div>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
         </div>
       </Container>
     </>

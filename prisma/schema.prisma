@@ -32,16 +32,38 @@ model NewsPost {
 model Driver {
   id        String   @id @default(cuid())
   league    League
+  gamertag  String?
   name      String
   number    Int?
   team      String?
   teamId    String?
   country   String?
+  portraitPath String?
+  starts   Int @default(0)
+  wins     Int @default(0)
+  podiums  Int @default(0)
+  driverOfDay Int @default(0)
+  driverTitles Int @default(0)
+  constructorTitles Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   results RaceResult[]
+  seasons DriverSeason[]
   teamRef Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+}
+
+model DriverSeason {
+  id       String   @id @default(cuid())
+  driverId String
+  seasonId String
+  createdAt DateTime @default(now())
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, seasonId])
+  @@index([seasonId])
 }
 
 model Team {
@@ -138,6 +160,7 @@ model Season {
   createdAt DateTime @default(now())
 
   teams TeamSeason[]
+  drivers DriverSeason[]
 
   @@unique([league, year, seasonNo, isTest])
 }
