@@ -495,14 +495,18 @@ export function NavLeagues() {
                                   style={{ backgroundImage: teamBg(d.accent) }}
                                 >
                                   {d.portraitUrl ? (
-                                    <Image
-                                      src={d.portraitUrl}
-                                      alt=""
-                                      fill
-                                      sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 260px"
-                                      className="object-cover"
-                                      quality={80}
-                                    />
+                                    <div className="absolute inset-0 p-2">
+                                      <div className="relative h-full w-full">
+                                        <Image
+                                          src={d.portraitUrl}
+                                          alt=""
+                                          fill
+                                          sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 260px"
+                                          className="object-contain object-bottom"
+                                          quality={80}
+                                        />
+                                      </div>
+                                    </div>
                                   ) : null}
                                   <div
                                     className="absolute inset-0 opacity-25"
