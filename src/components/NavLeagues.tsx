@@ -10,12 +10,6 @@ type League = {
   accent: string;
 };
 
-const fallbackLeagues: League[] = [
-  { slug: "mrl-one", label: "MRL One", accent: "rgba(225,6,0,1)" },
-  { slug: "mrl-two", label: "MRL Two", accent: "rgba(34,197,94,1)" },
-  { slug: "mrl-rookie", label: "MRL Rookie", accent: "rgba(56,189,248,1)" }
-];
-
 const sub = [
   { key: "drivers", label: "Fahrer" },
   { key: "results", label: "Ergebnisse" },
@@ -122,7 +116,7 @@ function raceImgSrc(title: string, meta: string, accent: string, live: boolean) 
 export function NavLeagues() {
   const [open, setOpen] = useState<string | null>(null);
   const [active, setActive] = useState<SubKey>("drivers");
-  const [leagues, setLeagues] = useState<League[]>(fallbackLeagues);
+  const [leagues, setLeagues] = useState<League[]>([]);
   const [scheduleByLeague, setScheduleByLeague] = useState<
     Partial<Record<string, LeagueSchedule>>
   >({});
@@ -140,7 +134,7 @@ export function NavLeagues() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
       .then((data: { leagues?: League[] }) => {
         const next = Array.isArray(data?.leagues) ? data.leagues : null;
-        if (next && next.length) setLeagues(next);
+        if (next) setLeagues(next);
       })
       .catch(() => {});
   }, []);
@@ -592,7 +586,7 @@ export function MobileNavLeagues({
 }) {
   const [league, setLeague] = useState<League["slug"] | null>(null);
   const [active, setActive] = useState<SubKey>("drivers");
-  const [leagues, setLeagues] = useState<League[]>(fallbackLeagues);
+  const [leagues, setLeagues] = useState<League[]>([]);
   const [scheduleByLeague, setScheduleByLeague] = useState<
     Partial<Record<League["slug"], LeagueSchedule>>
   >({});
@@ -609,7 +603,7 @@ export function MobileNavLeagues({
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
       .then((data: { leagues?: League[] }) => {
         const next = Array.isArray(data?.leagues) ? data.leagues : null;
-        if (next && next.length) setLeagues(next);
+        if (next) setLeagues(next);
       })
       .catch(() => {});
   }, []);
