@@ -67,6 +67,7 @@ model Driver {
   updatedAt DateTime @updatedAt
 
   results RaceResult[]
+  raceEntries RaceEntry[]
   seasons DriverSeason[]
   teamRef Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
 }
@@ -104,6 +105,7 @@ model Team {
 
   participations TeamSeason[]
   leagues TeamLeague[]
+  raceEntries RaceEntry[]
   driverSeasons DriverSeason[]
   drivers Driver[]
 }
@@ -156,8 +158,26 @@ model Race {
 
   circuitRef Circuit? @relation(fields: [circuitId], references: [id], onDelete: SetNull)
   results RaceResult[]
+  entries RaceEntry[]
 
   @@unique([league, season, seasonNo, seasonIsTest, round])
+}
+
+model RaceEntry {
+  id          String  @id @default(cuid())
+  raceId      String
+  driverId    String
+  participates Boolean @default(false)
+  teamId      String?
+  createdAt   DateTime @default(now())
+
+  race   Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  team   Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([raceId, driverId])
+  @@index([raceId, participates])
+  @@index([raceId, teamId])
 }
 
 model RaceResult {

@@ -6,6 +6,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { League, Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { RaceDriverField } from "@/components/RaceDriverField";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -13,7 +14,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const driverSelect = {
-  driver: { select: { id: true, name: true } }
+  driverId: true,
+  role: true,
+  teamId: true,
+  driver: { select: { id: true, name: true } },
+  teamRef: { select: { name: true } }
 } satisfies Prisma.DriverSeasonSelect;
 type DriverRow = Prisma.DriverSeasonGetPayload<{ select: typeof driverSelect }>;
 
@@ -99,12 +104,32 @@ function parseOcrToRows(raw: string) {
 
 async function upsertResult(
   adminLeague: string,
+  league: League,
   raceId: string,
   formData: FormData
 ) {
   "use server";
 
   await requireAdmin();
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
+    .catch(() => null);
+  if (!race || race.league !== league) return;
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+
   const driverId = String(formData.get("driverId") ?? "");
   const position = Number(formData.get("position") ?? "");
   const points = Number(formData.get("points") ?? "");
@@ -112,6 +137,21 @@ async function upsertResult(
   const fastestLap = formData.get("fastestLap") === "on";
 
   if (!driverId || !Number.isFinite(position) || !Number.isFinite(points)) return;
+
+  if (season) {
+    const eligible = await prisma.driverSeason
+      .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { id: true } })
+      .catch(() => null);
+    if (!eligible) return;
+  }
+
+  const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
+  if (anyEntries) {
+    const entry = await prisma.raceEntry
+      .findUnique({ where: { raceId_driverId: { raceId, driverId } }, select: { participates: true } })
+      .catch(() => null);
+    if (!entry?.participates) return;
+  }
 
   await prisma.raceResult.upsert({
     where: { raceId_driverId: { raceId, driverId } },
@@ -378,6 +418,112 @@ async function ocrImportResults(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
+async function setParticipation(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+  const driverId = String(formData.get("driverId") ?? "").trim();
+  const participates = String(formData.get("participates") ?? "").trim() === "1";
+  if (!driverId) return;
+
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
+    .catch(() => null);
+  if (!race || race.league !== league) return;
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!season) return;
+
+  const eligible = await prisma.driverSeason
+    .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { role: true } })
+    .catch(() => null);
+  if (!eligible) return;
+
+  await prisma.raceEntry
+    .upsert({
+      where: { raceId_driverId: { raceId, driverId } },
+      create: { raceId, driverId, participates, teamId: null },
+      update: { participates, ...(participates ? {} : { teamId: null }) }
+    })
+    .catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
+async function setReserveTeamForRace(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+  const driverId = String(formData.get("driverId") ?? "").trim();
+  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
+  const teamId = teamIdRaw ? teamIdRaw : null;
+  if (!driverId) return;
+
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
+    .catch(() => null);
+  if (!race || race.league !== league) return;
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!season) return;
+
+  const ds = await prisma.driverSeason
+    .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { role: true } })
+    .catch(() => null);
+  if (!ds || ds.role !== "RESERVE") return;
+
+  if (teamId) {
+    const allowed = await prisma.teamLeague
+      .findUnique({ where: { teamId_league: { teamId, league } }, select: { teamId: true } })
+      .catch(() => null);
+    if (!allowed) return;
+  }
+
+  await prisma.raceEntry
+    .upsert({
+      where: { raceId_driverId: { raceId, driverId } },
+      create: { raceId, driverId, participates: true, teamId },
+      update: { participates: true, teamId }
+    })
+    .catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
 export default async function AdminRaceResultsPage({
   params
   , searchParams
@@ -417,9 +563,10 @@ export default async function AdminRaceResultsPage({
 
   if (!race || race.league !== l) notFound();
 
-  type DriverItem = { id: string; name: string };
+  type DriverItem = { id: string; name: string; role: "MAIN" | "RESERVE"; teamName: string | null };
   type ResultItem = {
     id: string;
+    driverId: string;
     position: number;
     points: number;
     status: string | null;
@@ -429,27 +576,28 @@ export default async function AdminRaceResultsPage({
 
   let drivers: DriverItem[] = [];
   let results: ResultItem[] = [];
+  let entries: Array<{ driverId: string; participates: boolean; teamId: string | null; team: { id: string; name: string } | null }> = [];
+  let leagueTeams: Array<{ id: string; name: string }> = [];
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league: l,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
 
   try {
-    const season = await prisma.season
-      .findUnique({
-        where: {
-          league_year_seasonNo_isTest: {
-            league: l,
-            year: race.season,
-            seasonNo: race.seasonNo,
-            isTest: race.seasonIsTest
-          }
-        },
-        select: { id: true }
-      })
-      .catch(() => null);
-
     const rows: DriverRow[] = season
       ? await prisma.driverSeason
           .findMany({
             where: { seasonId: season.id },
-            distinct: ["driverId"],
             orderBy: [{ driver: { name: "asc" } }],
             select: driverSelect,
             take: 5000
@@ -458,14 +606,18 @@ export default async function AdminRaceResultsPage({
       : await prisma.driverSeason
           .findMany({
             where: { season: { league: l } },
-            distinct: ["driverId"],
             orderBy: [{ driver: { name: "asc" } }],
             select: driverSelect,
             take: 5000
           })
           .catch((): DriverRow[] => []);
 
-    drivers = rows.map((r) => r.driver);
+    drivers = rows.map((r) => ({
+      id: r.driver.id,
+      name: r.driver.name,
+      role: r.role,
+      teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null
+    }));
   } catch {}
 
   try {
@@ -474,6 +626,7 @@ export default async function AdminRaceResultsPage({
       orderBy: [{ position: "asc" }],
       select: {
         id: true,
+        driverId: true,
         position: true,
         points: true,
         status: true,
@@ -482,6 +635,30 @@ export default async function AdminRaceResultsPage({
       }
     });
   } catch {}
+
+  entries = await prisma.raceEntry
+    .findMany({
+      where: { raceId },
+      select: { driverId: true, participates: true, teamId: true, team: { select: { id: true, name: true } } },
+      take: 5000
+    })
+    .catch(() => []);
+
+  leagueTeams = await prisma.teamLeague
+    .findMany({
+      where: { league: l },
+      orderBy: [{ team: { name: "asc" } }],
+      select: { team: { select: { id: true, name: true } } },
+      take: 2000
+    })
+    .then((rows) => rows.map((r) => r.team))
+    .catch(() => []);
+
+  const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
+  const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
+  const participatingDrivers = drivers.filter((d) => participatingDriverIds.has(d.id));
+  const driverOptions =
+    entries.length > 0 ? (participatingDrivers.length > 0 ? participatingDrivers : drivers) : drivers;
 
   return (
     <AdminShell>
@@ -585,6 +762,84 @@ export default async function AdminRaceResultsPage({
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="text-base font-semibold">Fahrerfeld</div>
+        <div className="mt-2 text-sm text-white/70">
+          Teilnahme pro Fahrer bestätigen. Bei Ersatzfahrern kannst du fürs einzelne Rennen ein Team setzen.
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {drivers.length === 0 ? (
+            <div className="text-sm text-white/60">Keine Fahrer gefunden.</div>
+          ) : (
+            drivers.map((d) => {
+              const entry = entryByDriverId.get(d.id) ?? null;
+              const participates = entry?.participates ?? false;
+              const reserve = d.role === "RESERVE";
+              return (
+                <div
+                  key={d.id}
+                  className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">
+                      {d.name}
+                      <span className="text-white/60"> · {reserve ? "Ersatzfahrer" : "Stammfahrer"}</span>
+                      {d.teamName ? <span className="text-white/60"> · {d.teamName}</span> : null}
+                    </div>
+                    {reserve && participates ? (
+                      <div className="mt-2 text-sm text-white/70">
+                        Team (nur für dieses Rennen): {entry?.team?.name ?? "(keins)"}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <form action={setParticipation.bind(null, league, l, raceId)}>
+                      <input type="hidden" name="driverId" value={d.id} />
+                      <input type="hidden" name="participates" value={participates ? "0" : "1"} />
+                      <button
+                        className={
+                          "rounded-lg px-3 py-2 text-xs font-semibold " +
+                          (participates ? "bg-mrl-red text-white" : "bg-white/10 text-white hover:bg-white/15")
+                        }
+                      >
+                        {participates ? "Nimmt teil" : "Nimmt nicht teil"}
+                      </button>
+                    </form>
+
+                    {reserve ? (
+                      <form action={setReserveTeamForRace.bind(null, league, l, raceId)} className="flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="driverId" value={d.id} />
+                        <select
+                          name="teamId"
+                          defaultValue={entry?.teamId ?? ""}
+                          disabled={!participates}
+                          className="w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25 disabled:opacity-50"
+                        >
+                          <option value="">(kein Team)</option>
+                          {leagueTeams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          disabled={!participates}
+                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+                        >
+                          Team setzen
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="text-base font-semibold">Ergebnisse eintragen</div>
           <Link
@@ -600,21 +855,23 @@ export default async function AdminRaceResultsPage({
         </div>
 
         <form
-          action={upsertResult.bind(null, league, raceId)}
+          action={upsertResult.bind(null, league, l, raceId)}
           className="mt-6 grid gap-4 md:grid-cols-2"
         >
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
               Fahrer
             </label>
-            <select className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" name="driverId">
-              <option value="">Bitte wählen</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+            <RaceDriverField name="driverId" drivers={driverOptions.map((d) => ({ id: d.id, name: d.name, active: participatingDriverIds.has(d.id), role: d.role, teamName: d.teamName }))} />
+            {entries.length > 0 ? (
+              <div className="mt-2 text-xs text-white/60">
+                Es werden nur Fahrer angeboten, die im Fahrerfeld als teilnehmend markiert sind.
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-white/60">
+                Tipp: Erst im Fahrerfeld Teilnahme setzen, dann Ergebnisse eintragen.
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-white/70">
@@ -674,6 +931,11 @@ export default async function AdminRaceResultsPage({
                     P{r.position} · {r.driver.name} · {r.points.toFixed(0)} P
                     {r.fastestLap ? " · FL" : ""}
                   </div>
+                  {entryByDriverId.get(r.driverId)?.team?.name ? (
+                    <div className="mt-1 text-sm text-white/60">
+                      Team (für dieses Rennen): {entryByDriverId.get(r.driverId)!.team!.name}
+                    </div>
+                  ) : null}
                   {r.status ? (
                     <div className="mt-1 text-sm text-white/60">{r.status}</div>
                   ) : null}
