@@ -266,7 +266,7 @@ function parseOcrToClassificationRows(raw: string) {
     stops: number | null;
     bestTime: string | null;
     timeText: string | null;
-    status?: string | null;
+    status: string | null;
   }> = [];
 
   let inferredPos = 0;
@@ -669,6 +669,7 @@ async function ocrImportResultsFromImages(
 
   const replace = formData.get("replace") === "on";
   const combined = String(formData.get("ocrText") ?? "").trim();
+  const rowsJson = String(formData.get("ocrRowsJson") ?? "").trim();
   if (!combined) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
 
   const race = await prisma.race
@@ -742,8 +743,52 @@ async function ocrImportResultsFromImages(
     return null;
   }
 
-  const parsed = parseOcrToClassificationRows(combined);
+  let parsed: Array<{
+    position: number;
+    driver: string;
+    grid: number | null;
+    stops: number | null;
+    bestTime: string | null;
+    timeText: string | null;
+    status: string | null;
+  }> = [];
+
+  if (rowsJson) {
+    try {
+      const v = JSON.parse(rowsJson) as unknown;
+      if (Array.isArray(v)) {
+        parsed = v
+          .map((r) => {
+            if (!r || typeof r !== "object") return null;
+            const obj = r as Record<string, unknown>;
+            const position = Number(obj.position ?? "");
+            const driver = String(obj.driver ?? "").trim();
+            const gridRaw = obj.grid === null || typeof obj.grid === "undefined" ? null : Number(obj.grid);
+            const stopsRaw = obj.stops === null || typeof obj.stops === "undefined" ? null : Number(obj.stops);
+            const bestTime = obj.bestTime ? String(obj.bestTime).trim() : null;
+            const timeText = obj.timeText ? String(obj.timeText).trim() : null;
+            const status = obj.status ? String(obj.status).trim() : null;
+            if (!Number.isFinite(position) || position < 1 || position > 30) return null;
+            if (!driver) return null;
+            return {
+              position,
+              driver,
+              grid: gridRaw !== null && Number.isFinite(gridRaw) ? gridRaw : null,
+              stops: stopsRaw !== null && Number.isFinite(stopsRaw) ? stopsRaw : null,
+              bestTime: bestTime || null,
+              timeText: timeText || null,
+              status: status || null
+            };
+          })
+          .filter((x): x is { position: number; driver: string; grid: number | null; stops: number | null; bestTime: string | null; timeText: string | null; status: string | null } => Boolean(x));
+      }
+    } catch {}
+  }
+
   const pointsParsed = parsed.length === 0 ? parseOcrToRows(combined) : [];
+  if (parsed.length === 0 && pointsParsed.length === 0) {
+    parsed = parseOcrToClassificationRows(combined);
+  }
   if (parsed.length === 0 && pointsParsed.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
 
   if (replace) {
@@ -1339,6 +1384,7 @@ export default async function AdminRaceResultsPage({
                   Vorhandene Ergebnisse ersetzen
                 </label>
                 <textarea name="ocrText" className="hidden" defaultValue="" />
+                <textarea name="ocrRowsJson" className="hidden" defaultValue="" />
                 <RaceResultsOcrClient
                   formId="ocr-import-form"
                   imageUrls={race.resultImages.map((img) => imageUrl(img.imagePath) ?? "").filter(Boolean)}

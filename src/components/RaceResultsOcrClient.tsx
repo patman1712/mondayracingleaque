@@ -17,7 +17,16 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
   const [cropRight, setCropRight] = useState(2);
 
   type OcrWorker = {
-    recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string | null } }>;
+    recognize: (image: HTMLCanvasElement) => Promise<{
+      data?: {
+        text?: string | null;
+        words?: Array<{
+          text: string;
+          confidence?: number;
+          bbox?: { x0: number; y0: number; x1: number; y1: number };
+        }>;
+      };
+    }>;
     setParameters?: (params: Record<string, string>) => Promise<unknown>;
     terminate: () => Promise<unknown>;
   };
@@ -156,6 +165,104 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
     return out;
   }
 
+  function extractRowsFromWords(
+    words: Array<{ text: string; confidence?: number; bbox?: { x0: number; y0: number; x1: number; y1: number } }>,
+    w: number,
+    h: number
+  ) {
+    const usable = words
+      .map((x) => ({
+        t: String(x.text ?? "").trim(),
+        c: typeof x.confidence === "number" ? x.confidence : 0,
+        b: x.bbox ?? null
+      }))
+      .filter((x) => x.t && x.b && x.c >= 35)
+      .filter((x) => x.t.length > 1 || /[0-9]/.test(x.t))
+      .filter((x) => !/^[\.\-—–_:;,'"“”‘’\[\]\(\)\{\}\|]+$/.test(x.t));
+
+    const items = usable
+      .map((x) => {
+        const b = x.b!;
+        const yMid = (b.y0 + b.y1) / 2;
+        const xMid = (b.x0 + b.x1) / 2;
+        return { text: x.t, yMid, xMid };
+      })
+      .sort((a, b) => a.yMid - b.yMid || a.xMid - b.xMid);
+
+    const yThreshold = Math.max(10, Math.round(h * 0.012));
+    const lines: Array<{ y: number; words: Array<{ text: string; xMid: number }> }> = [];
+    for (const it of items) {
+      const last = lines[lines.length - 1] ?? null;
+      if (!last || Math.abs(it.yMid - last.y) > yThreshold) {
+        lines.push({ y: it.yMid, words: [{ text: it.text, xMid: it.xMid }] });
+      } else {
+        last.y = (last.y * last.words.length + it.yMid) / (last.words.length + 1);
+        last.words.push({ text: it.text, xMid: it.xMid });
+      }
+    }
+
+    function inCol(x: number, a: number, b: number) {
+      const r = x / w;
+      return r >= a && r < b;
+    }
+
+    function join(ws: Array<{ text: string; xMid: number }>) {
+      return ws
+        .slice()
+        .sort((a, b) => a.xMid - b.xMid)
+        .map((x) => x.text)
+        .join(" ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
+    function num(s: string) {
+      const t = s.replace(/[oO]/g, "0").replace(/[^0-9]/g, "");
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    const rows: Array<{
+      position: number;
+      driver: string;
+      grid: number | null;
+      stops: number | null;
+      bestTime: string | null;
+      timeText: string | null;
+      status: string | null;
+    }> = [];
+
+    for (const ln of lines) {
+      const posStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.08)));
+      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.08, 0.62)));
+      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.62, 0.72)));
+      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.72, 0.80)));
+      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.80, 0.90)));
+      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.90, 1.01)));
+
+      if (!driverStr) continue;
+      if (/DRIVER/i.test(driverStr) || /BEST/i.test(driverStr) || /STOPS/i.test(driverStr)) continue;
+
+      const pos = num(posStr);
+      if (!pos || pos < 1 || pos > 30) continue;
+
+      const driver = driverStr.replace(/\s{2,}/g, " ").trim();
+      if (!driver) continue;
+
+      const grid = num(gridStr);
+      const stops = num(stopsStr);
+
+      const bestTime = bestStr ? bestStr.trim() : null;
+      const timeText = timeStr ? timeStr.trim() : null;
+      const status = timeText && /^(DNF|DSQ|DNS|RET)$/i.test(timeText) ? timeText.toUpperCase() : null;
+
+      rows.push({ position: pos, driver, grid, stops, bestTime, timeText, status });
+    }
+
+    return rows;
+  }
+
   async function runOcr() {
     if (running) return;
     if (urls.length === 0) {
@@ -181,6 +288,15 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       });
 
       const texts: string[] = [];
+      const structured: Array<{
+        position: number;
+        driver: string;
+        grid: number | null;
+        stops: number | null;
+        bestTime: string | null;
+        timeText: string | null;
+        status: string | null;
+      }> = [];
       for (let i = 0; i < urls.length; i++) {
         setProgress(`Bild ${i + 1}/${urls.length} vorbereiten…`);
         const canvas = await preprocess(urls[i]);
@@ -193,10 +309,12 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
         const res = await worker.recognize(canvas);
         const text = String(res?.data?.text ?? "").trim();
         if (text) texts.push(text);
+        const rows = extractRowsFromWords(res?.data?.words ?? [], canvas.width, canvas.height);
+        for (const r of rows) structured.push(r);
       }
 
-      const combined = texts.join("\n\n").trim();
-      if (!combined) {
+      let combined = texts.join("\n\n").trim();
+      if (!combined && structured.length === 0) {
         setError("OCR hat keinen Text erkannt.");
         setProgress(null);
         return;
@@ -204,10 +322,41 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
 
       const form = document.getElementById(formId) as HTMLFormElement | null;
       const field = form?.elements.namedItem("ocrText") as HTMLTextAreaElement | null;
+      const jsonField = form?.elements.namedItem("ocrRowsJson") as HTMLTextAreaElement | null;
       if (!form || !field) {
         setError("Formular nicht gefunden.");
         setProgress(null);
         return;
+      }
+
+      if (structured.length) {
+        const byPos = new Map<number, (typeof structured)[number]>();
+        for (const r of structured) {
+          const prev = byPos.get(r.position) ?? null;
+          if (!prev) {
+            byPos.set(r.position, r);
+            continue;
+          }
+          byPos.set(r.position, {
+            position: r.position,
+            driver: prev.driver.length >= r.driver.length ? prev.driver : r.driver,
+            grid: prev.grid ?? r.grid,
+            stops: prev.stops ?? r.stops,
+            bestTime: prev.bestTime ?? r.bestTime,
+            timeText: prev.timeText ?? r.timeText,
+            status: prev.status ?? r.status
+          });
+        }
+        const merged = Array.from(byPos.values()).sort((a, b) => a.position - b.position).slice(0, 30);
+        if (jsonField) jsonField.value = JSON.stringify(merged);
+
+        if (!combined) {
+          combined = merged
+            .map((r) => `${r.position} ${r.driver} ${r.grid ?? ""} ${r.stops ?? ""} ${r.bestTime ?? ""} ${r.timeText ?? ""}`.trim())
+            .join("\n");
+        }
+      } else {
+        if (jsonField) jsonField.value = "";
       }
 
       field.value = combined;
