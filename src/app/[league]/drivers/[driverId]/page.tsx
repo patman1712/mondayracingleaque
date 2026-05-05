@@ -3,6 +3,7 @@ import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { getLeagueColors } from "@/lib/leagueColors";
 import { League } from "@prisma/client";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -199,6 +200,7 @@ export default async function DriverDetailPage({
   const currentSeasonLabel = currentSeason
     ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`
     : null;
+  const displayName = driver.gamertag ?? driver.name;
 
   return (
     <>
@@ -206,65 +208,82 @@ export default async function DriverDetailPage({
         <div className="absolute inset-0" style={heroBg(accent)} />
         <div className="absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
         <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
-        <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[44px] bg-white/90 opacity-95 sm:block" style={{ clipPath: "polygon(0 0, 100% 0, 72% 100%, 0 100%)" }} />
-        <div className="pointer-events-none absolute inset-y-0 left-[34px] hidden w-[10px] bg-white/80 opacity-90 sm:block" style={{ clipPath: "polygon(0 0, 100% 0, 58% 100%, 0 100%)" }} />
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[44px] bg-white/90 opacity-95 sm:block" style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)" }} />
-        <div className="pointer-events-none absolute inset-y-0 right-[34px] hidden w-[10px] bg-white/80 opacity-90 sm:block" style={{ clipPath: "polygon(42% 0, 100% 0, 100% 100%, 0 100%)" }} />
 
         <Container>
           <div className="relative py-10 sm:py-14">
-            <div className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-end">
-              <div>
-                {teamLogoUrl ? (
-                  <img
-                    src={teamLogoUrl}
-                    alt=""
-                    className="h-9 w-auto bg-black/15 object-contain"
-                  />
-                ) : null}
-                <div className="mt-5 flex items-end gap-5">
-                  <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
-                    {driver.number ?? "—"}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate font-racing text-4xl font-bold uppercase tracking-[0.14em] text-white sm:text-5xl">
-                      {driver.name}
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/75">
-                      {driver.gamertag ? (
-                        <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-extrabold uppercase tracking-wider text-white/85">
-                          {driver.gamertag}
-                        </span>
-                      ) : null}
-                      {currentSeasonLabel ? (
-                        <span className="rounded-md bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
-                          {currentSeasonLabel}
-                        </span>
-                      ) : null}
-                      {countryToFlagEmoji(driver.country) ? (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
-                          {countryToFlagEmoji(driver.country)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+            {portraitUrl ? (
+              <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[min(520px,46vw)] sm:block">
+                <Image
+                  src={portraitUrl}
+                  alt=""
+                  fill
+                  sizes="(max-width: 1024px) 46vw, 520px"
+                  className="object-contain object-bottom drop-shadow-[0_28px_70px_rgba(0,0,0,0.6)]"
+                  quality={80}
+                />
               </div>
+            ) : null}
 
-              <div className="relative">
-                <div className="relative h-[320px] w-full overflow-hidden rounded-2xl border border-white/10 bg-black/20 sm:h-[380px]">
-                  {portraitUrl ? (
-                    <img
-                      src={portraitUrl}
-                      alt=""
-                      className="absolute inset-x-0 bottom-0 mx-auto h-[420px] w-full object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
-                      PORTRAIT
+            <div className="relative z-10 max-w-[720px]">
+              {teamLogoUrl ? (
+                <Image
+                  src={teamLogoUrl}
+                  alt=""
+                  width={160}
+                  height={48}
+                  unoptimized
+                  className="h-9 w-auto object-contain"
+                />
+              ) : null}
+
+              <div className="mt-6 flex items-end gap-5">
+                <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
+                  {driver.number ?? "—"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="hidden sm:block">
+                      <div className="h-[56px] w-[52px] bg-white/90" style={{ clipPath: "polygon(0 0, 100% 0, 68% 100%, 0 100%)" }} />
+                      <div className="-mt-2 h-[10px] w-[58px] bg-white/80" style={{ clipPath: "polygon(0 0, 100% 0, 74% 100%, 0 100%)" }} />
                     </div>
-                  )}
+
+                    <div className="min-w-0 font-racing text-5xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.65)] sm:text-6xl">
+                      {displayName}
+                    </div>
+
+                    <div className="hidden sm:block">
+                      <div className="h-[56px] w-[52px] bg-white/90" style={{ clipPath: "polygon(32% 0, 100% 0, 100% 100%, 0 100%)" }} />
+                      <div className="-mt-2 h-[10px] w-[58px] bg-white/80" style={{ clipPath: "polygon(26% 0, 100% 0, 100% 100%, 0 100%)" }} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/75">
+                    {currentSeasonLabel ? (
+                      <span className="rounded-md bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
+                        {currentSeasonLabel}
+                      </span>
+                    ) : null}
+                    {countryToFlagEmoji(driver.country) ? (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
+                        {countryToFlagEmoji(driver.country)}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {portraitUrl ? (
+                    <div className="pointer-events-none relative mt-8 h-[340px] w-full sm:hidden">
+                      <Image
+                        src={portraitUrl}
+                        alt=""
+                        fill
+                        sizes="100vw"
+                        className="object-contain object-bottom drop-shadow-[0_28px_70px_rgba(0,0,0,0.6)]"
+                        quality={80}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
