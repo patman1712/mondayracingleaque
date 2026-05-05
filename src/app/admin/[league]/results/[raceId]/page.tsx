@@ -82,6 +82,29 @@ function normalize(s: string) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+function levenshtein(a: string, b: string) {
+  if (a === b) return 0;
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+
+  const v0 = new Array(bl + 1);
+  const v1 = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) v0[j] = j;
+
+  for (let i = 0; i < al; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < bl; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+    for (let j = 0; j <= bl; j++) v0[j] = v1[j];
+  }
+
+  return v0[bl] as number;
+}
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -278,7 +301,6 @@ function parseOcrToClassificationRows(raw: string) {
         break;
       }
     }
-    if (!bestTime) continue;
 
     const used = new Set<number>();
     if (timeIdx >= 0) used.add(timeIdx);
@@ -314,6 +336,9 @@ function parseOcrToClassificationRows(raw: string) {
 
     const driverRaw = driverTokens.join(" ").replace(/\b\d+([A-Za-z])/g, "$1").replace(/\s{2,}/g, " ").trim();
     if (!driverRaw) continue;
+    const driverNorm = normalize(driverRaw);
+    if (driverNorm.length < 4) continue;
+    if (!bestTime && !timeText && grid === null && stops === null) continue;
 
     const status = timeText && ["DNF", "DSQ", "DNS", "RET"].includes(timeText) ? timeText : null;
 
@@ -634,16 +659,23 @@ async function ocrImportResultsFromImages(
 
   await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: combined } }).catch(() => null);
 
-  const entryDrivers: Array<{ driver: { id: string; name: string; gamertag: string | null } }> = await prisma.raceEntry
+  const seasonDrivers: Array<{ driver: { id: string; name: string; gamertag: string | null } }> = await prisma.driverSeason
     .findMany({
-      where: { raceId, participates: true },
+      where: { seasonId: season.id },
+      distinct: ["driverId"],
       select: { driver: { select: { id: true, name: true, gamertag: true } } },
       take: 5000
     })
     .catch(() => []);
 
-  const eligibleDrivers = entryDrivers.map((e) => e.driver);
+  const eligibleDrivers = seasonDrivers.map((e) => e.driver);
   if (eligibleDrivers.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=entries`);
+
+  const allEntries: Array<{ driverId: string; participates: boolean }> = await prisma.raceEntry
+    .findMany({ where: { raceId }, select: { driverId: true, participates: true }, take: 5000 })
+    .catch(() => []);
+  const hasAnyEntries = allEntries.length > 0;
+  const entryByDriverId = new Map(allEntries.map((e) => [e.driverId, e] as const));
 
   const driverByNorm = new Map<string, { id: string; name: string; gamertag: string | null }>();
   for (const d of eligibleDrivers) {
@@ -661,6 +693,15 @@ async function ocrImportResultsFromImages(
     for (const [k, v] of driverByNorm) {
       if (k.includes(n) || n.includes(k)) return v.id;
     }
+    let best: { id: string; dist: number; len: number } | null = null;
+    for (const [k, v] of driverByNorm) {
+      const d = levenshtein(n, k);
+      if (!best || d < best.dist) best = { id: v.id, dist: d, len: Math.max(n.length, k.length) };
+    }
+    if (!best) return null;
+    const ratio = best.len ? best.dist / best.len : 1;
+    const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
+    if (best.dist <= maxDist && ratio <= 0.25) return best.id;
     return null;
   }
 
@@ -697,7 +738,20 @@ async function ocrImportResultsFromImages(
       usedPos.add(row.position);
       const driverId = findDriverId(row.driver);
       if (!driverId) continue;
-      matched++;
+
+      if (hasAnyEntries) {
+        const entry = entryByDriverId.get(driverId) ?? null;
+        if (entry && !entry.participates) continue;
+        if (!entry) {
+          await prisma.raceEntry
+            .upsert({
+              where: { raceId_driverId: { raceId, driverId } },
+              create: { raceId, driverId, participates: true, teamId: null },
+              update: { participates: true }
+            })
+            .catch(() => null);
+        }
+      }
 
       const current = existing.get(driverId) ?? null;
       const points = current ? current.points : 0;
@@ -731,12 +785,25 @@ async function ocrImportResultsFromImages(
           }
         })
         .catch(() => null);
+      matched++;
     }
   } else {
     for (const row of pointsParsed) {
       const driverId = findDriverId(row.driver);
       if (!driverId) continue;
-      matched++;
+      if (hasAnyEntries) {
+        const entry = entryByDriverId.get(driverId) ?? null;
+        if (entry && !entry.participates) continue;
+        if (!entry) {
+          await prisma.raceEntry
+            .upsert({
+              where: { raceId_driverId: { raceId, driverId } },
+              create: { raceId, driverId, participates: true, teamId: null },
+              update: { participates: true }
+            })
+            .catch(() => null);
+        }
+      }
       const current = existing.get(driverId) ?? null;
       const points = current ? current.points : row.points;
       await prisma.raceResult
@@ -746,6 +813,7 @@ async function ocrImportResultsFromImages(
           update: { position: row.position, points, status: row.status ?? null }
         })
         .catch(() => null);
+      matched++;
     }
   }
 
@@ -758,6 +826,9 @@ async function ocrImportResultsFromImages(
       .catch(() => null);
     redirect(`/admin/${adminLeague}/results/${raceId}?error=nomatch`);
   }
+  await prisma.race
+    .update({ where: { id: raceId }, data: { resultsOcrText: combined + `\n\nIMPORT: ${matched} Matches` } })
+    .catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
