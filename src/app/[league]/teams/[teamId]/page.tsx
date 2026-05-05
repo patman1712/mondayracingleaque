@@ -282,30 +282,20 @@ export default async function TeamDetailPage({
               <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
 
               <div className="relative min-h-[260px] p-6 sm:min-h-[300px]">
-                <div className="pointer-events-none absolute right-4 top-2 font-racing text-[96px] font-bold leading-none tracking-[0.08em] text-white/20 sm:text-[120px]">
+                <div className="pointer-events-none absolute right-4 top-0 z-0 font-racing text-[104px] font-bold leading-none tracking-[0.08em] text-white/18 sm:text-[132px]">
                   {d.number ?? "—"}
                 </div>
 
-                <div className="relative flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
-                      {d.gamertag ?? d.name}
-                    </div>
+                <div className="relative z-10 min-w-0">
+                  <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
+                    {d.gamertag ?? d.name}
                   </div>
-                  {d.country && /^[A-Za-z]{2}$/.test(d.country) ? (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[18px]">
-                      {String.fromCodePoint(
-                        0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(0) - 65,
-                        0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(1) - 65
-                      )}
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="pointer-events-none absolute bottom-0 right-0 h-[96%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">
                   <div className="absolute inset-0 bg-gradient-to-l from-white/60 to-transparent" />
                 </div>
-                <div className="pointer-events-none absolute bottom-0 right-3 h-[88%] w-[56%]">
+                <div className="pointer-events-none absolute bottom-0 right-3 z-10 h-[88%] w-[56%]">
                   {d?.portraitPath ? (
                     <Image
                       src={imageUrl(d.portraitPath) ?? ""}
@@ -317,6 +307,15 @@ export default async function TeamDetailPage({
                     />
                   ) : null}
                 </div>
+
+                {d.country && /^[A-Za-z]{2}$/.test(d.country) ? (
+                  <div className="pointer-events-none absolute bottom-5 left-5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[22px]">
+                    {String.fromCodePoint(
+                      0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(0) - 65,
+                      0x1f1e6 + d.country.trim().toUpperCase().charCodeAt(1) - 65
+                    )}
+                  </div>
+                ) : null}
               </div>
               </Link>
             ) : (
