@@ -23,6 +23,33 @@ function formatStartsAt(d: Date) {
   });
 }
 
+function hexToRgba(hex: string, a: number) {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return `rgba(255,255,255,${a})`;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function teamBg(color: string | null | undefined) {
+  const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
+  const a = c ? hexToRgba(c, 0.32) : "rgba(255,255,255,0.08)";
+  const b = c ? hexToRgba(c, 0.06) : "rgba(255,255,255,0.03)";
+  const d = c ? hexToRgba(c, 0.22) : "rgba(255,255,255,0.06)";
+  return `radial-gradient(900px circle at 20% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
+}
+
+function f1Dots() {
+  return {
+    backgroundImage:
+      "radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px), radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
+    backgroundSize: "8px 8px, 18px 18px",
+    backgroundPosition: "0 0, 2px 2px"
+  } as const;
+}
+
 export default async function RaceDetailPage({
   params
 }: {
@@ -220,13 +247,18 @@ export default async function RaceDetailPage({
                 <Link
                   key={d.id}
                   href={`/${league}/drivers/${d.id}`}
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                  className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                  style={{ backgroundImage: teamBg(d.accent) }}
                 >
+                  <div
+                    className="absolute inset-0 opacity-25"
+                    style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                  />
                   <div
                     className="absolute left-0 top-0 h-[4px] w-full"
                     style={{ backgroundColor: d.accent ?? "#ffffff" }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/70" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
                   {d.portraitUrl ? (
                     <div className="absolute inset-y-0 right-0 w-[62%] p-2">
                       <div className="relative h-full w-full">
