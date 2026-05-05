@@ -209,9 +209,7 @@ export default async function DriverDetailPage({
       fallback;
 
   const portraitUrl = imageUrl(driver.portraitPath);
-  const teamLogoUrl = isReserve
-    ? imageUrl(seasonTeam?.teamRef?.logoPath)
-    : imageUrl(seasonTeam?.teamRef?.logoPath ?? driver.teamRef?.logoPath);
+  const teamLogoUrl = imageUrl(seasonTeam?.teamRef?.logoPath);
   const currentSeasonLabel = currentSeason
     ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`
     : null;
