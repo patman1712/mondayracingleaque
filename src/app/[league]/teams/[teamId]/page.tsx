@@ -126,9 +126,11 @@ export default async function TeamDetailPage({
   const mainDrivers = drivers.filter((d) => d.role === "MAIN").map((d) => d.driver);
   const reserveDrivers = drivers.filter((d) => d.role === "RESERVE").map((d) => d.driver);
 
+  const primaryDrivers = mainDrivers.length ? mainDrivers : reserveDrivers;
+
   const driverTiles: Array<(typeof mainDrivers)[number] | null> = [
-    mainDrivers[0] ?? null,
-    mainDrivers[1] ?? null
+    primaryDrivers[0] ?? null,
+    primaryDrivers[1] ?? null
   ];
 
   return (

@@ -1,6 +1,7 @@
 import { AdminShell } from "@/components/AdminShell";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/db";
+import { ensureReserveTeam } from "@/lib/reserveTeam";
 import { DriverRole, League, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
@@ -184,7 +185,12 @@ async function activateSeason(adminLeague: string, league: League, driverId: str
   const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
   const teamIdRaw = String(formData.get("teamId") ?? "").trim();
   const teamId = teamIdRaw ? teamIdRaw : null;
-  const t = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null) : null;
+  const t =
+    role === DriverRole.RESERVE
+      ? await ensureReserveTeam(league).catch(() => null)
+      : teamId
+        ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null)
+        : null;
 
   await prisma.driverSeason
     .upsert({
@@ -231,7 +237,12 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
 
   const teamIdRaw = String(formData.get("teamId") ?? "").trim();
   const teamId = teamIdRaw ? teamIdRaw : null;
-  const t = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null) : null;
+  const t =
+    role === DriverRole.RESERVE
+      ? await ensureReserveTeam(league).catch(() => null)
+      : teamId
+        ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null)
+        : null;
 
   const starts = asInt(String(formData.get("starts") ?? "0"), 0);
   const wins = asInt(String(formData.get("wins") ?? "0"), 0);
@@ -607,17 +618,7 @@ export default async function AdminDriverDetailPage({
                         ))}
                     </select>
                   </div>
-                  <div className="min-w-[220px]">
-                    <label className="mb-1 block text-xs font-semibold text-white/70">Typ</label>
-                    <select
-                      name="role"
-                      defaultValue="MAIN"
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                    >
-                      <option value="MAIN">Stammfahrer</option>
-                      <option value="RESERVE">Ersatzfahrer</option>
-                    </select>
-                  </div>
+                  <input type="hidden" name="role" value="MAIN" />
                   <div className="min-w-[240px]">
                     <label className="mb-1 block text-xs font-semibold text-white/70">Team</label>
                     <select
@@ -634,7 +635,29 @@ export default async function AdminDriverDetailPage({
                     </select>
                   </div>
                   <button className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
-                    Aktivieren
+                    Als Stammfahrer aktivieren
+                  </button>
+                </form>
+
+                <form action={activateSeason.bind(null, adminLeague, l, driver.id)} className="mt-3 flex flex-wrap items-end gap-2">
+                  <div className="min-w-[280px]">
+                    <label className="mb-1 block text-xs font-semibold text-white/70">Saison aktivieren</label>
+                    <select name="seasonId" defaultValue="" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25">
+                      <option value="">Bitte wählen</option>
+                      {seasons
+                        .filter((s) => !activeSeasonIds.has(s.id))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            Saison {s.year} · Season {s.seasonNo}
+                            {s.isTest ? " · TEST" : ""}
+                            {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <input type="hidden" name="role" value="RESERVE" />
+                  <button className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
+                    Als Ersatzfahrer aktivieren (Team automatisch)
                   </button>
                 </form>
               </div>
@@ -674,6 +697,7 @@ export default async function AdminDriverDetailPage({
                                 <select
                                   name="teamId"
                                   defaultValue={row?.teamId ?? ""}
+                                  disabled={row?.role === "RESERVE"}
                                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                                 >
                                   <option value="">(keins)</option>

@@ -1,9 +1,11 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { ensureReserveTeam } from "@/lib/reserveTeam";
 import { DriverRole, League } from "@prisma/client";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -71,11 +73,6 @@ async function createDriver(formData: FormData) {
   const gamertag = String(formData.get("gamertag") ?? "").trim();
   const numberRaw = String(formData.get("number") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
-  const seasonId = String(formData.get("seasonId") ?? "").trim();
-  const roleRaw = String(formData.get("role") ?? "").trim();
-  const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
-  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
-  const teamId = teamIdRaw ? teamIdRaw : null;
   const portrait = asUploadFile(formData.get("portrait"));
   const startsRaw = String(formData.get("starts") ?? "").trim();
   const winsRaw = String(formData.get("wins") ?? "").trim();
@@ -93,12 +90,6 @@ async function createDriver(formData: FormData) {
   const driverOfDay = driverOfDayRaw ? Number(driverOfDayRaw) : 0;
   const driverTitles = driverTitlesRaw ? Number(driverTitlesRaw) : 0;
   const constructorTitles = constructorTitlesRaw ? Number(constructorTitlesRaw) : 0;
-
-  const season = seasonId
-    ? await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null)
-    : null;
-
-  const t = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null) : null;
 
   const created = await prisma.driver.create({
     data: {
@@ -125,12 +116,6 @@ async function createDriver(formData: FormData) {
     await prisma.driver.update({ where: { id: created.id }, data: { portraitPath: fileName } }).catch(() => null);
   }
 
-  if (season) {
-    await prisma.driverSeason
-      .create({ data: { driverId: created.id, seasonId: season.id, role, teamId: t?.id ?? null } })
-      .catch(() => null);
-  }
-
   revalidatePath("/admin/settings/drivers");
   revalidatePath("/admin/one/drivers");
   revalidatePath("/admin/two/drivers");
@@ -144,6 +129,68 @@ async function createDriver(formData: FormData) {
   revalidatePath(`/mrl-one/drivers/${created.id}`);
   revalidatePath(`/mrl-two/drivers/${created.id}`);
   revalidatePath(`/mrl-rookie/drivers/${created.id}`);
+}
+
+async function activateDriver(formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const driverId = String(formData.get("driverId") ?? "").trim();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const roleRaw = String(formData.get("role") ?? "").trim();
+  const role = roleRaw === "RESERVE" ? DriverRole.RESERVE : DriverRole.MAIN;
+  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
+  const teamId = teamIdRaw ? teamIdRaw : null;
+  if (!driverId || !seasonId) redirect("/admin/settings/drivers?error=invalid");
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null);
+  if (!season) redirect("/admin/settings/drivers?error=invalid");
+
+  const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { id: true } }).catch(() => null);
+  if (!driver) redirect("/admin/settings/drivers?error=invalid");
+
+  const t =
+    role === DriverRole.RESERVE
+      ? await ensureReserveTeam(season.league).catch(() => null)
+      : teamId
+        ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }).catch(() => null)
+        : null;
+
+  await prisma.driverSeason
+    .upsert({
+      where: { driverId_seasonId: { driverId, seasonId } },
+      create: { driverId, seasonId, role, teamId: t?.id ?? null },
+      update: { role, teamId: t?.id ?? null }
+    })
+    .catch(() => null);
+
+  revalidatePath("/admin/settings/drivers");
+  revalidatePath(`/admin/${adminSlug[season.league]}/drivers`);
+  revalidatePath(`/admin/${adminSlug[season.league]}/drivers/${driverId}`);
+  revalidatePath(`/${publicSlug[season.league]}/drivers`);
+  revalidatePath(`/${publicSlug[season.league]}/drivers/${driverId}`);
+  redirect("/admin/settings/drivers?ok=1");
+}
+
+async function deactivateDriver(formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const driverId = String(formData.get("driverId") ?? "").trim();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  if (!driverId || !seasonId) redirect("/admin/settings/drivers?error=invalid");
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { league: true } }).catch(() => null);
+  if (!season) redirect("/admin/settings/drivers?error=invalid");
+
+  await prisma.driverSeason.deleteMany({ where: { driverId, seasonId } }).catch(() => null);
+
+  revalidatePath("/admin/settings/drivers");
+  revalidatePath(`/admin/${adminSlug[season.league]}/drivers`);
+  revalidatePath(`/admin/${adminSlug[season.league]}/drivers/${driverId}`);
+  revalidatePath(`/${publicSlug[season.league]}/drivers`);
+  revalidatePath(`/${publicSlug[season.league]}/drivers/${driverId}`);
+  redirect("/admin/settings/drivers?ok=1");
 }
 
 export default async function AdminSettingsDriversPage() {
@@ -176,12 +223,17 @@ export default async function AdminSettingsDriversPage() {
         number: true,
         country: true,
         team: true,
-        seasons: { select: { seasonId: true } }
+        seasons: { select: { seasonId: true, role: true, teamId: true, teamRef: { select: { name: true } } } }
       }
     })
     .catch(() => []);
 
   const seasonById = new Map(seasons.map((s) => [s.id, s] as const));
+  const seasonsByLeague: Record<League, typeof seasons> = {
+    [League.ONE]: seasons.filter((s) => s.league === League.ONE),
+    [League.TWO]: seasons.filter((s) => s.league === League.TWO),
+    [League.ROOKIE]: seasons.filter((s) => s.league === League.ROOKIE)
+  };
 
   return (
     <AdminShell>
@@ -189,48 +241,8 @@ export default async function AdminSettingsDriversPage() {
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
           <div className="text-base font-semibold">Fahrer anlegen</div>
           <form action={createDriver} encType="multipart/form-data" className="mt-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-white/70">Aktiv in Saison</label>
-              <select
-                name="seasonId"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              >
-                <option value="">(keine)</option>
-                {seasons.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {leagueLabel[s.league]} · Saison {s.year} · Season {s.seasonNo}
-                    {s.isTest ? " · TEST" : ""}
-                    {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-white/70">Typ</label>
-              <select
-                name="role"
-                defaultValue="MAIN"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              >
-                <option value="MAIN">Stammfahrer</option>
-                <option value="RESERVE">Ersatzfahrer</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-white/70">Team (optional)</label>
-              <select
-                name="teamId"
-                defaultValue=""
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              >
-                <option value="">(keins)</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+            <div className="md:col-span-2 text-sm text-white/60">
+              Fahrer wird nur 1x global angelegt. Ligen/Saisons + Stamm/Ersatz + Team stellst du danach unter dem Fahrer ein.
             </div>
 
             <div className="md:col-span-2">
@@ -369,6 +381,123 @@ export default async function AdminSettingsDriversPage() {
                           {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
                           {leagues.length ? ` · Ligen: ${leagues.map((l) => leagueLabel[l]).join(", ")}` : ""}
                         </div>
+
+                        <details className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-white/70">
+                            Ligen / Saisons
+                          </summary>
+
+                          <div className="mt-3 grid gap-4 md:grid-cols-3">
+                            {([League.ONE, League.TWO, League.ROOKIE] as const).map((lg) => {
+                              const seasonOptions = seasonsByLeague[lg];
+                              const activeSeasons = d.seasons
+                                .map((s) => ({ row: s, season: seasonById.get(s.seasonId) ?? null }))
+                                .filter((x) => x.season?.league === lg);
+
+                              return (
+                                <div key={lg} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                  <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                                    {leagueLabel[lg]}
+                                  </div>
+
+                                  <form action={activateDriver} className="mt-2 grid gap-2">
+                                    <input type="hidden" name="driverId" value={d.id} />
+                                    <input type="hidden" name="role" value="MAIN" />
+                                    <select
+                                      name="seasonId"
+                                      defaultValue=""
+                                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
+                                    >
+                                      <option value="">Saison wählen…</option>
+                                      {seasonOptions.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.placement === "ARCHIVE" ? "ARCHIV · " : ""}
+                                          {s.isTest ? "TEST · " : ""}
+                                          {s.year} · Season {s.seasonNo}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <select
+                                      name="teamId"
+                                      defaultValue=""
+                                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
+                                    >
+                                      <option value="">Team (optional)</option>
+                                      {teams.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                                      Als Stammfahrer aktivieren
+                                    </button>
+                                  </form>
+
+                                  <form action={activateDriver} className="mt-2 grid gap-2">
+                                    <input type="hidden" name="driverId" value={d.id} />
+                                    <input type="hidden" name="role" value="RESERVE" />
+                                    <select
+                                      name="seasonId"
+                                      defaultValue=""
+                                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
+                                    >
+                                      <option value="">Saison wählen…</option>
+                                      {seasonOptions.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.placement === "ARCHIVE" ? "ARCHIV · " : ""}
+                                          {s.isTest ? "TEST · " : ""}
+                                          {s.year} · Season {s.seasonNo}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                                      Als Ersatzfahrer aktivieren (Team automatisch)
+                                    </button>
+                                  </form>
+
+                                  {activeSeasons.length ? (
+                                    <div className="mt-3 space-y-2">
+                                      {activeSeasons.map(({ row, season }) =>
+                                        season ? (
+                                          <div
+                                            key={season.id}
+                                            className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                                          >
+                                            <div className="min-w-0 text-xs text-white/80">
+                                              {row.role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer"} · {season.year} S{season.seasonNo}
+                                              {row.teamRef?.name ? ` · ${row.teamRef.name}` : row.role === "RESERVE" ? ` · Ersatzfahrer` : ""}
+                                            </div>
+                                            <form action={deactivateDriver}>
+                                              <input type="hidden" name="driverId" value={d.id} />
+                                              <input type="hidden" name="seasonId" value={season.id} />
+                                              <button className="rounded-lg bg-white/10 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/15">
+                                                Entfernen
+                                              </button>
+                                            </form>
+                                          </div>
+                                        ) : null
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-3 text-xs text-white/50">
+                                      Noch nicht aktiv.
+                                    </div>
+                                  )}
+
+                                  <div className="mt-3">
+                                    <Link
+                                      href={`/admin/${adminSlug[lg]}/drivers/${d.id}`}
+                                      className="text-xs font-semibold text-white/70 hover:text-white"
+                                    >
+                                      In Liga bearbeiten →
+                                    </Link>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {leagues.length ? (
