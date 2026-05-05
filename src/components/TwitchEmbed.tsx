@@ -78,6 +78,7 @@ export function TwitchEmbed({
   const now = Date.now();
   const inWindow = now >= timing.openMs && now <= timing.closeMs;
   const isOnAir = Boolean(inWindow && live);
+  const liveLabel = live === null ? "unbekannt" : live ? "online" : "offline";
 
   useEffect(() => {
     const c = normalized;
@@ -150,7 +151,7 @@ export function TwitchEmbed({
           </div>
           <div className="mt-2 text-xs text-white/70">
             On Air Fenster: {formatTimeBerlin(timing.openMs)}–{formatTimeBerlin(timing.closeMs)} (Start {formatTimeBerlin(timing.startMs)})
-            {checkedAt ? ` · Status: ${live ? "online" : "offline"} · Check ${formatDateTimeBerlin(checkedAt)}` : ""}
+            {checkedAt ? ` · Status: ${liveLabel} · Check ${formatDateTimeBerlin(checkedAt)}` : ` · Status: ${liveLabel}`}
           </div>
         </div>
 
@@ -186,7 +187,9 @@ export function TwitchEmbed({
                   ? `Der Stream geht frühestens ab ${formatTimeBerlin(timing.openMs)} Uhr on air.`
                   : now > timing.closeMs
                     ? "Der Broadcast ist beendet."
-                    : "Der Stream ist aktuell offline."}
+                    : live === null
+                      ? "Stream-Status wird geprüft…"
+                      : "Der Stream ist aktuell offline."}
               </div>
               <div className="mt-2 text-sm text-white/70">
                 Startzeit: {formatDateTimeBerlin(timing.startMs)} · On Air: {formatTimeBerlin(timing.openMs)}–{formatTimeBerlin(timing.closeMs)}
