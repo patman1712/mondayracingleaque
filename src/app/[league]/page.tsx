@@ -1,14 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueLabel: Record<string, string> = {
-  "mrl-one": "MRL One",
-  "mrl-two": "MRL Two",
-  "mrl-rookie": "MRL Rookie"
-};
 
 export default async function LeagueHomePage({
   params
@@ -16,8 +11,9 @@ export default async function LeagueHomePage({
   params: Promise<{ league: string }>;
 }) {
   const { league } = await params;
-  const label = leagueLabel[league];
-  if (!label) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const label = cfg.name;
 
   const tiles = [
     { href: `/${league}/drivers`, label: "Fahrer" },

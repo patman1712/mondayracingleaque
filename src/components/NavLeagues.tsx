@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type League = {
-  slug: "mrl-one" | "mrl-two" | "mrl-rookie";
+  slug: string;
   label: string;
   accent: string;
 };
 
-const leagues: League[] = [
+const fallbackLeagues: League[] = [
   { slug: "mrl-one", label: "MRL One", accent: "rgba(225,6,0,1)" },
   { slug: "mrl-two", label: "MRL Two", accent: "rgba(34,197,94,1)" },
   { slug: "mrl-rookie", label: "MRL Rookie", accent: "rgba(56,189,248,1)" }
@@ -122,17 +122,28 @@ function raceImgSrc(title: string, meta: string, accent: string, live: boolean) 
 export function NavLeagues() {
   const [open, setOpen] = useState<string | null>(null);
   const [active, setActive] = useState<SubKey>("drivers");
+  const [leagues, setLeagues] = useState<League[]>(fallbackLeagues);
   const [scheduleByLeague, setScheduleByLeague] = useState<
-    Partial<Record<League["slug"], LeagueSchedule>>
+    Partial<Record<string, LeagueSchedule>>
   >({});
   const [teamsByLeague, setTeamsByLeague] = useState<
-    Partial<Record<League["slug"], LeagueTeams>>
+    Partial<Record<string, LeagueTeams>>
   >({});
   const [driversByLeague, setDriversByLeague] = useState<
-    Partial<Record<League["slug"], LeagueDrivers>>
+    Partial<Record<string, LeagueDrivers>>
   >({});
-  const [loadingLeague, setLoadingLeague] = useState<League["slug"] | null>(null);
+  const [loadingLeague, setLoadingLeague] = useState<string | null>(null);
   const closeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/leagues", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: { leagues?: League[] }) => {
+        const next = Array.isArray(data?.leagues) ? data.leagues : null;
+        if (next && next.length) setLeagues(next);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -141,7 +152,7 @@ export function NavLeagues() {
   }, []);
 
   useEffect(() => {
-    const league = open as League["slug"] | null;
+    const league = open;
     if (!league) return;
     if (active !== "calendar") return;
     if (scheduleByLeague[league]) return;
@@ -160,7 +171,7 @@ export function NavLeagues() {
   }, [open, active, scheduleByLeague, loadingLeague]);
 
   useEffect(() => {
-    const league = open as League["slug"] | null;
+    const league = open;
     if (!league) return;
     if (active !== "teams") return;
     if (teamsByLeague[league]) return;
@@ -179,7 +190,7 @@ export function NavLeagues() {
   }, [open, active, teamsByLeague, loadingLeague]);
 
   useEffect(() => {
-    const league = open as League["slug"] | null;
+    const league = open;
     if (!league) return;
     if (active !== "drivers") return;
     if (driversByLeague[league]) return;
@@ -495,14 +506,14 @@ export function NavLeagues() {
                                   style={{ backgroundImage: teamBg(d.accent) }}
                                 >
                                   {d.portraitUrl ? (
-                                    <div className="absolute inset-0 p-2">
+                                    <div className="absolute inset-y-0 right-0 w-[68%] p-0">
                                       <div className="relative h-full w-full">
                                         <Image
                                           src={d.portraitUrl}
                                           alt=""
                                           fill
                                           sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 260px"
-                                          className="object-contain object-bottom"
+                                          className="object-contain object-right object-bottom"
                                           quality={80}
                                         />
                                       </div>
@@ -581,6 +592,7 @@ export function MobileNavLeagues({
 }) {
   const [league, setLeague] = useState<League["slug"] | null>(null);
   const [active, setActive] = useState<SubKey>("drivers");
+  const [leagues, setLeagues] = useState<League[]>(fallbackLeagues);
   const [scheduleByLeague, setScheduleByLeague] = useState<
     Partial<Record<League["slug"], LeagueSchedule>>
   >({});
@@ -591,6 +603,16 @@ export function MobileNavLeagues({
     Partial<Record<League["slug"], LeagueDrivers>>
   >({});
   const [loadingLeague, setLoadingLeague] = useState<League["slug"] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/leagues", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: { leagues?: League[] }) => {
+        const next = Array.isArray(data?.leagues) ? data.leagues : null;
+        if (next && next.length) setLeagues(next);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!league) return;

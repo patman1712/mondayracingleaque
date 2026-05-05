@@ -11,6 +11,14 @@ enum League {
   ONE
   TWO
   ROOKIE
+  THREE
+  FOUR
+  FIVE
+  SIX
+  SEVEN
+  EIGHT
+  NINE
+  TEN
 }
 
 enum SeasonPlacement {
@@ -163,6 +171,19 @@ model AppConfig {
   value String
 }
 
+model LeagueConfig {
+  league      League  @id
+  adminSlug   String  @unique
+  publicSlug  String  @unique
+  name        String
+  accentColor String
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  seasons Season[]
+}
+
 model Season {
   id    String @id @default(cuid())
   league League @default(ONE)
@@ -174,6 +195,7 @@ model Season {
 
   createdAt DateTime @default(now())
 
+  leagueRef LeagueConfig @relation(fields: [league], references: [league], onDelete: Restrict)
   teams TeamSeason[]
   drivers DriverSeason[]
 

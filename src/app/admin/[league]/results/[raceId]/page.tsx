@@ -3,25 +3,19 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
-import { League } from "@prisma/client";
+import { League, Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 import fs from "node:fs";
 import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
-
-const publicLeagueSlug: Record<string, string> = {
-  one: "mrl-one",
-  two: "mrl-two",
-  rookie: "mrl-rookie"
-};
+const driverSelect = {
+  driver: { select: { id: true, name: true } }
+} satisfies Prisma.DriverSeasonSelect;
+type DriverRow = Prisma.DriverSeasonGetPayload<{ select: typeof driverSelect }>;
 
 function ensureDir(p: string) {
   try {
@@ -185,7 +179,16 @@ async function setBroadcast(
     })
     .catch(() => null);
 
-  const pub = publicLeagueSlug[adminLeague] ?? null;
+  const cfg = await resolveLeagueByAdminSlug(adminLeague);
+  const pub =
+    cfg?.publicSlug ??
+    (adminLeague === "one"
+      ? "mrl-one"
+      : adminLeague === "two"
+        ? "mrl-two"
+        : adminLeague === "rookie"
+          ? "mrl-rookie"
+          : null);
   if (pub) revalidatePath(`/${pub}/races/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
 }
@@ -217,7 +220,16 @@ async function uploadResultsImage(
     })
     .catch(() => null);
 
-  const pub = publicLeagueSlug[adminLeague] ?? null;
+  const cfg = await resolveLeagueByAdminSlug(adminLeague);
+  const pub =
+    cfg?.publicSlug ??
+    (adminLeague === "one"
+      ? "mrl-one"
+      : adminLeague === "two"
+        ? "mrl-two"
+        : adminLeague === "rookie"
+          ? "mrl-rookie"
+          : null);
   if (pub) revalidatePath(`/${pub}/races/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
@@ -278,23 +290,23 @@ async function ocrImportResults(
     })
     .catch(() => null);
 
-  const driverRows = season
+  const driverRows: DriverRow[] = season
     ? await prisma.driverSeason
         .findMany({
           where: { seasonId: season.id },
           distinct: ["driverId"],
-          select: { driver: { select: { id: true, name: true } } },
+          select: driverSelect,
           take: 5000
         })
-        .catch(() => [])
+        .catch((): DriverRow[] => [])
     : await prisma.driverSeason
         .findMany({
           where: { season: { league } },
           distinct: ["driverId"],
-          select: { driver: { select: { id: true, name: true } } },
+          select: driverSelect,
           take: 5000
         })
-        .catch(() => []);
+        .catch((): DriverRow[] => []);
 
   const drivers = driverRows.map((r) => r.driver);
   const driverByNorm = new Map<string, { id: string; name: string }>();
@@ -339,14 +351,29 @@ async function ocrImportResults(
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
   revalidatePath(`/admin/${adminLeague}/standings`);
-  revalidatePath("/mrl-one/results");
-  revalidatePath("/mrl-two/results");
-  revalidatePath("/mrl-rookie/results");
-  revalidatePath("/mrl-one/standings");
-  revalidatePath("/mrl-two/standings");
-  revalidatePath("/mrl-rookie/standings");
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
 
-  const pub = publicLeagueSlug[adminLeague] ?? null;
+  const cfg = await resolveLeagueByAdminSlug(adminLeague);
+  const pub =
+    cfg?.publicSlug ??
+    (adminLeague === "one"
+      ? "mrl-one"
+      : adminLeague === "two"
+        ? "mrl-two"
+        : adminLeague === "rookie"
+          ? "mrl-rookie"
+          : null);
   if (pub) revalidatePath(`/${pub}/races/${raceId}`);
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
@@ -365,8 +392,9 @@ export default async function AdminRaceResultsPage({
   const error = sp.error ?? null;
 
   const { league, raceId } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   const race = await prisma.race
     .findUnique({
@@ -417,25 +445,25 @@ export default async function AdminRaceResultsPage({
       })
       .catch(() => null);
 
-    const rows = season
+    const rows: DriverRow[] = season
       ? await prisma.driverSeason
           .findMany({
             where: { seasonId: season.id },
             distinct: ["driverId"],
             orderBy: [{ driver: { name: "asc" } }],
-            select: { driver: { select: { id: true, name: true } } },
+            select: driverSelect,
             take: 5000
           })
-          .catch(() => [])
+          .catch((): DriverRow[] => [])
       : await prisma.driverSeason
           .findMany({
             where: { season: { league: l } },
             distinct: ["driverId"],
             orderBy: [{ driver: { name: "asc" } }],
-            select: { driver: { select: { id: true, name: true } } },
+            select: driverSelect,
             take: 5000
           })
-          .catch(() => []);
+          .catch((): DriverRow[] => []);
 
     drivers = rows.map((r) => r.driver);
   } catch {}

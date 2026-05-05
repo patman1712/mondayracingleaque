@@ -1,14 +1,19 @@
 import { League } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-const leagueLabel: Record<League, string> = {
-  ONE: "MRL One",
-  TWO: "MRL Two",
-  ROOKIE: "MRL Rookie"
-};
+async function leagueName(league: League) {
+  const row = await prisma.leagueConfig
+    .findUnique({ where: { league }, select: { name: true } })
+    .catch(() => null);
+  if (row?.name) return row.name;
+  if (league === League.ONE) return "MRL One";
+  if (league === League.TWO) return "MRL Two";
+  if (league === League.ROOKIE) return "MRL Rookie";
+  return String(league);
+}
 
 export async function ensureReserveTeam(league: League) {
-  const name = `Ersatzfahrer · ${leagueLabel[league]}`;
+  const name = `Ersatzfahrer · ${await leagueName(league)}`;
   const team = await prisma.team.upsert({
     where: { name },
     create: { name, color: null, logoPath: null },
@@ -17,4 +22,3 @@ export async function ensureReserveTeam(league: League) {
   });
   return team;
 }
-

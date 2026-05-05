@@ -1,21 +1,9 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
-import { League } from "@prisma/client";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  "mrl-one": League.ONE,
-  "mrl-two": League.TWO,
-  "mrl-rookie": League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 export default async function LeagueStandingsPage({
   params
@@ -23,8 +11,9 @@ export default async function LeagueStandingsPage({
   params: Promise<{ league: string }>;
 }) {
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const l = cfg.league;
 
   type StandingRow = {
     driverId: string;
@@ -69,7 +58,7 @@ export default async function LeagueStandingsPage({
     <Container>
       <div className="mt-10">
         <div className="text-2xl font-extrabold">
-          WM Stand · {leagueLabel[l]}
+          WM Stand · {cfg.name}
         </div>
         <div className="mt-2 text-sm text-white/70">
           Punkte basieren auf den eingetragenen Ergebnissen

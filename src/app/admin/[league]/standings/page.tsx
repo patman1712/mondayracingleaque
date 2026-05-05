@@ -1,22 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
-import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 export default async function AdminStandingsPage({
   params
@@ -26,8 +14,9 @@ export default async function AdminStandingsPage({
   await requireAdmin();
 
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   type StandingRow = {
     driverId: string;
@@ -65,9 +54,7 @@ export default async function AdminStandingsPage({
   return (
     <AdminShell>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">
-          WM Stand · {leagueLabel[l]}
-        </div>
+        <div className="text-base font-semibold">WM Stand · {cfg.name}</div>
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20">
           <div className="grid grid-cols-[70px_1fr_120px] gap-4 border-b border-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60">
             <div>Pos.</div>

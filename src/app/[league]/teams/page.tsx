@@ -2,23 +2,11 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
-import { League } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  "mrl-one": League.ONE,
-  "mrl-two": League.TWO,
-  "mrl-rookie": League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
@@ -58,8 +46,9 @@ export default async function LeagueTeamsPage({
   params: Promise<{ league: string }>;
 }) {
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const l = cfg.league;
 
   const currentSeason = await getActiveSeason({
     league: l,
@@ -117,7 +106,7 @@ export default async function LeagueTeamsPage({
     <Container>
       <div className="mt-10">
         <div className="text-2xl font-extrabold">
-          Teams · {leagueLabel[l]}
+          Teams · {cfg.name}
         </div>
         <div className="mt-2 text-sm text-white/70">
           {currentSeason

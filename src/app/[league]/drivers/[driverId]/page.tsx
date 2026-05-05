@@ -5,14 +5,9 @@ import { getLeagueColors } from "@/lib/leagueColors";
 import { League } from "@prisma/client";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  "mrl-one": League.ONE,
-  "mrl-two": League.TWO,
-  "mrl-rookie": League.ROOKIE
-};
 
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
@@ -77,8 +72,9 @@ export default async function DriverDetailPage({
   params: Promise<{ league: string; driverId: string }>;
 }) {
   const { league, driverId } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const l = cfg.league;
 
   const currentSeason = await getActiveSeason({
     league: l,

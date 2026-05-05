@@ -2,22 +2,11 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
-import { League } from "@prisma/client";
 import Link from "next/link";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  "mrl-one": League.ONE,
-  "mrl-two": League.TWO,
-  "mrl-rookie": League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
@@ -66,8 +55,9 @@ export default async function LeagueDriversPage({
   params: Promise<{ league: string }>;
 }) {
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const l = cfg.league;
 
   type DriverItem = {
     id: string;
@@ -136,26 +126,29 @@ export default async function LeagueDriversPage({
     }
 
     if (!drivers.length) {
+      const select = {
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            gamertag: true,
+            number: true,
+            country: true,
+            portraitPath: true
+          }
+        }
+      } satisfies Prisma.DriverSeasonSelect;
+      type Row = Prisma.DriverSeasonGetPayload<{ select: typeof select }>;
+
       const rows = await prisma.driverSeason
         .findMany({
           where: { season: { league: l } },
           distinct: ["driverId"],
           orderBy: [{ driver: { name: "asc" } }],
-          select: {
-            driver: {
-              select: {
-                id: true,
-                name: true,
-                gamertag: true,
-                number: true,
-                country: true,
-                portraitPath: true
-              }
-            }
-          },
+          select,
           take: 5000
         })
-        .catch(() => []);
+        .catch((): Row[] => []);
 
       drivers = rows.map((r) => ({
         id: r.driver.id,
@@ -173,7 +166,7 @@ export default async function LeagueDriversPage({
     <Container>
       <div className="mt-10">
         <div className="text-2xl font-extrabold">
-          Fahrer · {leagueLabel[l]}
+          Fahrer · {cfg.name}
         </div>
         <div className="mt-2 text-sm text-white/70">Fahrerübersicht</div>
       </div>

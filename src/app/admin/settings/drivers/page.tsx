@@ -12,23 +12,39 @@ import path from "node:path";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
+type LeagueMeta = {
+  league: League;
+  adminSlug: string;
+  publicSlug: string;
+  name: string;
 };
 
-const adminSlug: Record<League, string> = {
-  [League.ONE]: "one",
-  [League.TWO]: "two",
-  [League.ROOKIE]: "rookie"
-};
+const fallbackLeagues: LeagueMeta[] = [
+  { league: League.ONE, adminSlug: "one", publicSlug: "mrl-one", name: "MRL One" },
+  { league: League.TWO, adminSlug: "two", publicSlug: "mrl-two", name: "MRL Two" },
+  { league: League.ROOKIE, adminSlug: "rookie", publicSlug: "mrl-rookie", name: "MRL Rookie" }
+];
 
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
-};
+async function listLeagueMeta(): Promise<LeagueMeta[]> {
+  const rows = await prisma.leagueConfig
+    .findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { league: true, adminSlug: true, publicSlug: true, name: true }
+    })
+    .catch(() => []);
+  return rows.length ? rows : fallbackLeagues;
+}
+
+async function metaForLeague(league: League): Promise<LeagueMeta | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({
+      where: { league },
+      select: { league: true, adminSlug: true, publicSlug: true, name: true }
+    })
+    .catch(() => null);
+  if (row) return row;
+  return fallbackLeagues.find((l) => l.league === league) ?? null;
+}
 
 function ensureDir(p: string) {
   try {
@@ -117,18 +133,13 @@ async function createDriver(formData: FormData) {
   }
 
   revalidatePath("/admin/settings/drivers");
-  revalidatePath("/admin/one/drivers");
-  revalidatePath("/admin/two/drivers");
-  revalidatePath("/admin/rookie/drivers");
-  revalidatePath(`/admin/one/drivers/${created.id}`);
-  revalidatePath(`/admin/two/drivers/${created.id}`);
-  revalidatePath(`/admin/rookie/drivers/${created.id}`);
-  revalidatePath("/mrl-one/drivers");
-  revalidatePath("/mrl-two/drivers");
-  revalidatePath("/mrl-rookie/drivers");
-  revalidatePath(`/mrl-one/drivers/${created.id}`);
-  revalidatePath(`/mrl-two/drivers/${created.id}`);
-  revalidatePath(`/mrl-rookie/drivers/${created.id}`);
+  const leagues = await listLeagueMeta();
+  for (const l of leagues) {
+    revalidatePath(`/admin/${l.adminSlug}/drivers`);
+    revalidatePath(`/admin/${l.adminSlug}/drivers/${created.id}`);
+    revalidatePath(`/${l.publicSlug}/drivers`);
+    revalidatePath(`/${l.publicSlug}/drivers/${created.id}`);
+  }
 }
 
 async function activateDriver(formData: FormData) {
@@ -165,10 +176,13 @@ async function activateDriver(formData: FormData) {
     .catch(() => null);
 
   revalidatePath("/admin/settings/drivers");
-  revalidatePath(`/admin/${adminSlug[season.league]}/drivers`);
-  revalidatePath(`/admin/${adminSlug[season.league]}/drivers/${driverId}`);
-  revalidatePath(`/${publicSlug[season.league]}/drivers`);
-  revalidatePath(`/${publicSlug[season.league]}/drivers/${driverId}`);
+  const m = await metaForLeague(season.league);
+  if (m) {
+    revalidatePath(`/admin/${m.adminSlug}/drivers`);
+    revalidatePath(`/admin/${m.adminSlug}/drivers/${driverId}`);
+    revalidatePath(`/${m.publicSlug}/drivers`);
+    revalidatePath(`/${m.publicSlug}/drivers/${driverId}`);
+  }
   redirect("/admin/settings/drivers?ok=1");
 }
 
@@ -186,15 +200,22 @@ async function deactivateDriver(formData: FormData) {
   await prisma.driverSeason.deleteMany({ where: { driverId, seasonId } }).catch(() => null);
 
   revalidatePath("/admin/settings/drivers");
-  revalidatePath(`/admin/${adminSlug[season.league]}/drivers`);
-  revalidatePath(`/admin/${adminSlug[season.league]}/drivers/${driverId}`);
-  revalidatePath(`/${publicSlug[season.league]}/drivers`);
-  revalidatePath(`/${publicSlug[season.league]}/drivers/${driverId}`);
+  const m = await metaForLeague(season.league);
+  if (m) {
+    revalidatePath(`/admin/${m.adminSlug}/drivers`);
+    revalidatePath(`/admin/${m.adminSlug}/drivers/${driverId}`);
+    revalidatePath(`/${m.publicSlug}/drivers`);
+    revalidatePath(`/${m.publicSlug}/drivers/${driverId}`);
+  }
   redirect("/admin/settings/drivers?ok=1");
 }
 
 export default async function AdminSettingsDriversPage() {
   await requireAdmin();
+
+  const leagueMeta = await listLeagueMeta();
+  const labelByLeague = new Map(leagueMeta.map((l) => [l.league, l.name] as const));
+  const adminSlugByLeague = new Map(leagueMeta.map((l) => [l.league, l.adminSlug] as const));
 
   const seasons = await prisma.season
     .findMany({
@@ -229,11 +250,12 @@ export default async function AdminSettingsDriversPage() {
     .catch(() => []);
 
   const seasonById = new Map(seasons.map((s) => [s.id, s] as const));
-  const seasonsByLeague: Record<League, typeof seasons> = {
-    [League.ONE]: seasons.filter((s) => s.league === League.ONE),
-    [League.TWO]: seasons.filter((s) => s.league === League.TWO),
-    [League.ROOKIE]: seasons.filter((s) => s.league === League.ROOKIE)
-  };
+  const seasonsByLeague = new Map<League, typeof seasons>();
+  for (const s of seasons) {
+    const list = seasonsByLeague.get(s.league) ?? [];
+    list.push(s);
+    seasonsByLeague.set(s.league, list);
+  }
 
   return (
     <AdminShell>
@@ -359,7 +381,7 @@ export default async function AdminSettingsDriversPage() {
             ) : (
               drivers.map((d) => (
                 (() => {
-                  const leagues = Array.from(
+                  const activeLeagues = Array.from(
                     new Set(
                       d.seasons
                         .map((s) => seasonById.get(s.seasonId)?.league ?? null)
@@ -379,7 +401,11 @@ export default async function AdminSettingsDriversPage() {
                         <div className="mt-1 text-sm text-white/60">
                           {d.gamertag ? `${d.gamertag} · ` : ""}
                           {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
-                          {leagues.length ? ` · Ligen: ${leagues.map((l) => leagueLabel[l]).join(", ")}` : ""}
+                          {activeLeagues.length
+                            ? ` · Ligen: ${activeLeagues
+                                .map((l) => labelByLeague.get(l) ?? String(l))
+                                .join(", ")}`
+                            : ""}
                         </div>
 
                         <details className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
@@ -388,8 +414,9 @@ export default async function AdminSettingsDriversPage() {
                           </summary>
 
                           <div className="mt-3 grid gap-4 md:grid-cols-3">
-                            {([League.ONE, League.TWO, League.ROOKIE] as const).map((lg) => {
-                              const seasonOptions = seasonsByLeague[lg];
+                            {leagueMeta.map((lm) => {
+                              const lg = lm.league;
+                              const seasonOptions = seasonsByLeague.get(lg) ?? [];
                               const activeSeasons = d.seasons
                                 .map((s) => ({ row: s, season: seasonById.get(s.seasonId) ?? null }))
                                 .filter((x) => x.season?.league === lg);
@@ -397,7 +424,7 @@ export default async function AdminSettingsDriversPage() {
                               return (
                                 <div key={lg} className="rounded-xl border border-white/10 bg-black/20 p-3">
                                   <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                                    {leagueLabel[lg]}
+                                    {labelByLeague.get(lg) ?? String(lg)}
                                   </div>
 
                                   <form action={activateDriver} className="mt-2 grid gap-2">
@@ -486,12 +513,14 @@ export default async function AdminSettingsDriversPage() {
                                   )}
 
                                   <div className="mt-3">
-                                    <Link
-                                      href={`/admin/${adminSlug[lg]}/drivers/${d.id}`}
-                                      className="text-xs font-semibold text-white/70 hover:text-white"
-                                    >
-                                      In Liga bearbeiten →
-                                    </Link>
+                                    {adminSlugByLeague.get(lg) ? (
+                                      <Link
+                                        href={`/admin/${adminSlugByLeague.get(lg)}/drivers/${d.id}`}
+                                        className="text-xs font-semibold text-white/70 hover:text-white"
+                                      >
+                                        In Liga bearbeiten →
+                                      </Link>
+                                    ) : null}
                                   </div>
                                 </div>
                               );
@@ -500,16 +529,22 @@ export default async function AdminSettingsDriversPage() {
                         </details>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        {leagues.length ? (
-                          leagues.map((l) => (
-                            <Link
-                              key={l}
-                              href={`/admin/${adminSlug[l]}/drivers/${d.id}`}
-                              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                            >
-                              {leagueLabel[l]} · Details
-                            </Link>
-                          ))
+                        {activeLeagues.length ? (
+                          activeLeagues
+                            .map((l) => {
+                              const slug = adminSlugByLeague.get(l);
+                              if (!slug) return null;
+                              return (
+                                <Link
+                                  key={l}
+                                  href={`/admin/${slug}/drivers/${d.id}`}
+                                  className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                                >
+                                  {labelByLeague.get(l) ?? String(l)} · Details
+                                </Link>
+                              );
+                            })
+                            .filter(Boolean)
                         ) : (
                           <div className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-white/60">
                             Nicht aktiv

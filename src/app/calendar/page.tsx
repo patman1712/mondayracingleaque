@@ -1,7 +1,8 @@
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { getLeagueColors, leagueLabel, type LeagueKey } from "@/lib/leagueColors";
+import { listPublicLeagues } from "@/lib/league";
+import { League } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function CalendarPage({
 }) {
   type RaceItem = {
     id: string;
-    league: LeagueKey;
+    league: League;
     season: number;
     seasonNo: number;
     seasonIsTest: boolean;
@@ -73,14 +74,21 @@ export default async function CalendarPage({
   const monthStart = startOfMonth(viewMonth);
   const monthEnd = startOfMonth(nextMonth);
 
-  const colors = await getLeagueColors();
+  const leagues = await listPublicLeagues();
+  const activeLeagues = leagues.map((l) => l.league);
+  const metaByLeague = new Map(
+    leagues.map((l) => [
+      l.league,
+      { name: l.name, publicSlug: l.publicSlug, accentColor: l.accentColor }
+    ])
+  );
 
   let monthRaces: RaceItem[] = [];
   let upcoming: RaceItem[] = [];
 
   try {
     const races = await prisma.race.findMany({
-      where: { startsAt: { gte: monthStart, lt: monthEnd } },
+      where: { league: { in: activeLeagues }, startsAt: { gte: monthStart, lt: monthEnd } },
       orderBy: [{ startsAt: "asc" }],
       take: 500,
       select: {
@@ -100,7 +108,7 @@ export default async function CalendarPage({
 
   try {
     const races = await prisma.race.findMany({
-      where: { seasonIsTest: false, startsAt: { gte: now } },
+      where: { league: { in: activeLeagues }, seasonIsTest: false, startsAt: { gte: now } },
       orderBy: [{ startsAt: "asc" }],
       take: 18,
       select: {
@@ -220,8 +228,8 @@ export default async function CalendarPage({
                           <div
                             key={r.id}
                             className="h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: colors[r.league] }}
-                            title={`${leagueLabel(r.league)} · ${r.name}`}
+                            style={{ backgroundColor: metaByLeague.get(r.league)?.accentColor ?? "#ffffff" }}
+                            title={`${metaByLeague.get(r.league)?.name ?? String(r.league)} · ${r.name}`}
                           />
                         ))}
                         {more > 0 ? (
@@ -235,7 +243,7 @@ export default async function CalendarPage({
                           <div key={r.id} className="truncate">
                             <span
                               className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
-                              style={{ backgroundColor: colors[r.league] }}
+                              style={{ backgroundColor: metaByLeague.get(r.league)?.accentColor ?? "#ffffff" }}
                             />
                             {r.name}
                           </div>
@@ -252,13 +260,13 @@ export default async function CalendarPage({
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <div className="text-sm font-semibold">Legende</div>
           <div className="mt-3 space-y-2 text-sm">
-            {(["ONE", "TWO", "ROOKIE"] as const).map((l) => (
-              <div key={l} className="flex items-center gap-2 text-white/80">
+            {leagues.map((l) => (
+              <div key={l.publicSlug} className="flex items-center gap-2 text-white/80">
                 <div
                   className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: colors[l] }}
+                  style={{ backgroundColor: l.accentColor }}
                 />
-                <div>{leagueLabel(l)}</div>
+                <div>{l.name}</div>
               </div>
             ))}
           </div>
@@ -278,7 +286,7 @@ export default async function CalendarPage({
                     <div className="flex items-start gap-3">
                       <div
                         className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: colors[r.league] }}
+                        style={{ backgroundColor: metaByLeague.get(r.league)?.accentColor ?? "#ffffff" }}
                       />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-white">
@@ -286,7 +294,7 @@ export default async function CalendarPage({
                           {r.name}
                         </div>
                         <div className="mt-1 text-xs text-white/70">
-                          {leagueLabel(r.league)} ·{" "}
+                          {metaByLeague.get(r.league)?.name ?? String(r.league)} ·{" "}
                           {new Date(r.startsAt).toLocaleString("de-DE", {
                             timeZone: "Europe/Berlin",
                             weekday: "short",

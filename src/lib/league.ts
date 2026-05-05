@@ -1,24 +1,128 @@
 import { League } from "@prisma/client";
+import { prisma } from "@/lib/db";
 
-export const leagueMeta: Record<
-  League,
-  { label: string; slug: string; accent: string }
-> = {
-  ONE: { label: "MRL One", slug: "mrl-one", accent: "border-mrl-red/40" },
-  TWO: { label: "MRL Two", slug: "mrl-two", accent: "border-white/20" },
-  ROOKIE: { label: "MRL Rookie", slug: "mrl-rookie", accent: "border-white/20" }
+export type LeagueConfigInfo = {
+  league: League;
+  adminSlug: string;
+  publicSlug: string;
+  name: string;
+  accentColor: string;
+  isActive: boolean;
+  sortOrder: number;
 };
 
-export function leagueFromAdminSlug(slug: string): League | null {
-  if (slug === "one") return League.ONE;
-  if (slug === "two") return League.TWO;
-  if (slug === "rookie") return League.ROOKIE;
-  return null;
+const fallbackLeagues: LeagueConfigInfo[] = [
+  {
+    league: League.ONE,
+    adminSlug: "one",
+    publicSlug: "mrl-one",
+    name: "MRL One",
+    accentColor: "#E10600",
+    isActive: true,
+    sortOrder: 0
+  },
+  {
+    league: League.TWO,
+    adminSlug: "two",
+    publicSlug: "mrl-two",
+    name: "MRL Two",
+    accentColor: "#22C55E",
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    league: League.ROOKIE,
+    adminSlug: "rookie",
+    publicSlug: "mrl-rookie",
+    name: "MRL Rookie",
+    accentColor: "#38BDF8",
+    isActive: true,
+    sortOrder: 2
+  }
+];
+
+const fallbackByPublicSlug: Record<string, LeagueConfigInfo> = Object.fromEntries(
+  fallbackLeagues.map((l) => [l.publicSlug, l])
+);
+const fallbackByAdminSlug: Record<string, LeagueConfigInfo> = Object.fromEntries(
+  fallbackLeagues.map((l) => [l.adminSlug, l])
+);
+
+export async function resolveLeagueByPublicSlug(
+  publicSlug: string
+): Promise<LeagueConfigInfo | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({
+      where: { publicSlug },
+      select: {
+        league: true,
+        adminSlug: true,
+        publicSlug: true,
+        name: true,
+        accentColor: true,
+        isActive: true,
+        sortOrder: true
+      }
+    })
+    .catch(() => null);
+  return row ?? fallbackByPublicSlug[publicSlug] ?? null;
 }
 
-export function leagueFromPublicSlug(slug: string): League | null {
-  if (slug === "mrl-one") return League.ONE;
-  if (slug === "mrl-two") return League.TWO;
-  if (slug === "mrl-rookie") return League.ROOKIE;
-  return null;
+export async function resolveLeagueByAdminSlug(
+  adminSlug: string
+): Promise<LeagueConfigInfo | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({
+      where: { adminSlug },
+      select: {
+        league: true,
+        adminSlug: true,
+        publicSlug: true,
+        name: true,
+        accentColor: true,
+        isActive: true,
+        sortOrder: true
+      }
+    })
+    .catch(() => null);
+  return row ?? fallbackByAdminSlug[adminSlug] ?? null;
+}
+
+export async function listPublicLeagues(): Promise<LeagueConfigInfo[]> {
+  const rows = await prisma.leagueConfig
+    .findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        league: true,
+        adminSlug: true,
+        publicSlug: true,
+        name: true,
+        accentColor: true,
+        isActive: true,
+        sortOrder: true
+      }
+    })
+    .catch(() => []);
+
+  return rows.length ? rows : fallbackLeagues;
+}
+
+export async function listAdminLeagues(): Promise<LeagueConfigInfo[]> {
+  const rows = await prisma.leagueConfig
+    .findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        league: true,
+        adminSlug: true,
+        publicSlug: true,
+        name: true,
+        accentColor: true,
+        isActive: true,
+        sortOrder: true
+      }
+    })
+    .catch(() => []);
+
+  return rows.length ? rows : fallbackLeagues;
 }

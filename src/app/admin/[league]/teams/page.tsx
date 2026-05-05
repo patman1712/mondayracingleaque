@@ -1,6 +1,6 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
-import { League, Prisma, SeasonPlacement } from "@prisma/client";
+import { Prisma, SeasonPlacement } from "@prisma/client";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { requireAdmin } from "@/lib/requireAdmin";
 import fs from "node:fs";
@@ -8,27 +8,10 @@ import path from "node:path";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
-
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
-};
 
 function ensureDir(p: string) {
   try {
@@ -80,17 +63,17 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-async function revalidatePublicTeamsForLeague(league: League, teamId?: string) {
-  const slug = publicSlug[league];
-  revalidatePath(`/${slug}/teams`);
-  if (teamId) revalidatePath(`/${slug}/teams/${teamId}`);
+async function revalidatePublicTeamsForLeague(publicSlug: string, teamId?: string) {
+  revalidatePath(`/${publicSlug}/teams`);
+  if (teamId) revalidatePath(`/${publicSlug}/teams/${teamId}`);
 }
 
 async function addParticipation(formData: FormData) {
   "use server";
   const leagueSlug = String(formData.get("league") ?? "");
-  const league = leagueEnum[leagueSlug];
-  if (!league) redirect("/admin?error=invalid");
+  const cfg = await resolveLeagueByAdminSlug(leagueSlug);
+  if (!cfg) redirect("/admin?error=invalid");
+  const league = cfg.league;
 
   const seasonId = String(formData.get("seasonId") ?? "");
   const teamId = String(formData.get("teamId") ?? "");
@@ -146,15 +129,16 @@ async function addParticipation(formData: FormData) {
   }
 
   revalidatePath(`/admin/${leagueSlug}/teams`);
-  await revalidatePublicTeamsForLeague(league, teamId);
+  await revalidatePublicTeamsForLeague(cfg.publicSlug, teamId);
   redirect(`/admin/${leagueSlug}/teams?ok=1&seasonId=${encodeURIComponent(seasonId)}`);
 }
 
 async function updateParticipation(formData: FormData) {
   "use server";
   const leagueSlug = String(formData.get("league") ?? "");
-  const league = leagueEnum[leagueSlug];
-  if (!league) redirect("/admin?error=invalid");
+  const cfg = await resolveLeagueByAdminSlug(leagueSlug);
+  if (!cfg) redirect("/admin?error=invalid");
+  const league = cfg.league;
 
   const id = String(formData.get("id") ?? "");
   const color = String(formData.get("color") ?? "").trim();
@@ -222,15 +206,16 @@ async function updateParticipation(formData: FormData) {
   if (newHeroBackgroundPath && current.heroBackgroundPath) deleteUpload(current.heroBackgroundPath);
 
   revalidatePath(`/admin/${leagueSlug}/teams`);
-  await revalidatePublicTeamsForLeague(league, current.teamId);
+  await revalidatePublicTeamsForLeague(cfg.publicSlug, current.teamId);
   redirect(`/admin/${leagueSlug}/teams?ok=1&seasonId=${encodeURIComponent(seasonId || current.seasonId)}`);
 }
 
 async function deleteParticipation(formData: FormData) {
   "use server";
   const leagueSlug = String(formData.get("league") ?? "");
-  const league = leagueEnum[leagueSlug];
-  if (!league) redirect("/admin?error=invalid");
+  const cfg = await resolveLeagueByAdminSlug(leagueSlug);
+  if (!cfg) redirect("/admin?error=invalid");
+  const league = cfg.league;
 
   const id = String(formData.get("id") ?? "");
   const seasonId = String(formData.get("seasonId") ?? "");
@@ -257,7 +242,7 @@ async function deleteParticipation(formData: FormData) {
   deleteUpload(current.heroBackgroundPath);
 
   revalidatePath(`/admin/${leagueSlug}/teams`);
-  await revalidatePublicTeamsForLeague(league, current.teamId);
+  await revalidatePublicTeamsForLeague(cfg.publicSlug, current.teamId);
   redirect(`/admin/${leagueSlug}/teams?ok=1&seasonId=${encodeURIComponent(seasonId || current.seasonId)}`);
 }
 
@@ -271,8 +256,9 @@ export default async function AdminLeagueTeamsPage({
   await requireAdmin();
 
   const { league: leagueSlug } = await params;
-  const l = leagueEnum[leagueSlug];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(leagueSlug);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   const sp = await searchParams;
   const ok = sp.ok === "1";
@@ -341,7 +327,7 @@ export default async function AdminLeagueTeamsPage({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold">Teams · {leagueLabel[l]}</div>
+            <div className="text-lg font-semibold">Teams · {cfg.name}</div>
             <div className="text-sm text-white/60">
               Teams einmal unter Allgemein anlegen, dann hier pro Saison der Liga konfigurieren.
             </div>

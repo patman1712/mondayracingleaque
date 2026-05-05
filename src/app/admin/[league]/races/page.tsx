@@ -6,16 +6,11 @@ import { AdminShell } from "@/components/AdminShell";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 import fs from "node:fs";
 import path from "node:path";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
 
 function ensureDir(p: string) {
   try {
@@ -136,12 +131,6 @@ function buildRaceName(input: {
   const base = input.circuit ? input.circuit : `Runde ${input.round}`;
   return input.seasonIsTest ? `TEST · ${base}` : base;
 }
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 async function createRace(
   adminLeague: string,
@@ -298,12 +287,12 @@ async function createRace(
     redirect(`${basePath}?${returnQuery.toString()}`);
   }
 
+  const slugRow = await prisma.leagueConfig
+    .findUnique({ where: { league }, select: { publicSlug: true } })
+    .catch(() => null);
   const publicSlug =
-    league === League.ONE
-      ? "mrl-one"
-      : league === League.TWO
-        ? "mrl-two"
-        : "mrl-rookie";
+    slugRow?.publicSlug ??
+    (league === League.ONE ? "mrl-one" : league === League.TWO ? "mrl-two" : "mrl-rookie");
 
   revalidatePath(`/admin/${adminLeague}/races`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -357,15 +346,23 @@ async function deleteRace(formData: FormData) {
   }
 
   revalidatePath("/admin");
-  revalidatePath("/admin/one/races");
-  revalidatePath("/admin/two/races");
-  revalidatePath("/admin/rookie/races");
-  revalidatePath("/admin/one/results");
-  revalidatePath("/admin/two/results");
-  revalidatePath("/admin/rookie/results");
-  revalidatePath("/mrl-one/calendar");
-  revalidatePath("/mrl-two/calendar");
-  revalidatePath("/mrl-rookie/calendar");
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { adminSlug: true, publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [
+          { adminSlug: "one", publicSlug: "mrl-one" },
+          { adminSlug: "two", publicSlug: "mrl-two" },
+          { adminSlug: "rookie", publicSlug: "mrl-rookie" }
+        ];
+  for (const l of list) {
+    revalidatePath(`/admin/${l.adminSlug}/races`);
+    revalidatePath(`/admin/${l.adminSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/calendar`);
+  }
   revalidatePath("/calendar");
   revalidatePath("/");
 }
@@ -407,8 +404,9 @@ export default async function AdminRacesPage({
   };
 
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   type SeasonItem = {
     year: number;
@@ -488,9 +486,7 @@ export default async function AdminRacesPage({
     <AdminShell>
       <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">
-          Rennkalender · {leagueLabel[l]}
-        </div>
+        <div className="text-base font-semibold">Rennkalender · {cfg.name}</div>
         {ok ? (
           <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
             Gespeichert.

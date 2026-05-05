@@ -61,11 +61,16 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
-};
+async function publicSlugForLeague(league: League): Promise<string | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({ where: { league }, select: { publicSlug: true } })
+    .catch(() => null);
+  if (row?.publicSlug) return row.publicSlug;
+  if (league === League.ONE) return "mrl-one";
+  if (league === League.TWO) return "mrl-two";
+  if (league === League.ROOKIE) return "mrl-rookie";
+  return null;
+}
 
 async function createTeam(formData: FormData) {
   "use server";
@@ -111,7 +116,8 @@ async function revalidatePublicTeam(teamId: string) {
     .catch(() => []);
   const leagues = Array.from(new Set(rows.map((r) => r.season.league)));
   for (const l of leagues) {
-    const slug = publicSlug[l];
+    const slug = await publicSlugForLeague(l);
+    if (!slug) continue;
     revalidatePath(`/${slug}/teams`);
     revalidatePath(`/${slug}/teams/${teamId}`);
   }

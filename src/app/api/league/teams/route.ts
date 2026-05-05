@@ -1,13 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getActiveSeason } from "@/lib/currentSeason";
-import { League, Prisma } from "@prisma/client";
-
-function leagueFromSlug(slug: string): League | null {
-  if (slug === "mrl-one") return League.ONE;
-  if (slug === "mrl-two") return League.TWO;
-  if (slug === "mrl-rookie") return League.ROOKIE;
-  return null;
-}
+import { Prisma } from "@prisma/client";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
@@ -21,8 +15,10 @@ function isReserveTeamName(name: string) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("league") ?? "";
-  const league = leagueFromSlug(slug);
-  if (!league) return new Response("Bad league", { status: 400 });
+  const cfg = await resolveLeagueByPublicSlug(slug);
+  if (!cfg) return new Response("Bad league", { status: 400 });
+  if (!cfg.isActive) return new Response("Inactive league", { status: 404 });
+  const league = cfg.league;
 
   const currentSeason = await getActiveSeason({
     league,

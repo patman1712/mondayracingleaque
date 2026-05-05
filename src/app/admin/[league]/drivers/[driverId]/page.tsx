@@ -6,23 +6,23 @@ import { DriverRole, League, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 import fs from "node:fs";
 import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
-
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
-};
+async function publicSlugForLeague(league: League): Promise<string | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({ where: { league }, select: { publicSlug: true } })
+    .catch(() => null);
+  if (row?.publicSlug) return row.publicSlug;
+  if (league === League.ONE) return "mrl-one";
+  if (league === League.TWO) return "mrl-two";
+  if (league === League.ROOKIE) return "mrl-rookie";
+  return null;
+}
 
 function ensureDir(p: string) {
   try {
@@ -131,11 +131,13 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
 
   if (newPortraitPath && current.portraitPath) deleteUpload(current.portraitPath);
 
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers`);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+  }
 
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
@@ -166,9 +168,9 @@ async function updateTotals(adminLeague: string, league: League, driverId: strin
     })
     .catch(() => null);
 
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) revalidatePath(`/${pub}/drivers/${driverId}`);
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -200,10 +202,12 @@ async function activateSeason(adminLeague: string, league: League, driverId: str
     })
     .catch(() => null);
 
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+  }
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -215,10 +219,12 @@ async function deactivateSeason(adminLeague: string, league: League, driverId: s
 
   await prisma.driverSeason.deleteMany({ where: { driverId, seasonId } }).catch(() => null);
 
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+  }
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -279,10 +285,12 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
     })
     .catch(() => null);
 
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+  }
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -295,9 +303,9 @@ async function removePortrait(adminLeague: string, league: League, driverId: str
   if (!current) notFound();
   await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: null } }).catch(() => null);
   if (current.portraitPath) deleteUpload(current.portraitPath);
-  const pub = publicSlug[league];
+  const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  revalidatePath(`/${pub}/drivers/${driverId}`);
+  if (pub) revalidatePath(`/${pub}/drivers/${driverId}`);
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -311,8 +319,9 @@ export default async function AdminDriverDetailPage({
   await requireAdmin();
 
   const { league: adminLeague, driverId } = await params;
-  const l = leagueEnum[adminLeague];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(adminLeague);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   const sp = await searchParams;
   const ok = sp.ok === "1";

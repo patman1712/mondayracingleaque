@@ -1,23 +1,11 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
-import { League } from "@prisma/client";
 import Link from "next/link";
 import { TwitchEmbed } from "@/components/TwitchEmbed";
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  "mrl-one": League.ONE,
-  "mrl-two": League.TWO,
-  "mrl-rookie": League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
@@ -41,8 +29,9 @@ export default async function RaceDetailPage({
   params: Promise<{ league: string; raceId: string }>;
 }) {
   const { league, raceId } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByPublicSlug(league);
+  if (!cfg || !cfg.isActive) notFound();
+  const l = cfg.league;
 
   const race = await prisma.race
     .findUnique({
@@ -113,7 +102,7 @@ export default async function RaceDetailPage({
                 {race.name}
               </div>
               <div className="mt-2 text-sm text-white/70">
-                {leagueLabel[l]}
+                {cfg.name}
                 {subLine ? ` · ${subLine}` : ""}
               </div>
             </div>

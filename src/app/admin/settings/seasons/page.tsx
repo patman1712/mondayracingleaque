@@ -6,11 +6,43 @@ import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
+type LeagueMeta = {
+  league: League;
+  adminSlug: string;
+  publicSlug: string;
+  name: string;
 };
+
+const fallbackLeagues: LeagueMeta[] = [
+  { league: League.ONE, adminSlug: "one", publicSlug: "mrl-one", name: "MRL One" },
+  { league: League.TWO, adminSlug: "two", publicSlug: "mrl-two", name: "MRL Two" },
+  { league: League.ROOKIE, adminSlug: "rookie", publicSlug: "mrl-rookie", name: "MRL Rookie" }
+];
+
+function isLeagueValue(input: string): input is League {
+  return (Object.values(League) as string[]).includes(input);
+}
+
+async function listLeagueMeta(): Promise<LeagueMeta[]> {
+  const rows = await prisma.leagueConfig
+    .findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { league: true, adminSlug: true, publicSlug: true, name: true }
+    })
+    .catch(() => []);
+  return rows.length ? rows : fallbackLeagues;
+}
+
+async function metaForLeague(league: League): Promise<LeagueMeta | null> {
+  const row = await prisma.leagueConfig
+    .findUnique({
+      where: { league },
+      select: { league: true, adminSlug: true, publicSlug: true, name: true }
+    })
+    .catch(() => null);
+  if (row) return row;
+  return fallbackLeagues.find((l) => l.league === league) ?? null;
+}
 
 function activeKey(league: League) {
   return `activeSeasonId:${league}`;
@@ -26,8 +58,7 @@ async function createSeason(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
   const year = Number.parseInt(yearRaw, 10);
   const seasonNo = Number.parseInt(seasonNoRaw, 10);
-  const league =
-    leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
+  const league = isLeagueValue(leagueRaw) ? leagueRaw : null;
   const placement = placementRaw === "ARCHIVE" ? "ARCHIVE" : "CALENDAR";
   if (!Number.isFinite(year) || !Number.isFinite(seasonNo) || !league) {
     redirect("/admin/settings/seasons?error=invalid");
@@ -41,12 +72,11 @@ async function createSeason(formData: FormData) {
     redirect("/admin/settings/seasons?error=duplicate");
   }
 
-  revalidatePath("/mrl-one/calendar");
-  revalidatePath("/mrl-two/calendar");
-  revalidatePath("/mrl-rookie/calendar");
-  revalidatePath("/mrl-one/archive");
-  revalidatePath("/mrl-two/archive");
-  revalidatePath("/mrl-rookie/archive");
+  const leagues = await listLeagueMeta();
+  for (const l of leagues) {
+    revalidatePath(`/${l.publicSlug}/calendar`);
+    revalidatePath(`/${l.publicSlug}/archive`);
+  }
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -54,8 +84,7 @@ async function setActiveSeason(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
   const leagueRaw = String(formData.get("league") ?? "");
-  const league =
-    leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
+  const league = isLeagueValue(leagueRaw) ? leagueRaw : null;
   if (!id || !league) redirect("/admin/settings/seasons?error=invalid");
 
   const season = await prisma.season
@@ -70,10 +99,13 @@ async function setActiveSeason(formData: FormData) {
     update: { value: season.id }
   });
 
-  revalidatePath(`/${publicSlug[league]}/calendar`);
-  revalidatePath(`/${publicSlug[league]}/archive`);
-  revalidatePath(`/${publicSlug[league]}/teams`);
-  revalidatePath(`/${publicSlug[league]}/drivers`);
+  const meta = await metaForLeague(league);
+  if (meta) {
+    revalidatePath(`/${meta.publicSlug}/calendar`);
+    revalidatePath(`/${meta.publicSlug}/archive`);
+    revalidatePath(`/${meta.publicSlug}/teams`);
+    revalidatePath(`/${meta.publicSlug}/drivers`);
+  }
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -89,12 +121,11 @@ async function deleteSeason(formData: FormData) {
     }
   }
   await prisma.season.delete({ where: { id } }).catch(() => null);
-  revalidatePath("/mrl-one/calendar");
-  revalidatePath("/mrl-two/calendar");
-  revalidatePath("/mrl-rookie/calendar");
-  revalidatePath("/mrl-one/archive");
-  revalidatePath("/mrl-two/archive");
-  revalidatePath("/mrl-rookie/archive");
+  const leagues = await listLeagueMeta();
+  for (const l of leagues) {
+    revalidatePath(`/${l.publicSlug}/calendar`);
+    revalidatePath(`/${l.publicSlug}/archive`);
+  }
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -119,12 +150,11 @@ async function duplicateSeasonVariant(formData: FormData) {
         placement: current.placement
       }
     });
-    revalidatePath("/mrl-one/calendar");
-    revalidatePath("/mrl-two/calendar");
-    revalidatePath("/mrl-rookie/calendar");
-    revalidatePath("/mrl-one/archive");
-    revalidatePath("/mrl-two/archive");
-    revalidatePath("/mrl-rookie/archive");
+    const leagues = await listLeagueMeta();
+    for (const l of leagues) {
+      revalidatePath(`/${l.publicSlug}/calendar`);
+      revalidatePath(`/${l.publicSlug}/archive`);
+    }
     redirect("/admin/settings/seasons?ok=1");
   } catch {
     redirect("/admin/settings/seasons?error=duplicate");
@@ -140,12 +170,11 @@ async function setPlacement(formData: FormData) {
     redirect("/admin/settings/seasons?error=invalid");
   }
   await prisma.season.update({ where: { id }, data: { placement } }).catch(() => null);
-  revalidatePath("/mrl-one/calendar");
-  revalidatePath("/mrl-two/calendar");
-  revalidatePath("/mrl-rookie/calendar");
-  revalidatePath("/mrl-one/archive");
-  revalidatePath("/mrl-two/archive");
-  revalidatePath("/mrl-rookie/archive");
+  const leagues = await listLeagueMeta();
+  for (const l of leagues) {
+    revalidatePath(`/${l.publicSlug}/calendar`);
+    revalidatePath(`/${l.publicSlug}/archive`);
+  }
   redirect("/admin/settings/seasons?ok=1");
 }
 
@@ -158,6 +187,9 @@ export default async function AdminSeasonsPage({
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
 
+  const leagues = await listLeagueMeta();
+  const labelByLeague = new Map(leagues.map((l) => [l.league, l.name] as const));
+
   const seasons = await prisma.season
     .findMany({
       orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { league: "asc" }],
@@ -165,18 +197,18 @@ export default async function AdminSeasonsPage({
     })
     .catch(() => []);
 
+  const keyToLeague = new Map(leagues.map((l) => [activeKey(l.league), l.league] as const));
   const activeConfig = await prisma.appConfig
     .findMany({
-      where: { key: { in: [activeKey(League.ONE), activeKey(League.TWO), activeKey(League.ROOKIE)] } },
+      where: { key: { in: Array.from(keyToLeague.keys()) } },
       select: { key: true, value: true }
     })
     .catch(() => []);
 
   const activeByLeague: Partial<Record<League, string>> = {};
   for (const row of activeConfig) {
-    if (row.key === activeKey(League.ONE)) activeByLeague[League.ONE] = row.value;
-    if (row.key === activeKey(League.TWO)) activeByLeague[League.TWO] = row.value;
-    if (row.key === activeKey(League.ROOKIE)) activeByLeague[League.ROOKIE] = row.value;
+    const lg = keyToLeague.get(row.key);
+    if (lg) activeByLeague[lg] = row.value;
   }
 
   const key = (s: { league: League; year: number; seasonNo: number }) =>
@@ -188,12 +220,6 @@ export default async function AdminSeasonsPage({
     if (s.isTest) hasTest.add(k);
     else hasNormal.add(k);
   }
-
-  const leagueLabel: Record<League, string> = {
-    [League.ONE]: "MRL One",
-    [League.TWO]: "MRL Two",
-    [League.ROOKIE]: "MRL Rookie"
-  };
 
   return (
     <AdminShell>
@@ -224,15 +250,17 @@ export default async function AdminSeasonsPage({
               <label className="mb-1 block text-xs font-semibold text-white/70">
                 Liga
               </label>
-              <select
-                name="league"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                defaultValue={League.ONE}
-              >
-                <option value={League.ONE}>MRL One</option>
-                <option value={League.TWO}>MRL Two</option>
-                <option value={League.ROOKIE}>MRL Rookie</option>
-              </select>
+            <select
+              name="league"
+              defaultValue={leagues[0]?.league ?? League.ONE}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            >
+              {leagues.map((l) => (
+                <option key={l.league} value={l.league}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-white/70">
@@ -316,7 +344,7 @@ export default async function AdminSeasonsPage({
                 >
                   <div className="min-w-0">
                     <div className="truncate font-semibold">
-                      {s.year} · Season {s.seasonNo} · {leagueLabel[s.league]}
+                      {s.year} · Season {s.seasonNo} · {labelByLeague.get(s.league) ?? String(s.league)}
                     </div>
                     {s.label ? (
                       <div className="mt-1 text-sm text-white/60">{s.label}</div>

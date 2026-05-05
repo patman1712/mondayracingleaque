@@ -3,23 +3,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { getActiveSeason } from "@/lib/currentSeason";
-import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import Link from "next/link";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-
-const leagueEnum: Record<string, League> = {
-  one: League.ONE,
-  two: League.TWO,
-  rookie: League.ROOKIE
-};
-
-const leagueLabel: Record<League, string> = {
-  [League.ONE]: "MRL One",
-  [League.TWO]: "MRL Two",
-  [League.ROOKIE]: "MRL Rookie"
-};
 
 async function deleteDriver(formData: FormData) {
   "use server";
@@ -27,12 +16,22 @@ async function deleteDriver(formData: FormData) {
   if (!id) return;
   await prisma.driver.delete({ where: { id } });
   revalidatePath("/admin");
-  revalidatePath("/admin/one/drivers");
-  revalidatePath("/admin/two/drivers");
-  revalidatePath("/admin/rookie/drivers");
-  revalidatePath("/mrl-one/drivers");
-  revalidatePath("/mrl-two/drivers");
-  revalidatePath("/mrl-rookie/drivers");
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { adminSlug: true, publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [
+          { adminSlug: "one", publicSlug: "mrl-one" },
+          { adminSlug: "two", publicSlug: "mrl-two" },
+          { adminSlug: "rookie", publicSlug: "mrl-rookie" }
+        ];
+  for (const l of list) {
+    revalidatePath(`/admin/${l.adminSlug}/drivers`);
+    revalidatePath(`/${l.publicSlug}/drivers`);
+  }
 }
 
 export default async function AdminDriversPage({
@@ -43,8 +42,9 @@ export default async function AdminDriversPage({
   await requireAdmin();
 
   const { league } = await params;
-  const l = leagueEnum[league];
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   type DriverItem = {
     id: string;
@@ -59,56 +59,46 @@ export default async function AdminDriversPage({
 
   let drivers: DriverItem[] = [];
   try {
+    const select = {
+      role: true,
+      teamRef: { select: { name: true } },
+      driver: {
+        select: {
+          id: true,
+          name: true,
+          gamertag: true,
+          number: true,
+          country: true,
+          portraitPath: true
+        }
+      }
+    } satisfies Prisma.DriverSeasonSelect;
+    type Row = Prisma.DriverSeasonGetPayload<{ select: typeof select }>;
+
     const activeSeason = await getActiveSeason({
       league: l,
       select: { id: true }
     }).catch(() => null);
 
-    const rows = activeSeason
+    const rows: Row[] = activeSeason
       ? await prisma.driverSeason
           .findMany({
             where: { seasonId: activeSeason.id },
             distinct: ["driverId"],
             orderBy: [{ role: "asc" }, { driver: { name: "asc" } }],
-            select: {
-              role: true,
-              teamRef: { select: { name: true } },
-              driver: {
-                select: {
-                  id: true,
-                  name: true,
-                  gamertag: true,
-                  number: true,
-                  country: true,
-                  portraitPath: true
-                }
-              }
-            },
+            select,
             take: 2000
           })
-          .catch(() => [])
+          .catch((): Row[] => [])
       : await prisma.driverSeason
           .findMany({
             where: { season: { league: l } },
             distinct: ["driverId"],
             orderBy: [{ driver: { name: "asc" } }],
-            select: {
-              role: true,
-              teamRef: { select: { name: true } },
-              driver: {
-                select: {
-                  id: true,
-                  name: true,
-                  gamertag: true,
-                  number: true,
-                  country: true,
-                  portraitPath: true
-                }
-              }
-            },
+            select,
             take: 2000
           })
-          .catch(() => []);
+          .catch((): Row[] => []);
 
     drivers = rows.map((r) => ({
       id: r.driver.id,
@@ -126,7 +116,7 @@ export default async function AdminDriversPage({
     <AdminShell>
       <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">Fahrer · {leagueLabel[l]}</div>
+        <div className="text-base font-semibold">Fahrer · {cfg.name}</div>
         <div className="mt-4 space-y-2">
           {drivers.length === 0 ? (
             <div className="text-sm text-white/60">Noch keine Fahrer.</div>

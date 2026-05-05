@@ -2,14 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/AdminShell";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
-
-const leagueLabel: Record<string, string> = {
-  one: "MRL One",
-  two: "MRL Two",
-  rookie: "MRL Rookie"
-};
 
 export default async function AdminLeagueHomePage({
   params
@@ -19,8 +14,9 @@ export default async function AdminLeagueHomePage({
   await requireAdmin();
 
   const { league } = await params;
-  const label = leagueLabel[league];
-  if (!label) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const label = cfg.name;
 
   const items = [
     { href: `/admin/${league}/drivers`, label: "Fahrer" },

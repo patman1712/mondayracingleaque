@@ -1,13 +1,6 @@
 import { prisma } from "@/lib/db";
-import { getLeagueColors, leagueLabel, type LeagueKey } from "@/lib/leagueColors";
 import { Prisma } from "@prisma/client";
-
-function leagueFromSlug(slug: string): LeagueKey | null {
-  if (slug === "mrl-one") return "ONE";
-  if (slug === "mrl-two") return "TWO";
-  if (slug === "mrl-rookie") return "ROOKIE";
-  return null;
-}
+import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 function formatDateRange(d: Date) {
   return d.toLocaleDateString("de-DE", {
@@ -25,13 +18,12 @@ function imageUrl(imagePath: string | null | undefined) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("league") ?? "";
-  const league = leagueFromSlug(slug);
-  if (!league) return new Response("Bad league", { status: 400 });
-  const leagueKey = league;
+  const cfg = await resolveLeagueByPublicSlug(slug);
+  if (!cfg) return new Response("Bad league", { status: 400 });
+  if (!cfg.isActive) return new Response("Inactive league", { status: 404 });
+  const league = cfg.league;
 
   const now = new Date();
-
-  const colors = await getLeagueColors();
 
   const select = {
     id: true,
@@ -48,7 +40,7 @@ export async function GET(req: Request) {
   async function findPreferred(where: Prisma.RaceWhereInput, orderBy: Prisma.RaceOrderByWithRelationInput) {
     const normal = await prisma.race
       .findFirst({
-        where: { ...where, league: leagueKey, seasonIsTest: false },
+        where: { ...where, league, seasonIsTest: false },
         orderBy,
         select
       })
@@ -56,7 +48,7 @@ export async function GET(req: Request) {
     if (normal) return normal;
     return prisma.race
       .findFirst({
-        where: { ...where, league: leagueKey },
+        where: { ...where, league },
         orderBy,
         select
       })
@@ -75,9 +67,9 @@ export async function GET(req: Request) {
       : null;
 
   const payload = {
-    league: leagueKey,
-    leagueLabel: leagueLabel(leagueKey),
-    accent: colors[leagueKey],
+    league: cfg.league,
+    leagueLabel: cfg.name,
+    accent: cfg.accentColor,
     previous: previous
       ? {
           id: previous.id,

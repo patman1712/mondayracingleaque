@@ -1,36 +1,45 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
-import { leagueFromAdminSlug } from "@/lib/league";
 import { League } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import { resolveLeagueByAdminSlug } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
 
-const publicSlug: Record<League, string> = {
-  [League.ONE]: "mrl-one",
-  [League.TWO]: "mrl-two",
-  [League.ROOKIE]: "mrl-rookie"
-};
-
 function activeKey(league: League) {
   return `activeSeasonId:${league}`;
+}
+
+function isLeagueValue(input: string): input is League {
+  return (Object.values(League) as string[]).includes(input);
+}
+
+function fallbackSlugsFor(league: League) {
+  if (league === League.ONE) return { adminSlug: "one", publicSlug: "mrl-one" };
+  if (league === League.TWO) return { adminSlug: "two", publicSlug: "mrl-two" };
+  return { adminSlug: "rookie", publicSlug: "mrl-rookie" };
 }
 
 async function setActiveSeason(formData: FormData) {
   "use server";
   const leagueRaw = String(formData.get("league") ?? "");
   const seasonId = String(formData.get("seasonId") ?? "");
-  const league = leagueRaw === "ONE" ? League.ONE : leagueRaw === "TWO" ? League.TWO : leagueRaw === "ROOKIE" ? League.ROOKIE : null;
-  if (!league) redirect("/admin?error=invalid");
+  if (!isLeagueValue(leagueRaw)) redirect("/admin?error=invalid");
+  const league = leagueRaw;
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findUnique({ where: { league }, select: { adminSlug: true, publicSlug: true } })
+      .catch(() => null)) ?? fallbackSlugsFor(league);
 
   if (!seasonId) {
     await prisma.appConfig.delete({ where: { key: activeKey(league) } }).catch(() => null);
-    revalidatePath(`/${publicSlug[league]}/calendar`);
-    revalidatePath(`/${publicSlug[league]}/archive`);
-    revalidatePath(`/${publicSlug[league]}/teams`);
-    revalidatePath(`/${publicSlug[league]}/drivers`);
-    redirect(`/admin/${league === League.ONE ? "one" : league === League.TWO ? "two" : "rookie"}/settings?ok=1`);
+    revalidatePath(`/${slugs.publicSlug}/calendar`);
+    revalidatePath(`/${slugs.publicSlug}/archive`);
+    revalidatePath(`/${slugs.publicSlug}/teams`);
+    revalidatePath(`/${slugs.publicSlug}/drivers`);
+    redirect(`/admin/${slugs.adminSlug}/settings?ok=1`);
   }
 
   const season = await prisma.season
@@ -39,8 +48,8 @@ async function setActiveSeason(formData: FormData) {
       select: { id: true, league: true, placement: true }
     })
     .catch(() => null);
-  if (!season || season.league !== league) redirect(`/admin/${league === League.ONE ? "one" : league === League.TWO ? "two" : "rookie"}/settings?error=invalid`);
-  if (season.placement !== "CALENDAR") redirect(`/admin/${league === League.ONE ? "one" : league === League.TWO ? "two" : "rookie"}/settings?error=not_calendar`);
+  if (!season || season.league !== league) redirect(`/admin/${slugs.adminSlug}/settings?error=invalid`);
+  if (season.placement !== "CALENDAR") redirect(`/admin/${slugs.adminSlug}/settings?error=not_calendar`);
 
   await prisma.appConfig.upsert({
     where: { key: activeKey(league) },
@@ -48,11 +57,11 @@ async function setActiveSeason(formData: FormData) {
     update: { value: season.id }
   });
 
-  revalidatePath(`/${publicSlug[league]}/calendar`);
-  revalidatePath(`/${publicSlug[league]}/archive`);
-  revalidatePath(`/${publicSlug[league]}/teams`);
-  revalidatePath(`/${publicSlug[league]}/drivers`);
-  redirect(`/admin/${league === League.ONE ? "one" : league === League.TWO ? "two" : "rookie"}/settings?ok=1`);
+  revalidatePath(`/${slugs.publicSlug}/calendar`);
+  revalidatePath(`/${slugs.publicSlug}/archive`);
+  revalidatePath(`/${slugs.publicSlug}/teams`);
+  revalidatePath(`/${slugs.publicSlug}/drivers`);
+  redirect(`/admin/${slugs.adminSlug}/settings?ok=1`);
 }
 
 export default async function AdminLeagueSettingsPage({
@@ -67,8 +76,9 @@ export default async function AdminLeagueSettingsPage({
   const ok = sp.ok === "1";
   const error = sp.error ?? null;
 
-  const l = leagueFromAdminSlug(league);
-  if (!l) notFound();
+  const cfg = await resolveLeagueByAdminSlug(league);
+  if (!cfg) notFound();
+  const l = cfg.league;
 
   const seasons = await prisma.season
     .findMany({
@@ -135,4 +145,3 @@ export default async function AdminLeagueSettingsPage({
     </AdminShell>
   );
 }
-
