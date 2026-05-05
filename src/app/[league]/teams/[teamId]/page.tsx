@@ -122,12 +122,6 @@ export default async function TeamDetailPage({
     drivers[1] ?? null
   ];
 
-  const heroNames = driverTiles
-    .filter(Boolean)
-    .map((d) => (d ? d.name : ""))
-    .filter(Boolean)
-    .slice(0, 2);
-
   return (
     <>
       <div className="relative left-1/2 right-1/2 -mx-[50vw] mt-6 w-screen overflow-hidden">
@@ -231,11 +225,6 @@ export default async function TeamDetailPage({
                     </div>
                   </div>
 
-                  {heroNames.length ? (
-                    <div className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70 sm:text-xs">
-                      {heroNames.join(" · ")}
-                    </div>
-                  ) : null}
                   {seasonLabel ? (
                     <div className="mt-2 flex items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wider text-white/80 drop-shadow-[0_8px_20px_rgba(0,0,0,0.8)] sm:text-sm">
                       <span
