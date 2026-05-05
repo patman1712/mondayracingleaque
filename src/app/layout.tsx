@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Teko } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+
+const racing = Teko({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-racing",
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: {
@@ -19,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className="min-h-dvh">
+      <body className={`${racing.variable} min-h-dvh`}>
         <Header />
         <main className="min-h-[60dvh]">{children}</main>
         <Footer />

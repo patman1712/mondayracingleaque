@@ -23,6 +23,15 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 function hexToRgba(hex: string, a: number) {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return `rgba(255,255,255,${a})`;
@@ -189,15 +198,19 @@ export default async function LeagueDriversPage({
               <div className="relative p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-lg font-extrabold uppercase tracking-wide text-white">
+                    <div className="truncate font-racing text-xl font-bold uppercase tracking-[0.14em] text-white sm:text-2xl">
                       {d.name}
                     </div>
-                    <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-white/70">
-                      {d.gamertag ? d.gamertag : d.team ? d.team : "Fahrer"}
-                      {d.country ? ` · ${d.country}` : ""}
+                    <div className="mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/75">
+                      {d.gamertag ? <span className="truncate">{d.gamertag}</span> : <span className="truncate">Fahrer</span>}
+                      {countryToFlagEmoji(d.country) ? (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[14px]">
+                          {countryToFlagEmoji(d.country)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="text-2xl font-extrabold text-white/85">
+                  <div className="font-racing text-4xl font-bold leading-none tracking-[0.08em] text-white/90">
                     {d.number ?? "—"}
                   </div>
                 </div>

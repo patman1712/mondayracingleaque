@@ -50,6 +50,15 @@ function splitDriverName(name: string) {
   return { first: parts.slice(0, -1).join(" "), last: parts.slice(-1).join("") };
 }
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 export default async function TeamDetailPage({
   params
 }: {
@@ -113,7 +122,7 @@ export default async function TeamDetailPage({
         ? { league: l, teamId: team.id, seasons: { some: { seasonId: currentSeason.id } } }
         : { league: l, teamId: team.id },
       orderBy: [{ number: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, number: true, country: true, portraitPath: true }
+      select: { id: true, name: true, gamertag: true, number: true, country: true, portraitPath: true }
     })
     .catch(() => []);
 
@@ -231,7 +240,7 @@ export default async function TeamDetailPage({
                           />
                         </div>
                       ) : null}
-                      <div className="truncate text-center text-2xl font-extrabold uppercase tracking-wide text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-4xl lg:text-5xl">
+                      <div className="truncate text-center font-racing text-3xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-5xl lg:text-6xl">
                         {team.name}
                       </div>
                     </div>
@@ -290,16 +299,13 @@ export default async function TeamDetailPage({
               <div className="relative p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                      {team.name}
-                    </div>
                     <div className="mt-3 text-2xl font-extrabold leading-[1.05] text-white">
                       {d ? (
                         <>
-                          <div className="text-base font-semibold text-white/85">
+                            <div className="font-racing text-base font-bold uppercase tracking-[0.14em] text-white/85">
                             {splitDriverName(d.name).first}
                           </div>
-                          <div className="text-3xl font-extrabold tracking-tight">
+                            <div className="font-racing text-4xl font-bold uppercase tracking-[0.14em]">
                             {splitDriverName(d.name).last}
                           </div>
                         </>
@@ -308,13 +314,22 @@ export default async function TeamDetailPage({
                       )}
                     </div>
                   </div>
-                  <div className="text-3xl font-extrabold text-white/85">
+                    <div className="font-racing text-5xl font-bold leading-none tracking-[0.08em] text-white/90">
                     {d?.number ?? "—"}
                   </div>
                 </div>
 
-                <div className="mt-3 text-sm text-white/70">
-                  {d?.country ?? ""}
+                  <div className="mt-3 flex items-center gap-2 text-sm text-white/70">
+                    {d?.gamertag ? (
+                      <div className="rounded-md bg-white/10 px-2 py-1 text-xs font-extrabold uppercase tracking-wider text-white/85">
+                        {d.gamertag}
+                      </div>
+                    ) : null}
+                    {countryToFlagEmoji(d?.country) ? (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
+                        {countryToFlagEmoji(d?.country)}
+                      </div>
+                    ) : null}
                 </div>
 
                 <div className="pointer-events-none absolute bottom-0 right-0 h-[96%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">

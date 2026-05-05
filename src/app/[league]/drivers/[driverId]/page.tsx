@@ -17,6 +17,15 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 function hexToRgba(hex: string, a: number) {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return `rgba(255,255,255,${a})`;
@@ -142,16 +151,24 @@ export default async function DriverDetailPage({
                   />
                 ) : null}
                 <div className="mt-5 flex items-end gap-5">
-                  <div className="text-6xl font-extrabold leading-none text-white/90 sm:text-7xl">
+                  <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
                     {driver.number ?? "—"}
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-3xl font-extrabold uppercase tracking-wide text-white sm:text-4xl">
+                    <div className="truncate font-racing text-4xl font-bold uppercase tracking-[0.14em] text-white sm:text-5xl">
                       {driver.name}
                     </div>
-                    <div className="mt-2 text-sm font-semibold text-white/75">
-                      {driver.gamertag ? driver.gamertag : driver.teamRef?.name ? driver.teamRef.name : "Fahrer"}
-                      {driver.country ? ` · ${driver.country}` : ""}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/75">
+                      {driver.gamertag ? (
+                        <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-extrabold uppercase tracking-wider text-white/85">
+                          {driver.gamertag}
+                        </span>
+                      ) : null}
+                      {countryToFlagEmoji(driver.country) ? (
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
+                          {countryToFlagEmoji(driver.country)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -195,4 +212,3 @@ export default async function DriverDetailPage({
     </>
   );
 }
-

@@ -4,6 +4,9 @@ const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
+      fontFamily: {
+        racing: ["var(--font-racing)", "ui-sans-serif", "system-ui", "sans-serif"]
+      },
       colors: {
         mrl: {
           red: "#E10600",
