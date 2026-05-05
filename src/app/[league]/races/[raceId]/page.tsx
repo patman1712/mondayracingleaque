@@ -69,7 +69,11 @@ export default async function RaceDetailPage({
 
   const now = Date.now();
   const start = new Date(race.startsAt);
-  const isUpcoming = start.getTime() > now;
+  const startMs = start.getTime();
+  const broadcastCloseMs = startMs + 3 * 60 * 60 * 1000;
+  const showBroadcast = Boolean(race.twitchChannel) && now <= broadcastCloseMs;
+  const showStartTime = now <= broadcastCloseMs;
+  const showResults = now > broadcastCloseMs;
 
   const hero = imageUrl(race.imagePath) ?? imageUrl(race.circuitRef?.imagePath ?? null);
   const subLine = [race.location, race.circuit].filter(Boolean).join(" · ");
@@ -83,7 +87,7 @@ export default async function RaceDetailPage({
   };
 
   let results: ResultRow[] = [];
-  if (!isUpcoming) {
+  if (showResults) {
     results = await prisma.raceResult
       .findMany({
         where: { raceId: race.id },
@@ -135,7 +139,7 @@ export default async function RaceDetailPage({
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/35" />
           <div className="absolute bottom-0 left-0 right-0 pb-6 sm:pb-8">
             <Container>
-              {isUpcoming ? (
+              {showStartTime ? (
                 <div className="w-fit rounded-xl bg-black/40 px-4 py-3 text-sm text-white/85 backdrop-blur">
                   Startzeit · {formatStartsAt(start)}
                 </div>
@@ -149,17 +153,7 @@ export default async function RaceDetailPage({
       </div>
 
       <Container>
-        {isUpcoming ? (
-          <div className="mt-6">
-            {race.twitchChannel ? (
-              <TwitchEmbed channel={race.twitchChannel} />
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-                Noch kein Live-Stream hinterlegt.
-              </div>
-            )}
-          </div>
-        ) : (
+        {showResults ? (
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-5 py-4">
               <div className="text-lg font-semibold">Rennergebnis</div>
@@ -191,6 +185,16 @@ export default async function RaceDetailPage({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-6">
+            {showBroadcast && race.twitchChannel ? (
+              <TwitchEmbed channel={race.twitchChannel} startsAtMs={startMs} />
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+                Noch kein Live-Stream hinterlegt.
               </div>
             )}
           </div>
