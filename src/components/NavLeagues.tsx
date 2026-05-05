@@ -55,6 +55,15 @@ type LeagueTeams = {
   teams: TeamCard[];
 };
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 type DriverCard = {
   id: string;
   name: string;
@@ -478,57 +487,64 @@ export function NavLeagues() {
                                 {loadingLeague === l.slug ? "Lädt..." : "Noch keine Fahrer"}
                               </div>
                             ) : (
-                              drivers.slice(0, 8).map((d) => (
+                              drivers.map((d) => (
                                 <Link
                                   key={d.id}
                                   href={`/${l.slug}/drivers/${d.id}`}
                                   className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                                   style={{ backgroundImage: teamBg(d.accent) }}
                                 >
+                                  {d.portraitUrl ? (
+                                    <Image
+                                      src={d.portraitUrl}
+                                      alt=""
+                                      fill
+                                      sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 260px"
+                                      className="object-cover"
+                                      quality={80}
+                                    />
+                                  ) : null}
                                   <div
                                     className="absolute inset-0 opacity-25"
                                     style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
                                   />
-                                  <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/10 to-black/70" />
+                                  <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/25 to-black/80" />
                                   <div
                                     className="absolute left-0 top-0 h-[6px] w-full"
                                     style={{ backgroundColor: d.accent ?? "#ffffff" }}
                                   />
 
-                                  {d.number !== null ? (
-                                    <div className="pointer-events-none absolute right-3 top-2 text-[52px] font-extrabold leading-none text-white/12">
-                                      {d.number}
-                                    </div>
-                                  ) : null}
+                                  <div className="relative flex min-h-[160px] flex-col justify-end p-4">
+                                    {d.role === "RESERVE" ? (
+                                      <div className="absolute left-3 top-3 rounded-lg bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/85">
+                                        Ersatzfahrer
+                                      </div>
+                                    ) : null}
 
-                                  <div className="relative p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/90 group-hover:text-white">
-                                          {d.gamertag ?? d.name}
-                                        </div>
-                                        <div className="mt-1 text-xs font-semibold text-white/55">
-                                          {d.role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer"}
-                                        </div>
-                                      </div>
-                                      <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-black/20">
-                                        {d.portraitUrl ? (
-                                          <Image
-                                            src={d.portraitUrl}
-                                            alt=""
-                                            fill
-                                            sizes="56px"
-                                            className="object-cover"
-                                            quality={80}
-                                          />
-                                        ) : null}
-                                      </div>
+                                    <div className="text-sm font-extrabold uppercase tracking-wide text-white/95 group-hover:text-white">
+                                      {d.gamertag ?? d.name}
                                     </div>
 
                                     <div className="mt-3 flex items-center justify-between">
-                                      <div className="text-xs text-white/55">
-                                        {d.country ?? ""}
+                                      <div className="flex items-center gap-2">
+                                        {d.country ? (
+                                          <div className="flex items-center gap-2 rounded-full bg-black/35 px-2 py-1">
+                                            <span className="text-[16px] leading-none">
+                                              {countryToFlagEmoji(d.country) ?? "🏁"}
+                                            </span>
+                                            <span className="text-[11px] font-semibold text-white/90">
+                                              {d.country.toUpperCase()}
+                                            </span>
+                                          </div>
+                                        ) : null}
+
+                                        {d.number !== null ? (
+                                          <div className="rounded-full bg-black/35 px-3 py-1 text-[18px] font-extrabold leading-none text-white/95">
+                                            {d.number}
+                                          </div>
+                                        ) : null}
                                       </div>
+
                                       <div className="text-xs font-semibold text-white/65">→</div>
                                     </div>
                                   </div>
