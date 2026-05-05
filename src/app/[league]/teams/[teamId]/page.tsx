@@ -44,21 +44,6 @@ function f1Dots() {
   } as const;
 }
 
-function splitDriverName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return { first: "", last: name.trim() };
-  return { first: parts.slice(0, -1).join(" "), last: parts.slice(-1).join("") };
-}
-
-function countryToFlagEmoji(country: string | null | undefined) {
-  const code = (country ?? "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return null;
-  const a = 0x1f1e6;
-  const first = code.charCodeAt(0) - 65 + a;
-  const second = code.charCodeAt(1) - 65 + a;
-  return String.fromCodePoint(first, second);
-}
-
 export default async function TeamDetailPage({
   params
 }: {
@@ -297,40 +282,15 @@ export default async function TeamDetailPage({
               <div className="absolute left-0 top-0 h-full w-[62%] bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
 
               <div className="relative p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="mt-3 text-2xl font-extrabold leading-[1.05] text-white">
-                      {d ? (
-                        <>
-                            <div className="font-racing text-base font-bold uppercase tracking-[0.14em] text-white/85">
-                            {splitDriverName(d.name).first}
-                          </div>
-                            <div className="font-racing text-4xl font-bold uppercase tracking-[0.14em]">
-                            {splitDriverName(d.name).last}
-                          </div>
-                        </>
-                      ) : (
-                        "TBA"
-                      )}
+                  <div className="pointer-events-none absolute -top-8 right-3 font-racing text-[120px] font-bold leading-none tracking-[0.08em] text-white/15 sm:text-[150px]">
+                    {d.number ?? "—"}
+                  </div>
+
+                  <div className="relative">
+                    <div className="mt-2 truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
+                      {d.gamertag ?? d.name}
                     </div>
                   </div>
-                    <div className="font-racing text-5xl font-bold leading-none tracking-[0.08em] text-white/90">
-                    {d?.number ?? "—"}
-                  </div>
-                </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-sm text-white/70">
-                    {d?.gamertag ? (
-                      <div className="rounded-md bg-white/10 px-2 py-1 text-xs font-extrabold uppercase tracking-wider text-white/85">
-                        {d.gamertag}
-                      </div>
-                    ) : null}
-                    {countryToFlagEmoji(d?.country) ? (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
-                        {countryToFlagEmoji(d?.country)}
-                      </div>
-                    ) : null}
-                </div>
 
                 <div className="pointer-events-none absolute bottom-0 right-0 h-[96%] w-[56%] opacity-25 transition duration-300 group-hover:opacity-30">
                   <div className="absolute inset-0 bg-gradient-to-l from-white/60 to-transparent" />
