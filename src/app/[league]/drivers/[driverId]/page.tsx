@@ -215,6 +215,10 @@ export default async function DriverDetailPage({
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
           <div className="absolute left-0 top-0 h-[8px] w-full" style={{ backgroundColor: accent }} />
 
+          <div className="pointer-events-none absolute right-6 top-6 z-0 font-racing text-[160px] font-bold leading-none tracking-[0.08em] text-white/10 sm:right-10 sm:top-8 sm:text-[220px]">
+            {driver.number ?? "—"}
+          </div>
+
           {portraitUrl ? (
             <div className="pointer-events-none absolute inset-y-0 right-0 w-full sm:w-[min(720px,52vw)]">
               <Image
@@ -229,99 +233,90 @@ export default async function DriverDetailPage({
             </div>
           ) : null}
 
-          <Container>
-            <div className="relative z-10 flex h-full items-end pb-10 sm:pb-14">
-              <div className="w-full max-w-[820px]">
-                {teamLogoUrl ? (
-                  <Image
-                    src={teamLogoUrl}
-                    alt=""
-                    width={180}
-                    height={54}
-                    unoptimized
-                    className="h-10 w-auto object-contain sm:h-11"
-                  />
-                ) : null}
-
-                <div className="mt-6 flex items-end gap-5">
-                  <div className="font-racing text-7xl font-bold leading-none tracking-[0.08em] text-white sm:text-8xl">
-                    {driver.number ?? "—"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <div
-                          className="h-[46px] w-[42px] bg-white/90 sm:h-[72px] sm:w-[54px]"
-                          style={{ clipPath: "polygon(0 0, 100% 0, 66% 100%, 0 100%)" }}
-                        />
-                        <div
-                          className="-mt-2 h-[9px] w-[48px] bg-white/80 sm:h-[11px] sm:w-[64px]"
-                          style={{ clipPath: "polygon(0 0, 100% 0, 72% 100%, 0 100%)" }}
-                        />
-                      </div>
-
-                      <div className="min-w-0 font-racing text-5xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_12px_34px_rgba(0,0,0,0.7)] sm:text-6xl lg:text-7xl">
+          <div className="absolute bottom-0 left-0 w-full bg-black/70">
+            <div
+              className="absolute left-0 top-0 h-[10px] w-full opacity-85"
+              style={{
+                backgroundImage: `linear-gradient(90deg, ${hexToRgba(accent, 0.95)}, ${hexToRgba(accent, 0.65)}, transparent)`
+              }}
+            />
+            <div className="relative pb-7 pt-5 sm:pb-8 sm:pt-6">
+              <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/55 to-black/85" />
+              <div className="pointer-events-none absolute inset-0 z-0">
+                <div
+                  className="absolute left-0 top-[46%] hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute left-0 top-[46%] hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 94% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute right-0 top-[46%] hidden h-[12px] w-[30%] -translate-y-1/2 bg-white sm:block"
+                  style={{ clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute right-0 top-[46%] hidden h-[3px] w-[34%] -translate-y-1/2 translate-y-[14px] bg-white/90 sm:block"
+                  style={{ clipPath: "polygon(6% 0, 100% 0, 100% 100%, 0 100%)" }}
+                />
+              </div>
+              <Container>
+                <div className="relative z-10 -mt-1 sm:-mt-2">
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="min-w-0">
+                      {teamLogoUrl ? (
+                        <div className="flex justify-center">
+                          <Image
+                            src={teamLogoUrl}
+                            alt=""
+                            width={96}
+                            height={96}
+                            unoptimized
+                            className="mb-2 h-10 w-10 bg-black/25 object-contain sm:h-12 sm:w-12 lg:h-14 lg:w-14"
+                          />
+                        </div>
+                      ) : null}
+                      <div className="text-center font-racing text-3xl font-bold uppercase tracking-[0.16em] text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.7)] sm:text-5xl lg:text-6xl">
                         {displayName}
                       </div>
-
-                      <div>
-                        <div
-                          className="h-[46px] w-[42px] bg-white/90 sm:h-[72px] sm:w-[54px]"
-                          style={{ clipPath: "polygon(34% 0, 100% 0, 100% 100%, 0 100%)" }}
-                        />
-                        <div
-                          className="-mt-2 h-[9px] w-[48px] bg-white/80 sm:h-[11px] sm:w-[64px]"
-                          style={{ clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)" }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-2 text-sm font-semibold text-white/80 sm:grid-cols-2 sm:gap-x-6">
-                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
-                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
-                          Saison
-                        </div>
-                        <div className="text-right">
-                          {currentSeasonLabel ?? "—"}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
-                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
-                          Team
-                        </div>
-                        <div className="truncate text-right">
-                          {seasonTeam?.teamRef?.name ?? driver.teamRef?.name ?? "—"}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
-                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
-                          Land
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {countryToFlagEmoji(driver.country) ? (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
-                              {countryToFlagEmoji(driver.country)}
-                            </span>
-                          ) : null}
-                          <span className="uppercase">
-                            {(driver.country ?? "—").trim()}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2">
-                        <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/55">
-                          Name
-                        </div>
-                        <div className="truncate text-right">
-                          {driver.name}
-                        </div>
-                      </div>
                     </div>
                   </div>
+
+                  {currentSeasonLabel ? (
+                    <div className="mt-2 flex items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wider text-white/80 drop-shadow-[0_8px_20px_rgba(0,0,0,0.8)] sm:text-sm">
+                      <span
+                        className="h-[10px] w-[48px] bg-white/90 sm:h-[12px] sm:w-[56px]"
+                        style={{ clipPath: "polygon(0 0, 100% 0, 88% 100%, 0 100%)" }}
+                      />
+                      <span className="text-center">
+                        {currentSeasonLabel}
+                      </span>
+                      <span
+                        className="h-[10px] w-[48px] bg-white/90 sm:h-[12px] sm:w-[56px]"
+                        style={{ clipPath: "polygon(12% 0, 100% 0, 100% 100%, 0 100%)" }}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/70">
+                    <span className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-extrabold text-white/80">
+                      {driver.name}
+                    </span>
+                    {seasonTeam?.teamRef?.name ?? driver.teamRef?.name ? (
+                      <span className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-extrabold text-white/80">
+                        {seasonTeam?.teamRef?.name ?? driver.teamRef?.name}
+                      </span>
+                    ) : null}
+                    {countryToFlagEmoji(driver.country) ? (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[16px]">
+                        {countryToFlagEmoji(driver.country)}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              </Container>
             </div>
-          </Container>
+          </div>
         </div>
       </div>
 
