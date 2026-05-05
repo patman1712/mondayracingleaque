@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { RaceDriverField } from "@/components/RaceDriverField";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
+import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -514,6 +515,8 @@ async function ocrImportResultsFromImages(
   await requireAdmin();
 
   const replace = formData.get("replace") === "on";
+  const combined = String(formData.get("ocrText") ?? "").trim();
+  if (!combined) redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
 
   const race = await prisma.race
     .findUnique({
@@ -537,59 +540,6 @@ async function ocrImportResultsFromImages(
     })
     .catch(() => null);
   if (!season) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
-
-  const imgs = await prisma.raceResultImage
-    .findMany({
-      where: { raceId },
-      orderBy: [{ createdAt: "asc" }],
-      select: { imagePath: true },
-      take: 20
-    })
-    .catch(() => []);
-  if (imgs.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=image`);
-
-  await prisma.race
-    .update({ where: { id: raceId }, data: { resultsOcrText: `OCR läuft… (${new Date().toLocaleString("de-DE")})` } })
-    .catch(() => null);
-
-  const uploadsDir = path.join(dataRootDir(), "uploads");
-
-  let worker: { recognize: (p: string) => Promise<{ data?: { text?: string | null } }>; terminate?: () => Promise<unknown> } | null =
-    null;
-  let combined = "";
-
-  try {
-    const { createWorker } = await import("tesseract.js");
-    worker = await createWorker("eng");
-    if (!worker) throw new Error("OCR worker not available");
-
-    const texts: string[] = [];
-    for (const img of imgs) {
-      const abs = path.join(uploadsDir, img.imagePath);
-      const rel = path.relative(uploadsDir, abs);
-      if (rel.startsWith("..") || path.isAbsolute(rel) || !fs.existsSync(abs)) continue;
-      try {
-        const res = await worker.recognize(abs);
-        const text = String(res?.data?.text ?? "").trim();
-        if (text) texts.push(text);
-      } catch {}
-    }
-    combined = texts.join("\n\n").trim();
-  } catch (e) {
-    const msg = typeof e === "object" && e && "message" in e ? String((e as { message?: unknown }).message ?? "") : String(e ?? "");
-    const safe = msg.replace(/\s+/g, " ").slice(0, 160);
-    await prisma.race
-      .update({ where: { id: raceId }, data: { resultsOcrText: safe ? `OCR Fehler: ${safe}` : "OCR Fehler" } })
-      .catch(() => null);
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
-  } finally {
-    if (worker) await worker.terminate?.().catch(() => null);
-  }
-
-  if (!combined) {
-    await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: "OCR: Kein Text erkannt." } }).catch(() => null);
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=ocr`);
-  }
 
   await prisma.race.update({ where: { id: raceId }, data: { resultsOcrText: combined } }).catch(() => null);
 
@@ -1166,17 +1116,16 @@ export default async function AdminRaceResultsPage({
               ) : null}
             </div>
             <div className="space-y-3">
-              <form action={ocrImportResultsFromImages.bind(null, league, l, raceId)}>
+              <form id="ocr-import-form" action={ocrImportResultsFromImages.bind(null, league, l, raceId)}>
                 <label className="flex items-center gap-2 text-sm text-white/80">
                   <input type="checkbox" name="replace" className="h-4 w-4" />{" "}
                   Vorhandene Ergebnisse ersetzen
                 </label>
-                <FormSubmitButton
-                  className="mt-3 w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white"
-                  pendingText="OCR läuft…"
-                >
-                  OCR aus Bildern → Ergebnisse eintragen
-                </FormSubmitButton>
+                <textarea name="ocrText" className="hidden" defaultValue="" />
+                <RaceResultsOcrClient
+                  formId="ocr-import-form"
+                  imageUrls={race.resultImages.map((img) => imageUrl(img.imagePath) ?? "").filter(Boolean)}
+                />
               </form>
 
               {race.resultsOcrText ? (
