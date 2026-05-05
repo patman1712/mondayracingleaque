@@ -176,20 +176,28 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
         c: typeof x.confidence === "number" ? x.confidence : 0,
         b: x.bbox ?? null
       }))
-      .filter((x) => x.t && x.b && x.c >= 35)
+      .filter((x) => x.t && x.b && x.c >= 20)
       .filter((x) => x.t.length > 1 || /[0-9]/.test(x.t))
       .filter((x) => !/^[\.\-—–_:;,'"“”‘’\[\]\(\)\{\}\|]+$/.test(x.t));
+
+    const heights = usable.map((x) => {
+      const b = x.b!;
+      return Math.max(1, b.y1 - b.y0);
+    });
+    heights.sort((a, b) => a - b);
+    const medianHeight = heights.length ? heights[Math.floor(heights.length / 2)] : Math.max(12, Math.round(h * 0.02));
 
     const items = usable
       .map((x) => {
         const b = x.b!;
         const yMid = (b.y0 + b.y1) / 2;
         const xMid = (b.x0 + b.x1) / 2;
-        return { text: x.t, yMid, xMid };
+        const height = Math.max(1, b.y1 - b.y0);
+        return { text: x.t, yMid, xMid, height };
       })
       .sort((a, b) => a.yMid - b.yMid || a.xMid - b.xMid);
 
-    const yThreshold = Math.max(10, Math.round(h * 0.012));
+    const yThreshold = Math.max(10, Math.round(medianHeight * 0.8));
     const lines: Array<{ y: number; words: Array<{ text: string; xMid: number }> }> = [];
     for (const it of items) {
       const last = lines[lines.length - 1] ?? null;
@@ -223,8 +231,20 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       return Number.isFinite(n) ? n : null;
     }
 
+    function pickPosition(ws: Array<{ text: string; xMid: number }>) {
+      const candidates: number[] = [];
+      for (const w2 of ws) {
+        const n = num(w2.text);
+        if (n !== null && n >= 1 && n <= 30) candidates.push(n);
+      }
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => a - b);
+      return candidates[0] ?? null;
+    }
+
     const rows: Array<{
-      position: number;
+      position: number | null;
+      y: number;
       driver: string;
       grid: number | null;
       stops: number | null;
@@ -234,18 +254,21 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
     }> = [];
 
     for (const ln of lines) {
-      const posStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.08)));
-      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.08, 0.62)));
-      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.62, 0.72)));
-      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.72, 0.80)));
-      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.80, 0.90)));
-      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.90, 1.01)));
+      const posWords = ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.12));
+      const pos = pickPosition(posWords);
+
+      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.12, 0.66)));
+      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.66, 0.75)));
+      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.75, 0.82)));
+      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.82, 0.92)));
+      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.92, 1.02)));
 
       if (!driverStr) continue;
-      if (/DRIVER/i.test(driverStr) || /BEST/i.test(driverStr) || /STOPS/i.test(driverStr)) continue;
-
-      const pos = num(posStr);
-      if (!pos || pos < 1 || pos > 30) continue;
+      const lineStr = (posWords.map((x) => x.text).join(" ") + " " + driverStr + " " + gridStr + " " + stopsStr + " " + bestStr + " " + timeStr)
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (/POS/i.test(lineStr) || /DRIVER/i.test(lineStr) || /GRID/i.test(lineStr) || /STOPS/i.test(lineStr) || /BEST/i.test(lineStr) || /TIME/i.test(lineStr))
+        continue;
 
       const driver = driverStr.replace(/\s{2,}/g, " ").trim();
       if (!driver) continue;
@@ -257,10 +280,31 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       const timeText = timeStr ? timeStr.trim() : null;
       const status = timeText && /^(DNF|DSQ|DNS|RET)$/i.test(timeText) ? timeText.toUpperCase() : null;
 
-      rows.push({ position: pos, driver, grid, stops, bestTime, timeText, status });
+      rows.push({ position: pos, y: ln.y, driver, grid, stops, bestTime, timeText, status });
     }
 
-    return rows;
+    rows.sort((a, b) => a.y - b.y);
+    const seen = new Set<number>();
+    for (let i = 0; i < rows.length; i++) {
+      const inferred = i + 1;
+      const p = rows[i].position;
+      if (!p || p < 1 || p > 30 || seen.has(p)) {
+        rows[i].position = inferred;
+        seen.add(inferred);
+      } else {
+        seen.add(p);
+      }
+    }
+
+    return rows.map((r) => ({
+      position: r.position ?? 0,
+      driver: r.driver,
+      grid: r.grid,
+      stops: r.stops,
+      bestTime: r.bestTime,
+      timeText: r.timeText,
+      status: r.status
+    }));
   }
 
   async function runOcr() {
