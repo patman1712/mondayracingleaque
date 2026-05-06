@@ -14,6 +14,7 @@ type ExistingResult = {
   position: number;
   bestTime: string | null;
   timeText: string | null;
+  finishTimeMs: number | null;
   penaltySeconds: number;
   status: string | null;
   fastestLap: boolean;
@@ -26,10 +27,36 @@ type Row = {
   teamName: string | null;
   bestTime: string;
   timeText: string;
-  penaltySeconds: string;
   status: string;
   fastestLap: boolean;
 };
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function pad3(n: number) {
+  return String(n).padStart(3, "0");
+}
+
+function formatRaceTimeMs(ms: number) {
+  const total = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(total / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const milli = total % 1000;
+  return `${minutes}:${pad2(seconds)}.${pad3(milli)}`;
+}
+
+function parseRaceTimeMs(s: string) {
+  const raw = s.trim();
+  const m = raw.match(/^(\d+):(\d{2})\.(\d{3})$/);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3]);
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return (min * 60 + sec) * 1000 + ms;
+}
 
 function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
   const byDriverId = new Map(existing.map((r) => [r.driverId, r] as const));
@@ -51,14 +78,26 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
 
   const rows: Row[] = ordered.map((d) => {
     const r = byDriverId.get(d.driverId) ?? null;
+    const timeText =
+      r && typeof r.finishTimeMs === "number" && Number.isFinite(r.finishTimeMs)
+        ? formatRaceTimeMs(r.finishTimeMs)
+        : r?.timeText && !r.timeText.trim().startsWith("+")
+          ? (() => {
+              const base = r.timeText ?? "";
+              const pen = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+              if (!pen) return base;
+              const parsed = parseRaceTimeMs(base);
+              if (typeof parsed !== "number") return base;
+              return formatRaceTimeMs(Math.max(0, parsed - pen * 1000));
+            })()
+          : "";
     return {
       id: d.driverId,
       driverId: d.driverId,
       name: d.name,
       teamName: d.teamName,
       bestTime: r?.bestTime ?? "",
-      timeText: r?.timeText ?? "",
-      penaltySeconds: r && typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? String(r.penaltySeconds) : "",
+      timeText,
       status: r?.status ?? "",
       fastestLap: Boolean(r?.fastestLap)
     };
@@ -94,6 +133,17 @@ export function RaceResultsBulkEditorClient({
 }) {
   const initial = useMemo(() => toInitialRows(drivers, existingResults), [drivers, existingResults]);
   const [rows, setRows] = useState<Row[]>(initial);
+  const driverNameById = useMemo(() => new Map(drivers.map((d) => [d.driverId, d.name] as const)), [drivers]);
+  const penalties = useMemo(() => {
+    return existingResults
+      .filter((r) => typeof r.penaltySeconds === "number" && r.penaltySeconds > 0)
+      .map((r) => ({
+        driverId: r.driverId,
+        name: driverNameById.get(r.driverId) ?? r.driverId,
+        penaltySeconds: r.penaltySeconds
+      }))
+      .sort((a, b) => b.penaltySeconds - a.penaltySeconds || a.name.localeCompare(b.name, "de-DE"));
+  }, [existingResults, driverNameById]);
 
   const payload = useMemo(() => {
     const out = rows
@@ -102,7 +152,6 @@ export function RaceResultsBulkEditorClient({
         position: idx + 1,
         bestTime: r.bestTime.trim() || null,
         timeText: r.timeText.trim() || null,
-        penaltySeconds: Number.isFinite(Number(r.penaltySeconds)) ? Math.max(0, Math.floor(Number(r.penaltySeconds))) : 0,
         status: r.status.trim() || null,
         fastestLap: Boolean(r.fastestLap)
       }))
@@ -149,8 +198,20 @@ export function RaceResultsBulkEditorClient({
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="text-sm font-semibold text-white">Schnell-Eingabe</div>
       <div className="mt-1 text-xs text-white/60">
-        Reihenfolge per Drag & Drop = Position. Endzeit + Bestzeit + Strafe direkt pro Fahrer eintragen.
+        Reihenfolge per Drag & Drop = Position. Endzeit + Bestzeit eintragen. Strafen nur über „Stewards (Strafen)“.
       </div>
+      {penalties.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {penalties.map((p) => (
+            <div
+              key={p.driverId}
+              className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300"
+            >
+              {p.name} +{p.penaltySeconds}s
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <form className="mt-4 space-y-3" action={action}>
         <textarea name="bulkJson" className="hidden" readOnly value={payload} />
@@ -164,7 +225,7 @@ export function RaceResultsBulkEditorClient({
               onDragStart={(e) => onDragStart(e, idx)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => onDrop(e, idx)}
-              className="grid grid-cols-[56px_minmax(260px,1fr)_150px_150px_110px_130px_60px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+              className="grid grid-cols-[56px_minmax(260px,1fr)_160px_160px_130px_60px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             >
               <div className="text-xs font-semibold text-white/70">P{idx + 1}</div>
 
@@ -185,14 +246,6 @@ export function RaceResultsBulkEditorClient({
                 onChange={(e) => updateRow(r.driverId, { bestTime: e.target.value })}
                 className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
                 placeholder="Bestzeit"
-              />
-
-              <input
-                value={r.penaltySeconds}
-                onChange={(e) => updateRow(r.driverId, { penaltySeconds: e.target.value })}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
-                placeholder="Strafe (s)"
-                inputMode="numeric"
               />
 
               <select
@@ -218,7 +271,7 @@ export function RaceResultsBulkEditorClient({
                 FL
               </label>
 
-              <div className="col-span-7 flex items-center justify-end gap-2">
+              <div className="col-span-6 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => move(idx, Math.max(0, idx - 1))}

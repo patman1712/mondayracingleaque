@@ -391,8 +391,8 @@ export default async function RaceDetailPage({
                           ) : null}
 
                           {teamLogoUrl ? (
-                            <div className="absolute inset-y-0 right-[38%] hidden w-[12%] items-center justify-center p-2 sm:flex">
-                              <img src={teamLogoUrl} alt="" className="max-h-[44px] w-auto object-contain opacity-95" />
+                            <div className="absolute bottom-2 right-[38%] hidden w-[14%] items-end justify-center p-2 sm:flex">
+                              <img src={teamLogoUrl} alt="" className="h-12 w-auto object-contain opacity-95 md:h-14" />
                             </div>
                           ) : null}
 

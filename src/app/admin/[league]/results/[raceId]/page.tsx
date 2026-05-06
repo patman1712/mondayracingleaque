@@ -352,7 +352,7 @@ async function bulkUpsertResults(
       const r = included[i];
       const pos = i + 1;
       const current = existing.get(r.driverId) ?? null;
-      const penaltySeconds = typeof r.penaltySeconds === "number" ? r.penaltySeconds : current ? current.penaltySeconds : 0;
+      const penaltySeconds = current ? current.penaltySeconds : 0;
       const finishTimeMs = finishMsByDriverId.get(r.driverId) ?? null;
       await tx.raceResult.update({
         where: { raceId_driverId: { raceId, driverId: r.driverId } },
@@ -1345,6 +1345,7 @@ export default async function AdminRaceResultsPage({
                 position: r.position,
                 bestTime: r.bestTime,
                 timeText: r.timeText,
+                finishTimeMs: r.finishTimeMs,
                 penaltySeconds: r.penaltySeconds,
                 status: r.status,
                 fastestLap: r.fastestLap
