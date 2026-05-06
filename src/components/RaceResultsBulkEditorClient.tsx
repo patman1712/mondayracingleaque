@@ -155,6 +155,7 @@ export function RaceResultsBulkEditorClient({
           {rows.map((r, idx) => (
             <div
               key={r.id}
+              id={`result-${r.driverId}`}
               draggable
               onDragStart={(e) => onDragStart(e, idx)}
               onDragOver={(e) => e.preventDefault()}

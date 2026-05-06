@@ -6,7 +6,6 @@ import { AdminShell } from "@/components/AdminShell";
 import { League, Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
-import { RaceDriverField } from "@/components/RaceDriverField";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
@@ -399,108 +398,6 @@ function parseOcrToClassificationRows(raw: string) {
     if (!uniqueByPos.has(r.position)) uniqueByPos.set(r.position, r);
   }
   return Array.from(uniqueByPos.values()).sort((a, b) => a.position - b.position).slice(0, 30);
-}
-
-async function upsertResult(
-  adminLeague: string,
-  league: League,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-
-  await requireAdmin();
-  const race = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
-    .catch(() => null);
-  if (!race || race.league !== league) return;
-
-  const season = await prisma.season
-    .findUnique({
-      where: {
-        league_year_seasonNo_isTest: {
-          league,
-          year: race.season,
-          seasonNo: race.seasonNo,
-          isTest: race.seasonIsTest
-        }
-      },
-      select: { id: true }
-    })
-    .catch(() => null);
-
-  const driverId = String(formData.get("driverId") ?? "");
-  const position = Number(formData.get("position") ?? "");
-  const points = Number(formData.get("points") ?? "");
-  const status = String(formData.get("status") ?? "").trim();
-  const fastestLap = formData.get("fastestLap") === "on";
-
-  if (!driverId || !Number.isFinite(position) || !Number.isFinite(points)) return;
-
-  if (season) {
-    const eligible = await prisma.driverSeason
-      .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { id: true } })
-      .catch(() => null);
-    if (!eligible) return;
-  }
-
-  const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
-  if (anyEntries) {
-    const entry = await prisma.raceEntry
-      .findUnique({ where: { raceId_driverId: { raceId, driverId } }, select: { participates: true } })
-      .catch(() => null);
-    if (!entry?.participates) return;
-  }
-
-  await prisma.raceResult.upsert({
-    where: { raceId_driverId: { raceId, driverId } },
-    create: {
-      raceId,
-      driverId,
-      position,
-      points,
-      status: status || null,
-      fastestLap
-    },
-    update: {
-      position,
-      points,
-      status: status || null,
-      fastestLap
-    }
-  });
-
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  revalidatePath(`/admin/${adminLeague}/results`);
-  revalidatePath(`/admin/${adminLeague}/standings`);
-  revalidatePath("/admin");
-  revalidatePath("/mrl-one/results");
-  revalidatePath("/mrl-two/results");
-  revalidatePath("/mrl-rookie/results");
-  revalidatePath("/mrl-one/standings");
-  revalidatePath("/mrl-two/standings");
-  revalidatePath("/mrl-rookie/standings");
-}
-
-async function deleteResult(
-  adminLeague: string,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  await prisma.raceResult.delete({ where: { id } });
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  revalidatePath(`/admin/${adminLeague}/results`);
-  revalidatePath(`/admin/${adminLeague}/standings`);
-  revalidatePath("/mrl-one/results");
-  revalidatePath("/mrl-two/results");
-  revalidatePath("/mrl-rookie/results");
-  revalidatePath("/mrl-one/standings");
-  revalidatePath("/mrl-two/standings");
-  revalidatePath("/mrl-rookie/standings");
 }
 
 async function setResultsPublished(
@@ -1238,7 +1135,7 @@ async function setParticipation(
     .catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#manual-results`);
 }
 
 async function setReserveTeamForRace(
@@ -1295,7 +1192,7 @@ async function setReserveTeamForRace(
     .catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#manual-results`);
 }
 
 export default async function AdminRaceResultsPage({
@@ -1453,8 +1350,6 @@ export default async function AdminRaceResultsPage({
     const teamName = d.role === "MAIN" ? d.teamName : entry?.team?.name ?? null;
     return { driverId: d.id, name: d.name, teamName };
   });
-  const driverOptions =
-    entries.length > 0 ? (participatingDrivers.length > 0 ? participatingDrivers : drivers) : drivers;
 
   return (
     <AdminShell>
@@ -1566,11 +1461,15 @@ export default async function AdminRaceResultsPage({
         </form>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">Ergebnis-Upload</div>
-        <div className="mt-2 text-sm text-white/70">
-          Mehrere Bilder hochladen (max. 6), dann OCR ausführen und Ergebnisse automatisch eintragen.
-        </div>
+      <details className="rounded-2xl border border-white/10 bg-white/5">
+        <summary className="cursor-pointer list-none px-6 py-5 text-base font-semibold text-white">
+          Automatisch auslesen (Bilder/OCR/Telemetry)
+          <div className="mt-2 text-sm font-normal text-white/70">
+            Optional: Ergebnisse per Bilder-Upload + OCR oder per F1 2025 UDP Telemetry importieren.
+          </div>
+        </summary>
+
+        <div className="px-6 pb-6">
 
         {error && ["image", "ocr", "entries", "invalid", "nomatch"].includes(error) ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
@@ -1670,7 +1569,8 @@ export default async function AdminRaceResultsPage({
             </div>
           </div>
         ) : null}
-      </div>
+        </div>
+      </details>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="text-base font-semibold">Fahrerfeld</div>
@@ -1686,6 +1586,7 @@ export default async function AdminRaceResultsPage({
               const entry = entryByDriverId.get(d.id) ?? null;
               const participates = entry?.participates ?? false;
               const reserve = d.role === "RESERVE";
+              const resultHref = participates ? `#result-${d.id}` : "#manual-results";
               return (
                 <div
                   key={d.id}
@@ -1693,7 +1594,9 @@ export default async function AdminRaceResultsPage({
                 >
                   <div className="min-w-0">
                     <div className="truncate font-semibold">
-                      {d.name}
+                      <a href={resultHref} className="hover:underline">
+                        {d.name}
+                      </a>
                       <span className="text-white/60"> · {reserve ? "Ersatzfahrer" : "Stammfahrer"}</span>
                       {d.teamName ? <span className="text-white/60"> · {d.teamName}</span> : null}
                     </div>
@@ -1717,6 +1620,22 @@ export default async function AdminRaceResultsPage({
                         {participates ? "Nimmt teil" : "Nimmt nicht teil"}
                       </button>
                     </form>
+
+                    {participates ? (
+                      <a
+                        href={`#result-${d.id}`}
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                      >
+                        Zum Ergebnis
+                      </a>
+                    ) : (
+                      <a
+                        href="#manual-results"
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                      >
+                        Ergebnis
+                      </a>
+                    )}
 
                     {reserve ? (
                       <form action={setReserveTeamForRace.bind(null, league, l, raceId)} className="flex flex-wrap items-center gap-2">
@@ -1750,15 +1669,9 @@ export default async function AdminRaceResultsPage({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div id="manual-results" className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-base font-semibold">Ergebnisse eintragen</div>
-          <Link
-            href={`/admin/${league}/results`}
-            className="text-sm font-semibold text-white/70 hover:text-white"
-          >
-            Zurück
-          </Link>
+          <div className="text-base font-semibold">Rennergebnis (Manuell)</div>
         </div>
         <div className="mt-2 text-sm text-white/70">
           Saison {race.season} · Runde {race.round} · {race.name} ·{" "}
@@ -1806,112 +1719,6 @@ export default async function AdminRaceResultsPage({
               }))}
               action={bulkUpsertResults.bind(null, league, l, raceId)}
             />
-          )}
-        </div>
-
-        <form
-          action={upsertResult.bind(null, league, l, raceId)}
-          className="mt-6 grid gap-4 md:grid-cols-2"
-        >
-          <div className="md:col-span-2 text-xs font-semibold uppercase tracking-wider text-white/60">
-            Einzel-Eintrag
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Fahrer
-            </label>
-            <RaceDriverField name="driverId" drivers={driverOptions.map((d) => ({ id: d.id, name: d.name, active: participatingDriverIds.has(d.id), role: d.role, teamName: d.teamName }))} />
-            {entries.length > 0 ? (
-              <div className="mt-2 text-xs text-white/60">
-                Es werden nur Fahrer angeboten, die im Fahrerfeld als teilnehmend markiert sind.
-              </div>
-            ) : (
-              <div className="mt-2 text-xs text-white/60">
-                Tipp: Erst im Fahrerfeld Teilnahme setzen, dann Ergebnisse eintragen.
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Position
-            </label>
-            <input
-              name="position"
-              inputMode="numeric"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="1"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Punkte
-            </label>
-            <input
-              name="points"
-              inputMode="decimal"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="25"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Status (optional)
-            </label>
-            <input
-              name="status"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="DNF, DSQ, ..."
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-white/80">
-            <input type="checkbox" name="fastestLap" className="h-4 w-4" />{" "}
-            Schnellste Runde
-          </label>
-          <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-            Speichern
-          </button>
-        </form>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">Aktuelle Einträge</div>
-        <div className="mt-4 space-y-2">
-          {results.length === 0 ? (
-            <div className="text-sm text-white/60">Noch keine Ergebnisse.</div>
-          ) : (
-            results.map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">
-                    P{r.position} · {r.driver.name} · {r.points.toFixed(0)} P
-                    {r.fastestLap ? " · FL" : ""}
-                  </div>
-                  <div className="mt-1 text-xs text-white/60">
-                    {r.grid !== null ? `Grid ${r.grid}` : "Grid -"}
-                    {r.stops !== null ? ` · Stops ${r.stops}` : " · Stops -"}
-                    {r.bestTime ? ` · Best ${r.bestTime}` : ""}
-                    {r.timeText ? ` · Time ${r.timeText}` : ""}
-                  </div>
-                  {entryByDriverId.get(r.driverId)?.team?.name ? (
-                    <div className="mt-1 text-sm text-white/60">
-                      Team (für dieses Rennen): {entryByDriverId.get(r.driverId)!.team!.name}
-                    </div>
-                  ) : null}
-                  {r.status ? (
-                    <div className="mt-1 text-sm text-white/60">{r.status}</div>
-                  ) : null}
-                </div>
-                <form action={deleteResult.bind(null, league, raceId)}>
-                  <input type="hidden" name="id" value={r.id} />
-                  <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                    Löschen
-                  </button>
-                </form>
-              </div>
-            ))
           )}
         </div>
       </div>
