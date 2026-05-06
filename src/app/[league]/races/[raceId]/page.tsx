@@ -41,15 +41,11 @@ function teamBg(color: string | null | undefined) {
   return `radial-gradient(900px circle at 20% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
 }
 
-function isDarkHex(hex: string | null | undefined) {
-  const m = (hex ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
-  if (!m) return true;
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luma < 0.55;
+function heroBg(color: string | null | undefined) {
+  const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
+  const a = c ? hexToRgba(c, 0.55) : "rgba(255,255,255,0.10)";
+  const b = c ? hexToRgba(c, 0.10) : "rgba(255,255,255,0.02)";
+  return `radial-gradient(900px circle at 30% 10%, ${a}, transparent 60%), linear-gradient(180deg, ${b}, rgba(0,0,0,0.65))`;
 }
 
 function f1Dots() {
@@ -318,15 +314,11 @@ export default async function RaceDetailPage({
         {showResults ? (
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
-              <div key={colIdx} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                <div className="divide-y divide-white/10">
+              <div key={colIdx} className="grid gap-3">
                   {col.map((r) => {
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
                     const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
                     const accent = d?.accent ?? null;
-                    const dark = isDarkHex(accent);
-                    const nameClass = dark ? "text-white" : "text-black";
-                    const metaClass = dark ? "text-white/80" : "text-black/70";
                     const endOrStatus = r.status ? r.status : r.timeText ? r.timeText : "";
                     const best = r.bestTime ?? "";
 
@@ -334,49 +326,68 @@ export default async function RaceDetailPage({
                       <Link
                         key={r.id}
                         href={`/${league}/drivers/${r.driver.id}`}
-                        className="group grid grid-cols-[44px_56px_1fr_84px] items-stretch"
+                        className="group relative block overflow-hidden rounded-2xl border border-white/10"
+                        style={{ backgroundImage: heroBg(accent) }}
                       >
-                        <div className="flex items-center justify-center bg-mrl-red text-sm font-extrabold text-white">
-                          {r.position}
-                        </div>
-
-                        <div className="relative overflow-hidden" style={{ backgroundColor: accent ?? "#2b2b2b" }}>
-                          {portraitUrl ? (
-                            <img
-                              src={portraitUrl}
-                              alt=""
-                              className="h-full w-full object-cover object-center opacity-90 transition duration-300 group-hover:opacity-100"
-                            />
-                          ) : null}
-                          <div className="absolute inset-0 bg-black/20" />
-                        </div>
-
                         <div
-                          className={"flex min-w-0 flex-col justify-center px-4 py-3 " + nameClass}
+                          className="absolute inset-0 opacity-25"
+                          style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                        />
+                        <div
+                          className="absolute left-0 top-0 h-[4px] w-full"
                           style={{ backgroundColor: accent ?? "#ffffff" }}
-                        >
-                          <div className="truncate text-sm font-extrabold uppercase tracking-wide">
-                            {r.driver.name}
-                          </div>
-                          <div className={"mt-1 truncate text-xs font-semibold " + metaClass}>
-                            {endOrStatus}
-                            {best ? ` · ${best}` : ""}
-                            {r.fastestLap ? " · FL" : ""}
-                          </div>
-                        </div>
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/70" />
 
-                        <div className="flex flex-col items-end justify-center bg-black/25 px-3 py-3">
-                          <div className="text-sm font-extrabold text-white">
-                            {r.points.toFixed(0)}
+                        {portraitUrl ? (
+                          <div className="absolute inset-y-0 right-0 w-[42%] p-2">
+                            <div className="relative h-full w-full">
+                              <img
+                                src={portraitUrl}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                              />
+                            </div>
                           </div>
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                            PTS
+                        ) : null}
+
+                        <div className="relative grid grid-cols-[64px_1fr_96px] gap-3 p-4">
+                          <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-black/25">
+                            <div className="text-center">
+                              <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                                Pos
+                              </div>
+                              <div className="mt-1 text-2xl font-extrabold text-white">
+                                {r.position}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
+                              {r.driver.name}
+                            </div>
+                            <div className="mt-1 truncate text-xs font-semibold text-white/70">
+                              {endOrStatus}
+                              {best ? ` · Best ${best}` : ""}
+                              {r.fastestLap ? " · FL" : ""}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end">
+                            <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+                              <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
+                                Punkte
+                              </div>
+                              <div className="mt-1 text-2xl font-extrabold text-white">
+                                {r.points.toFixed(0)}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </Link>
                     );
                   })}
-                </div>
               </div>
             ))}
           </div>
