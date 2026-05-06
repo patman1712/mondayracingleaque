@@ -312,10 +312,14 @@ export default async function RaceDetailPage({
         ) : null}
 
         {showResults ? (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
-              <div key={colIdx} className="grid gap-3">
-                  {col.map((r) => {
+          <div className="mt-8">
+            <div className="mb-3 px-1">
+              <div className="text-xl font-extrabold uppercase tracking-wide text-white">Rennergebnis:</div>
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
+                <div key={colIdx} className="grid gap-3">
+                    {col.map((r) => {
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
                     const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
                     const accent = d?.accent ?? null;
@@ -392,9 +396,10 @@ export default async function RaceDetailPage({
                         </div>
                       </Link>
                     );
-                  })}
-              </div>
-            ))}
+                    })}
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="mt-6">

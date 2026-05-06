@@ -21,6 +21,7 @@
     "@deltazeroproduction/f1-udp-parser": "^1.2.2",
     "@prisma/client": "^6.0.0",
     "bcryptjs": "^3.0.2",
+    "html-to-image": "^1.11.13",
     "next": "^15.0.0",
     "prisma": "^6.0.0",
     "react": "^19.0.0",

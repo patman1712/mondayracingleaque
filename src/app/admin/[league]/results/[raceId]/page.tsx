@@ -3,12 +3,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
-import { League, Prisma } from "@prisma/client";
+import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
+import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -19,10 +20,16 @@ const driverSelect = {
   driverId: true,
   role: true,
   teamId: true,
-  driver: { select: { id: true, name: true } },
-  teamRef: { select: { name: true } }
-} satisfies Prisma.DriverSeasonSelect;
-type DriverRow = Prisma.DriverSeasonGetPayload<{ select: typeof driverSelect }>;
+  driver: { select: { id: true, name: true, portraitPath: true } },
+  teamRef: { select: { name: true, color: true } }
+} as const;
+type DriverRow = {
+  driverId: string;
+  role: "MAIN" | "RESERVE";
+  teamId: string | null;
+  driver: { id: string; name: string; portraitPath: string | null };
+  teamRef: { name: string; color: string | null } | null;
+};
 
 function ensureDir(p: string) {
   try {
@@ -1242,7 +1249,14 @@ export default async function AdminRaceResultsPage({
 
   if (!race || race.league !== l) notFound();
 
-  type DriverItem = { id: string; name: string; role: "MAIN" | "RESERVE"; teamName: string | null };
+  type DriverItem = {
+    id: string;
+    name: string;
+    role: "MAIN" | "RESERVE";
+    teamName: string | null;
+    teamColor: string | null;
+    portraitUrl: string | null;
+  };
   type ResultItem = {
     id: string;
     driverId: string;
@@ -1259,7 +1273,12 @@ export default async function AdminRaceResultsPage({
 
   let drivers: DriverItem[] = [];
   let results: ResultItem[] = [];
-  let entries: Array<{ driverId: string; participates: boolean; teamId: string | null; team: { id: string; name: string } | null }> = [];
+  let entries: Array<{
+    driverId: string;
+    participates: boolean;
+    teamId: string | null;
+    team: { id: string; name: string; color: string | null } | null;
+  }> = [];
   let leagueTeams: Array<{ id: string; name: string }> = [];
 
   const season = await prisma.season
@@ -1299,7 +1318,9 @@ export default async function AdminRaceResultsPage({
       id: r.driver.id,
       name: r.driver.name,
       role: r.role,
-      teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null
+      teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null,
+      teamColor: r.role === "MAIN" ? r.teamRef?.color ?? null : null,
+      portraitUrl: imageUrl(r.driver.portraitPath)
     }));
   } catch {}
 
@@ -1326,7 +1347,7 @@ export default async function AdminRaceResultsPage({
   entries = await prisma.raceEntry
     .findMany({
       where: { raceId },
-      select: { driverId: true, participates: true, teamId: true, team: { select: { id: true, name: true } } },
+      select: { driverId: true, participates: true, teamId: true, team: { select: { id: true, name: true, color: true } } },
       take: 5000
     })
     .catch(() => []);
@@ -1344,11 +1365,30 @@ export default async function AdminRaceResultsPage({
   const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
   const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
   const participatingDrivers = drivers.filter((d) => participatingDriverIds.has(d.id));
+  const driverById = new Map(participatingDrivers.map((d) => [d.id, d] as const));
 
   const bulkDrivers = participatingDrivers.map((d) => {
     const entry = entryByDriverId.get(d.id) ?? null;
     const teamName = d.role === "MAIN" ? d.teamName : entry?.team?.name ?? null;
     return { driverId: d.id, name: d.name, teamName };
+  });
+
+  const posterRows = results.map((r) => {
+    const d = driverById.get(r.driverId) ?? null;
+    const entry = entryByDriverId.get(r.driverId) ?? null;
+    const accent = entry?.team?.color ?? d?.teamColor ?? null;
+    return {
+      position: r.position,
+      driverId: r.driverId,
+      driverName: r.driver.name,
+      portraitUrl: d?.portraitUrl ?? null,
+      accent,
+      points: r.points,
+      timeText: r.timeText,
+      status: r.status,
+      bestTime: r.bestTime,
+      fastestLap: r.fastestLap
+    };
   });
 
   return (
@@ -1700,6 +1740,18 @@ export default async function AdminRaceResultsPage({
             </FormSubmitButton>
           </form>
         </div>
+
+        {results.length > 0 ? (
+          <div className="mt-4">
+            <RaceResultsPosterExportClient
+              raceId={raceId}
+              title="Rennergebnis"
+              subtitle={`Saison ${race.season} · Runde ${race.round} · ${race.name}`}
+              rows={posterRows}
+              saveEnabled
+            />
+          </div>
+        ) : null}
 
         <div className="mt-6">
           {bulkDrivers.length === 0 ? (
