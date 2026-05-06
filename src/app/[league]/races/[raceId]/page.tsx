@@ -12,6 +12,15 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function countryToFlagEmoji(country: string | null | undefined) {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  const a = 0x1f1e6;
+  const first = code.charCodeAt(0) - 65 + a;
+  const second = code.charCodeAt(1) - 65 + a;
+  return String.fromCodePoint(first, second);
+}
+
 function formatStartsAt(d: Date) {
   return d.toLocaleString("de-DE", {
     timeZone: "Europe/Berlin",
@@ -111,7 +120,7 @@ export default async function RaceDetailPage({
         driverId: true,
         driver: { select: { id: true, name: true, number: true, country: true, portraitPath: true } },
         teamId: true,
-        team: { select: { id: true, name: true, color: true } }
+        team: { select: { id: true, name: true, color: true, logoPath: true } }
       },
       take: 5000
     })
@@ -136,7 +145,7 @@ export default async function RaceDetailPage({
     ? await prisma.driverSeason
         .findMany({
           where: { seasonId: season.id, driverId: { in: driverIds } },
-          select: { driverId: true, role: true, teamRef: { select: { name: true, color: true } } },
+          select: { driverId: true, role: true, teamRef: { select: { name: true, color: true, logoPath: true } } },
           take: 5000
         })
         .catch(() => [])
@@ -149,6 +158,10 @@ export default async function RaceDetailPage({
     const role = ds?.role ?? "MAIN";
     const roleLabel = role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer";
     const accent = e.team?.color ?? ds?.teamRef?.color ?? null;
+    const teamLogoUrl =
+      role === "MAIN"
+        ? imageUrl(ds?.teamRef?.logoPath ?? null) ?? imageUrl(e.team?.logoPath ?? null)
+        : imageUrl(e.team?.logoPath ?? null) ?? imageUrl(ds?.teamRef?.logoPath ?? null);
     return {
       id: e.driver.id,
       name: e.driver.name,
@@ -159,6 +172,7 @@ export default async function RaceDetailPage({
       roleLabel,
       teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
       raceTeamName: e.team?.name ?? null,
+      teamLogoUrl,
       accent
     };
   });
@@ -324,11 +338,18 @@ export default async function RaceDetailPage({
                     {col.map((r) => {
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
                     const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
+                    const teamLogoUrl = d?.teamLogoUrl ?? null;
                     const accent = d?.accent ?? null;
-                    const endOrStatus = r.status ? r.status : r.timeText ? r.timeText : "";
+                    const statusRaw = (r.status ?? "").trim();
+                    const statusUp = statusRaw.toUpperCase();
+                    const statusIsFinished = statusUp === "FINISHED" || statusUp === "FINISH" || statusUp === "F";
+                    const endOrStatus =
+                      r.timeText && (!statusRaw || statusIsFinished) ? r.timeText : r.status ? r.status : r.timeText ? r.timeText : "";
                     const best = r.bestTime ?? "";
                     const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
                     const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+                    const flag = countryToFlagEmoji(d?.country ?? null);
+                    const number = d?.number ?? r.driver.number ?? null;
 
                     return (
                       <Link
@@ -369,9 +390,27 @@ export default async function RaceDetailPage({
                             </div>
                           ) : null}
 
+                          {teamLogoUrl ? (
+                            <div className="absolute inset-y-0 right-[38%] hidden w-[12%] items-center justify-center p-2 sm:flex">
+                              <img src={teamLogoUrl} alt="" className="max-h-[44px] w-auto object-contain opacity-95" />
+                            </div>
+                          ) : null}
+
                           <div className="relative p-4">
-                            <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
-                              {r.driver.name}
+                            <div className="flex items-center gap-2">
+                              {flag ? (
+                                <div className="text-base leading-none">
+                                  {flag}
+                                </div>
+                              ) : null}
+                              <div className="min-w-0 truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                {r.driver.name}
+                              </div>
+                              {number ? (
+                                <div className="shrink-0 text-xs font-extrabold text-white/70">
+                                  #{number}
+                                </div>
+                              ) : null}
                             </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
