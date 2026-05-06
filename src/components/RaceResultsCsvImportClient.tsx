@@ -372,6 +372,20 @@ export function RaceResultsCsvImportClient({
                       <span className="text-emerald-200">{r.matchLabel}</span>
                     )}
                   </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/70">
+                    {r.timeText ? (
+                      <span className="font-semibold text-white">Zeit {r.timeText}</span>
+                    ) : null}
+                    {r.status ? <span>Status {r.status}</span> : null}
+                    {r.bestTime ? (
+                      <span className={r.fastestLap ? "text-violet-300" : ""}>
+                        Best {r.bestTime}
+                      </span>
+                    ) : null}
+                    {r.grid ? <span>Grid {r.grid}</span> : null}
+                    {r.stops ? <span>Stops {r.stops}</span> : null}
+                    {r.points ? <span>PTS {r.points}</span> : null}
+                  </div>
                 </div>
                 <select
                   value={r.driverId}
