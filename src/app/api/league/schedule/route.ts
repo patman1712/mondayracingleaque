@@ -32,6 +32,7 @@ export async function GET(req: Request) {
     round: true,
     imagePath: true,
     seasonIsTest: true,
+    _count: { select: { results: true } },
     circuitRef: { select: { imagePath: true } }
   } satisfies Prisma.RaceSelect;
 
@@ -76,6 +77,7 @@ export async function GET(req: Request) {
           title: previous.name,
           round: previous.round,
           date: formatDateRange(new Date(previous.startsAt)),
+          hasResults: (previous._count?.results ?? 0) > 0,
           imageUrl: imageUrl(previous.imagePath || previous.circuitRef?.imagePath)
         }
       : null,
@@ -86,6 +88,7 @@ export async function GET(req: Request) {
           round: current.round,
           date: formatDateRange(new Date(current.startsAt)),
           live: true,
+          hasResults: (current._count?.results ?? 0) > 0,
           imageUrl: imageUrl(current.imagePath || current.circuitRef?.imagePath)
         }
       : null,
@@ -95,6 +98,7 @@ export async function GET(req: Request) {
           title: upcoming.name,
           round: upcoming.round,
           date: formatDateRange(new Date(upcoming.startsAt)),
+          hasResults: (upcoming._count?.results ?? 0) > 0,
           imageUrl: imageUrl(upcoming.imagePath || upcoming.circuitRef?.imagePath)
         }
       : null

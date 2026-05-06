@@ -12,7 +12,6 @@ type League = {
 
 const sub = [
   { key: "drivers", label: "Fahrer" },
-  { key: "results", label: "Ergebnisse" },
   { key: "standings", label: "WM Stand" },
   { key: "calendar", label: "Rennkalender" },
   { key: "teams", label: "Teams" },
@@ -27,6 +26,7 @@ type ScheduleCard = {
   round: number;
   date: string;
   live?: boolean;
+  hasResults?: boolean;
   imageUrl?: string | null;
 };
 
@@ -356,11 +356,12 @@ export function NavLeagues() {
                                 Boolean(card.live)
                               );
                               const src = card.imageUrl || img;
+                              const href = card.hasResults ? `/${l.slug}/races/${card.id}` : `/${l.slug}/calendar`;
 
                               return (
                                 <Link
                                   key={slot.k}
-                                  href={`/${l.slug}/calendar`}
+                                  href={href}
                                   className="group overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                                 >
                                   <div className="px-4 pt-4 text-sm font-semibold text-white/70">
@@ -376,6 +377,11 @@ export function NavLeagues() {
                                       quality={80}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                                    {card.hasResults ? (
+                                      <div className="absolute right-3 top-3 rounded-lg bg-white/10 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 backdrop-blur">
+                                        Ergebnis
+                                      </div>
+                                    ) : null}
                                     <div className="absolute bottom-3 left-3 right-3">
                                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
                                         {cardMeta(card)}

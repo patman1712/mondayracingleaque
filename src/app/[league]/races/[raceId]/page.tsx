@@ -338,7 +338,6 @@ export default async function RaceDetailPage({
                     {col.map((r) => {
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
                     const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
-                    const teamLogoUrl = d?.teamLogoUrl ?? null;
                     const accent = d?.accent ?? null;
                     const statusRaw = (r.status ?? "").trim();
                     const statusUp = statusRaw.toUpperCase();
@@ -350,6 +349,7 @@ export default async function RaceDetailPage({
                     const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
                     const flag = countryToFlagEmoji(d?.country ?? null);
                     const number = d?.number ?? r.driver.number ?? null;
+                    const teamLogoUrl = d?.teamLogoUrl ?? null;
 
                     return (
                       <Link
@@ -390,12 +390,6 @@ export default async function RaceDetailPage({
                             </div>
                           ) : null}
 
-                          {teamLogoUrl ? (
-                            <div className="absolute bottom-2 right-[38%] hidden w-[14%] items-end justify-center p-2 sm:flex">
-                              <img src={teamLogoUrl} alt="" className="h-12 w-auto object-contain opacity-95 md:h-14" />
-                            </div>
-                          ) : null}
-
                           <div className="relative p-4">
                             <div className="flex items-center gap-2">
                               {flag ? (
@@ -418,6 +412,15 @@ export default async function RaceDetailPage({
                               {penalty ? (
                                 <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
                                   +{penalty}s
+                                </span>
+                              ) : null}
+                              {teamLogoUrl ? (
+                                <span className="ml-auto flex items-center">
+                                  <img
+                                    src={teamLogoUrl}
+                                    alt=""
+                                    className="h-9 w-auto object-contain opacity-95 sm:h-10 md:h-12"
+                                  />
                                 </span>
                               ) : null}
                             </div>

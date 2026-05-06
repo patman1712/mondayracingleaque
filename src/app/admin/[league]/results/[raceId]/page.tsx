@@ -36,67 +36,6 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-function toBerlinDateTimeLocalValue(d: Date) {
-  const parts = new Intl.DateTimeFormat("de-DE", {
-    timeZone: "Europe/Berlin",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).formatToParts(d);
-
-  const map = new Map(parts.map((p) => [p.type, p.value] as const));
-  const y = Number(map.get("year") ?? "0");
-  const m = Number(map.get("month") ?? "0");
-  const day = Number(map.get("day") ?? "0");
-  const h = Number(map.get("hour") ?? "0");
-  const min = Number(map.get("minute") ?? "0");
-  if (!y || !m || !day) return "";
-  return `${y}-${pad2(m)}-${pad2(day)}T${pad2(h)}:${pad2(min)}`;
-}
-
-function utcDateFromBerlinDateTimeLocalValue(input: string) {
-  const m = input.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  const hour = Number(m[4]);
-  const minute = Number(m[5]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(minute)) {
-    return null;
-  }
-
-  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
-  const tz = "Europe/Berlin";
-  const parts = new Intl.DateTimeFormat("de-DE", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).formatToParts(utcGuess);
-  const map = new Map(parts.map((p) => [p.type, p.value] as const));
-  const tzY = Number(map.get("year") ?? "0");
-  const tzM = Number(map.get("month") ?? "0");
-  const tzD = Number(map.get("day") ?? "0");
-  const tzH = Number(map.get("hour") ?? "0");
-  const tzMin = Number(map.get("minute") ?? "0");
-  const tzS = Number(map.get("second") ?? "0");
-  const asIfUtc = Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS);
-  const offsetMs = utcGuess.getTime() - asIfUtc;
-  return new Date(utcGuess.getTime() + offsetMs);
-}
-
 async function setResultsPublished(
   adminLeague: string,
   league: League,
@@ -471,93 +410,6 @@ async function applyPenalties(
     revalidatePath(`/${l.publicSlug}/standings`);
   }
 
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
-}
-
-async function setBroadcast(
-  adminLeague: string,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-  const twitchChannel = String(formData.get("twitchChannel") ?? "").trim();
-  await prisma.race
-    .update({
-      where: { id: raceId },
-      data: { twitchChannel: twitchChannel || null }
-    })
-    .catch(() => null);
-
-  const cfg = await resolveLeagueByAdminSlug(adminLeague);
-  const pub =
-    cfg?.publicSlug ??
-    (adminLeague === "one"
-      ? "mrl-one"
-      : adminLeague === "two"
-        ? "mrl-two"
-        : adminLeague === "rookie"
-          ? "mrl-rookie"
-          : null);
-  if (pub) revalidatePath(`/${pub}/races/${raceId}`);
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-}
-
-async function updateRaceDetails(
-  adminLeague: string,
-  league: League,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-
-  const name = String(formData.get("name") ?? "").trim();
-  const roundRaw = String(formData.get("round") ?? "").trim();
-  const startsAtRaw = String(formData.get("startsAt") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim();
-  const circuit = String(formData.get("circuit") ?? "").trim();
-
-  const round = roundRaw ? Number(roundRaw) : null;
-  const startsAt = startsAtRaw ? utcDateFromBerlinDateTimeLocalValue(startsAtRaw) : null;
-  if (!name || !round || !Number.isFinite(round) || !startsAt) {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
-  }
-
-  const current = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true } })
-    .catch(() => null);
-  if (!current || current.league !== league) notFound();
-
-  await prisma.race
-    .update({
-      where: { id: raceId },
-      data: {
-        name,
-        round: Math.max(1, Math.floor(round)),
-        startsAt,
-        location: location || null,
-        circuit: circuit || null
-      }
-    })
-    .catch(() => null);
-
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  revalidatePath(`/admin/${adminLeague}/races`);
-  const cfg = await resolveLeagueByAdminSlug(adminLeague);
-  const pub =
-    cfg?.publicSlug ??
-    (adminLeague === "one"
-      ? "mrl-one"
-      : adminLeague === "two"
-        ? "mrl-two"
-        : adminLeague === "rookie"
-          ? "mrl-rookie"
-          : null);
-  if (pub) {
-    revalidatePath(`/${pub}/races/${raceId}`);
-    revalidatePath(`/${pub}/calendar`);
-  }
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
@@ -1051,98 +903,26 @@ export default async function AdminRaceResultsPage({
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-base font-semibold">Rennen Details</div>
-          <Link
-            href={`/admin/${league}/races`}
-            className="text-sm font-semibold text-white/70 hover:text-white"
-          >
-            Zurück
-          </Link>
+          <div className="text-base font-semibold">Ergebnis · {race.name}</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/admin/${league}/results`}
+              className="text-sm font-semibold text-white/70 hover:text-white"
+            >
+              Zur Übersicht
+            </Link>
+            <Link
+              href={`/admin/${league}/races/${raceId}`}
+              className="text-sm font-semibold text-white/70 hover:text-white"
+            >
+              Rennkalender
+            </Link>
+          </div>
         </div>
         <div className="mt-2 text-sm text-white/70">
-          {race.seasonIsTest ? "TEST · " : ""}Saison {race.season} · Season {race.seasonNo} · Runde {race.round} · {race.name} ·{" "}
+          {race.seasonIsTest ? "TEST · " : ""}Saison {race.season} · Season {race.seasonNo} · Runde {race.round} ·{" "}
           {new Date(race.startsAt).toLocaleString("de-DE")}
         </div>
-
-        <form action={updateRaceDetails.bind(null, league, l, raceId)} className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Name
-            </label>
-            <input
-              name="name"
-              defaultValue={race.name}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Runde
-            </label>
-            <input
-              name="round"
-              inputMode="numeric"
-              defaultValue={race.round}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Startzeit (Europe/Berlin)
-            </label>
-            <input
-              name="startsAt"
-              type="datetime-local"
-              defaultValue={toBerlinDateTimeLocalValue(new Date(race.startsAt))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Location (optional)
-            </label>
-            <input
-              name="location"
-              defaultValue={race.location ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Circuit (optional)
-            </label>
-            <input
-              name="circuit"
-              defaultValue={race.circuit ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-              Rennen speichern
-            </button>
-          </div>
-        </form>
-
-        <form action={setBroadcast.bind(null, league, raceId)} className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-white/70">
-              Twitch Channel (oder URL)
-            </label>
-            <input
-              name="twitchChannel"
-              defaultValue={race.twitchChannel ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              placeholder="https://twitch.tv/deinchannel"
-            />
-            <div className="mt-2 text-xs text-white/60">
-              Wird vor dem Rennen auf der Detailseite eingeblendet und nach dem Rennen ausgeblendet.
-            </div>
-          </div>
-          <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-            Speichern
-          </button>
-        </form>
       </div>
 
       <details className="rounded-2xl border border-white/10 bg-white/5">
