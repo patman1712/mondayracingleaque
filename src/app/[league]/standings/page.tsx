@@ -90,6 +90,7 @@ export default async function LeagueStandingsPage({
     name: string;
     accent: string | null;
     logoPath: string | null;
+    drivers: string[];
   };
 
   let driverStandings: DriverStanding[] = [];
@@ -102,6 +103,7 @@ export default async function LeagueStandingsPage({
         select: {
           driverId: true,
           teamId: true,
+          role: true,
           driver: {
             select: {
               id: true,
@@ -154,6 +156,24 @@ export default async function LeagueStandingsPage({
         teamName: t?.name ?? null,
         teamLogoPath: t?.logoPath ?? null
       });
+    }
+
+    const teamBuckets = new Map<string, { main: string[]; reserve: string[] }>();
+    for (const r of seasonDrivers) {
+      const teamId = r.teamId ?? null;
+      if (!teamId) continue;
+      const label = (r.driver.gamertag ?? "").trim() ? String(r.driver.gamertag) : String(r.driver.name);
+      const bucket = teamBuckets.get(teamId) ?? { main: [], reserve: [] };
+      if (r.role === "MAIN") bucket.main.push(label);
+      else bucket.reserve.push(label);
+      teamBuckets.set(teamId, bucket);
+    }
+    const teamDriverNames = new Map<string, string[]>();
+    for (const [teamId, bucket] of teamBuckets.entries()) {
+      const main = bucket.main.slice().sort((a, b) => a.localeCompare(b));
+      const reserve = bucket.reserve.slice().sort((a, b) => a.localeCompare(b));
+      const merged = Array.from(new Set([...main, ...reserve])).slice(0, 2);
+      teamDriverNames.set(teamId, merged);
     }
 
     const races = await prisma.race
@@ -239,7 +259,8 @@ export default async function LeagueStandingsPage({
         points: teamPoints.get(t.team.id) ?? 0,
         name: t.team.name,
         accent: t.color ?? t.team.color ?? null,
-        logoPath: t.team.logoPath ?? null
+        logoPath: t.team.logoPath ?? null,
+        drivers: teamDriverNames.get(t.team.id) ?? []
       }))
       .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name)));
   } catch {}
@@ -417,17 +438,19 @@ export default async function LeagueStandingsPage({
                             <div className="relative p-4">
                               <div className="flex items-center gap-3">
                                 {logoUrl ? (
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 p-2">
-                                    <img src={logoUrl} alt="" className="h-full w-full object-contain" />
+                                  <div className="flex h-12 w-12 items-center justify-center sm:h-14 sm:w-14">
+                                    <img src={logoUrl} alt="" className="h-full w-full object-contain opacity-95" />
                                   </div>
                                 ) : (
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-sm font-extrabold text-white/70">
+                                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/20 text-sm font-extrabold text-white/70 sm:h-14 sm:w-14">
                                     {t.name.slice(0, 1).toUpperCase()}
                                   </div>
                                 )}
                                 <div className="min-w-0">
                                   <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">{t.name}</div>
-                                  <div className="mt-1 text-xs font-semibold text-white/70">Best 2 Fahrer pro Rennen</div>
+                                  <div className="mt-1 truncate text-xs font-semibold text-white/70">
+                                    {t.drivers.length ? t.drivers.join(" · ") : ""}
+                                  </div>
                                 </div>
                               </div>
                             </div>
