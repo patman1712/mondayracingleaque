@@ -176,7 +176,7 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
         c: typeof x.confidence === "number" ? x.confidence : 0,
         b: x.bbox ?? null
       }))
-      .filter((x) => x.t && x.b && x.c >= 20)
+      .filter((x) => x.t && x.b && x.c >= 12)
       .filter((x) => x.t.length > 1 || /[0-9]/.test(x.t))
       .filter((x) => !/^[\.\-—–_:;,'"“”‘’\[\]\(\)\{\}\|]+$/.test(x.t));
 
@@ -197,7 +197,7 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       })
       .sort((a, b) => a.yMid - b.yMid || a.xMid - b.xMid);
 
-    const yThreshold = Math.max(10, Math.round(medianHeight * 0.8));
+    const yThreshold = Math.max(9, Math.round(medianHeight * 0.65));
     const lines: Array<{ y: number; words: Array<{ text: string; xMid: number }> }> = [];
     for (const it of items) {
       const last = lines[lines.length - 1] ?? null;
@@ -254,14 +254,14 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
     }> = [];
 
     for (const ln of lines) {
-      const posWords = ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.12));
+      const posWords = ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.16));
       const pos = pickPosition(posWords);
 
-      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.12, 0.66)));
-      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.66, 0.75)));
-      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.75, 0.82)));
-      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.82, 0.92)));
-      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.92, 1.02)));
+      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.14, 0.70)));
+      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.70, 0.79)));
+      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.79, 0.86)));
+      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.86, 0.94)));
+      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.94, 1.03)));
 
       if (!driverStr) continue;
       const lineStr = (posWords.map((x) => x.text).join(" ") + " " + driverStr + " " + gridStr + " " + stopsStr + " " + bestStr + " " + timeStr)
