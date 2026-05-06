@@ -82,6 +82,7 @@ export default async function LeagueStandingsPage({
     teamId: string | null;
     teamName: string | null;
     teamLogoPath: string | null;
+    isReserve: boolean;
   };
 
   type TeamStanding = {
@@ -97,7 +98,28 @@ export default async function LeagueStandingsPage({
   let teamStandings: TeamStanding[] = [];
 
   try {
-    const seasonDrivers = await prisma.driverSeason
+    type SeasonDriverRow = {
+      driverId: string;
+      teamId: string | null;
+      role: "MAIN" | "RESERVE";
+      driver: {
+        id: string;
+        name: string;
+        gamertag: string | null;
+        number: number | null;
+        country: string | null;
+        portraitPath: string | null;
+      };
+      teamRef: {
+        id: string;
+        name: string;
+        logoPath: string | null;
+        color: string | null;
+        participations: Array<{ color: string | null }>;
+      } | null;
+    };
+
+    const seasonDrivers = (await prisma.driverSeason
       .findMany({
         where: { seasonId: currentSeason.id, driver: { status: "ACTIVE" } },
         select: {
@@ -126,7 +148,7 @@ export default async function LeagueStandingsPage({
         },
         take: 5000
       })
-      .catch(() => []);
+      .catch(() => [])) as SeasonDriverRow[];
 
     const driverInfo = new Map<
       string,
@@ -140,6 +162,7 @@ export default async function LeagueStandingsPage({
         teamId: string | null;
         teamName: string | null;
         teamLogoPath: string | null;
+        role: "MAIN" | "RESERVE";
       }
     >();
     for (const r of seasonDrivers) {
@@ -155,26 +178,38 @@ export default async function LeagueStandingsPage({
         teamId: r.teamId ?? t?.id ?? null,
         teamName: t?.name ?? null,
         teamLogoPath: t?.logoPath ?? null
+        , role: r.role
       });
     }
 
-    const teamBuckets = new Map<string, { main: string[]; reserve: string[] }>();
+    const driverRoleById = new Map<string, "MAIN" | "RESERVE">(seasonDrivers.map((r) => [r.driverId, r.role] as const));
+
+    const teamBuckets = new Map<string, { main: string[] }>();
     for (const r of seasonDrivers) {
       const teamId = r.teamId ?? null;
       if (!teamId) continue;
+      if (r.role !== "MAIN") continue;
       const label = (r.driver.gamertag ?? "").trim() ? String(r.driver.gamertag) : String(r.driver.name);
-      const bucket = teamBuckets.get(teamId) ?? { main: [], reserve: [] };
-      if (r.role === "MAIN") bucket.main.push(label);
-      else bucket.reserve.push(label);
+      const bucket = teamBuckets.get(teamId) ?? { main: [] };
+      bucket.main.push(label);
       teamBuckets.set(teamId, bucket);
     }
     const teamDriverNames = new Map<string, string[]>();
     for (const [teamId, bucket] of teamBuckets.entries()) {
       const main = bucket.main.slice().sort((a, b) => a.localeCompare(b));
-      const reserve = bucket.reserve.slice().sort((a, b) => a.localeCompare(b));
-      const merged = Array.from(new Set([...main, ...reserve])).slice(0, 2);
-      teamDriverNames.set(teamId, merged);
+      teamDriverNames.set(teamId, Array.from(new Set(main)).slice(0, 2));
     }
+
+    const teamsSeason = await prisma.teamSeason
+      .findMany({
+        where: { seasonId: currentSeason.id },
+        select: {
+          color: true,
+          team: { select: { id: true, name: true, logoPath: true, color: true } }
+        },
+        take: 5000
+      })
+      .catch(() => []);
 
     const races = await prisma.race
       .findMany({
@@ -209,7 +244,10 @@ export default async function LeagueStandingsPage({
         const p = Number(r.points ?? 0);
         if (Number.isFinite(p)) driverPoints.set(r.driverId, (driverPoints.get(r.driverId) ?? 0) + p);
 
-        const teamId = raceTeamByDriverId.get(r.driverId) ?? driverInfo.get(r.driverId)?.teamId ?? null;
+        const role = driverRoleById.get(r.driverId) ?? "MAIN";
+        const teamId =
+          raceTeamByDriverId.get(r.driverId) ??
+          (role === "MAIN" ? driverInfo.get(r.driverId)?.teamId ?? null : null);
         if (!teamId) continue;
         const list = teamRacePoints.get(teamId) ?? [];
         list.push(Number.isFinite(p) ? p : 0);
@@ -236,22 +274,12 @@ export default async function LeagueStandingsPage({
         country: d.country,
         portraitPath: d.portraitPath,
         accent: d.accent,
-        teamId: d.teamId,
-        teamName: d.teamName,
-        teamLogoPath: d.teamLogoPath
+        teamId: d.role === "MAIN" ? d.teamId : null,
+        teamName: d.role === "MAIN" ? d.teamName : null,
+        teamLogoPath: d.role === "MAIN" ? d.teamLogoPath : null,
+        isReserve: d.role !== "MAIN"
       }))
       .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name)));
-
-    const teamsSeason = await prisma.teamSeason
-      .findMany({
-        where: { seasonId: currentSeason.id },
-        select: {
-          color: true,
-          team: { select: { id: true, name: true, logoPath: true, color: true } }
-        },
-        take: 5000
-      })
-      .catch(() => []);
 
     teamStandings = teamsSeason
       .map((t) => ({
@@ -368,12 +396,22 @@ export default async function LeagueStandingsPage({
                               </div>
 
                               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/80">
-                                <span className="truncate">{d.teamName ?? ""}</span>
-                                {teamLogoUrl ? (
-                                  <span className="ml-auto flex items-center">
-                                    <img src={teamLogoUrl} alt="" className="h-8 w-auto object-contain opacity-95 sm:h-9 md:h-10" />
-                                  </span>
-                                ) : null}
+                                {d.isReserve ? (
+                                  <span className="truncate text-white/70">Ersatzfahrer</span>
+                                ) : (
+                                  <>
+                                    <span className="truncate">{d.teamName ?? ""}</span>
+                                    {teamLogoUrl ? (
+                                      <span className="ml-auto flex items-center">
+                                        <img
+                                          src={teamLogoUrl}
+                                          alt=""
+                                          className="h-8 w-auto object-contain opacity-95 sm:h-9 md:h-10"
+                                        />
+                                      </span>
+                                    ) : null}
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
