@@ -29,6 +29,7 @@ export default async function LeagueResultsPage({
     round: number;
     name: string;
     startsAt: Date;
+    resultsPublishedAt: Date | null;
     results: ResultRow[];
   };
 
@@ -44,6 +45,7 @@ export default async function LeagueResultsPage({
         round: true,
         name: true,
         startsAt: true,
+        resultsPublishedAt: true,
         results: {
           orderBy: { position: "asc" },
           select: {
@@ -88,7 +90,11 @@ export default async function LeagueResultsPage({
                 </div>
               </div>
 
-              {race.results.length === 0 ? (
+              {!race.resultsPublishedAt ? (
+                <div className="px-5 py-5 text-sm text-white/60">
+                  Ergebnisse sind noch nicht veröffentlicht.
+                </div>
+              ) : race.results.length === 0 ? (
                 <div className="px-5 py-5 text-sm text-white/60">
                   Noch keine Ergebnisse.
                 </div>

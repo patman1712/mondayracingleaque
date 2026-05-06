@@ -9,6 +9,7 @@ import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { RaceDriverField } from "@/components/RaceDriverField";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
+import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -500,6 +501,254 @@ async function deleteResult(
   revalidatePath("/mrl-one/standings");
   revalidatePath("/mrl-two/standings");
   revalidatePath("/mrl-rookie/standings");
+}
+
+async function setResultsPublished(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const publish = String(formData.get("publish") ?? "").trim() === "1";
+
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true } })
+    .catch(() => null);
+  if (!race || race.league !== league) return;
+
+  await prisma.race
+    .update({
+      where: { id: raceId },
+      data: { resultsPublishedAt: publish ? new Date() : null }
+    })
+    .catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/races/${raceId}`);
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
+async function bulkUpsertResults(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const replace = formData.get("replace") === "on";
+  const raw = String(formData.get("bulkJson") ?? "").trim();
+  if (!raw) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  let rows: Array<{
+    driverId: string;
+    position: number;
+    bestTime: string | null;
+    timeText: string | null;
+    status: string | null;
+    fastestLap: boolean;
+  }> = [];
+
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (Array.isArray(v)) {
+      rows = v
+        .map((r) => {
+          if (!r || typeof r !== "object") return null;
+          const obj = r as Record<string, unknown>;
+          const driverId = String(obj.driverId ?? "").trim();
+          const position = Number(obj.position ?? "");
+          const bestTime = obj.bestTime ? String(obj.bestTime).trim() : null;
+          const timeText = obj.timeText ? String(obj.timeText).trim() : null;
+          const status = obj.status ? String(obj.status).trim() : null;
+          const fastestLap = Boolean(obj.fastestLap);
+          if (!driverId) return null;
+          if (!Number.isFinite(position) || position < 1 || position > 60) return null;
+          return {
+            driverId,
+            position: Math.floor(position),
+            bestTime: bestTime || null,
+            timeText: timeText || null,
+            status: status || null,
+            fastestLap
+          };
+        })
+        .filter(
+          (x): x is {
+            driverId: string;
+            position: number;
+            bestTime: string | null;
+            timeText: string | null;
+            status: string | null;
+            fastestLap: boolean;
+          } => Boolean(x)
+        );
+    }
+  } catch {}
+
+  if (rows.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const race = await prisma.race
+    .findUnique({
+      where: { id: raceId },
+      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true }
+    })
+    .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!season) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const existing = new Map(
+    (
+      await prisma.raceResult
+        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true }, take: 5000 })
+        .catch(() => [])
+    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
+  );
+
+  const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
+  const participating = anyEntries
+    ? new Set(
+        (
+          await prisma.raceEntry
+            .findMany({ where: { raceId, participates: true }, select: { driverId: true }, take: 5000 })
+            .catch(() => [])
+        ).map((e) => e.driverId)
+      )
+    : null;
+
+  const eligible = new Set(
+    (
+      await prisma.driverSeason
+        .findMany({ where: { seasonId: season.id }, distinct: ["driverId"], select: { driverId: true }, take: 5000 })
+        .catch(() => [])
+    ).map((e) => e.driverId)
+  );
+
+  const unique: Array<{
+    driverId: string;
+    position: number;
+    bestTime: string | null;
+    timeText: string | null;
+    status: string | null;
+    fastestLap: boolean;
+  }> = [];
+  const used = new Set<string>();
+  for (const r of rows.sort((a, b) => a.position - b.position)) {
+    if (used.has(r.driverId)) continue;
+    used.add(r.driverId);
+    if (!eligible.has(r.driverId)) continue;
+    if (participating && !participating.has(r.driverId)) continue;
+    unique.push(r);
+  }
+
+  const included = unique.filter((r) => Boolean(r.timeText || r.status || r.bestTime));
+  if (included.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const fastestDriverId = included.find((r) => r.fastestLap)?.driverId ?? null;
+
+  const base = 1000 + (Date.now() % 100000);
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < included.length; i++) {
+      const r = included[i];
+      const tempPos = base + i;
+      const current = existing.get(r.driverId) ?? null;
+      await tx.raceResult.upsert({
+        where: { raceId_driverId: { raceId, driverId: r.driverId } },
+        create: {
+          raceId,
+          driverId: r.driverId,
+          position: tempPos,
+          points: current ? current.points : 0,
+          bestTime: null,
+          timeText: null,
+          status: null,
+          fastestLap: false
+        },
+        update: { position: tempPos }
+      });
+    }
+
+    for (let i = 0; i < included.length; i++) {
+      const r = included[i];
+      const pos = i + 1;
+      await tx.raceResult.update({
+        where: { raceId_driverId: { raceId, driverId: r.driverId } },
+        data: {
+          position: pos,
+          bestTime: r.bestTime,
+          timeText: r.timeText,
+          status: r.status,
+          fastestLap: false
+        }
+      });
+    }
+
+    await tx.raceResult.updateMany({ where: { raceId }, data: { fastestLap: false } });
+    if (fastestDriverId) {
+      await tx.raceResult
+        .update({ where: { raceId_driverId: { raceId, driverId: fastestDriverId } }, data: { fastestLap: true } })
+        .catch(() => null);
+    }
+
+    if (replace) {
+      const ids = included.map((r) => r.driverId);
+      await tx.raceResult.deleteMany({ where: { raceId, driverId: { notIn: ids } } }).catch(() => null);
+    }
+  });
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/races/${raceId}`);
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
 async function setBroadcast(
@@ -1084,6 +1333,7 @@ export default async function AdminRaceResultsPage({
         twitchChannel: true,
         resultsImagePath: true,
         resultsOcrText: true,
+        resultsPublishedAt: true,
         resultImages: {
           select: { id: true, imagePath: true, createdAt: true },
           orderBy: [{ createdAt: "asc" }],
@@ -1197,6 +1447,12 @@ export default async function AdminRaceResultsPage({
   const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
   const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
   const participatingDrivers = drivers.filter((d) => participatingDriverIds.has(d.id));
+
+  const bulkDrivers = participatingDrivers.map((d) => {
+    const entry = entryByDriverId.get(d.id) ?? null;
+    const teamName = d.role === "MAIN" ? d.teamName : entry?.team?.name ?? null;
+    return { driverId: d.id, name: d.name, teamName };
+  });
   const driverOptions =
     entries.length > 0 ? (participatingDrivers.length > 0 ? participatingDrivers : drivers) : drivers;
 
@@ -1509,10 +1765,57 @@ export default async function AdminRaceResultsPage({
           {new Date(race.startsAt).toLocaleString("de-DE")}
         </div>
 
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
+          <div className="text-sm text-white/80">
+            Status:{" "}
+            {race.resultsPublishedAt ? (
+              <span className="font-semibold text-white">Veröffentlicht</span>
+            ) : (
+              <span className="font-semibold text-white/80">Nur Admin</span>
+            )}
+          </div>
+          <form action={setResultsPublished.bind(null, league, l, raceId)}>
+            <input type="hidden" name="publish" value={race.resultsPublishedAt ? "0" : "1"} />
+            <FormSubmitButton
+              className={
+                "w-fit rounded-lg px-4 py-2 text-sm font-semibold " +
+                (race.resultsPublishedAt ? "bg-white/10 text-white hover:bg-white/15" : "bg-mrl-red text-white")
+              }
+              pendingText="Speichern…"
+            >
+              {race.resultsPublishedAt ? "Veröffentlichung zurücknehmen" : "Ergebnis veröffentlichen"}
+            </FormSubmitButton>
+          </form>
+        </div>
+
+        <div className="mt-6">
+          {bulkDrivers.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
+              Bitte zuerst im Fahrerfeld die Fahrer auf „Nimmt teil“ setzen, dann kannst du hier alle Ergebnisse in einem Schritt eintragen.
+            </div>
+          ) : (
+            <RaceResultsBulkEditorClient
+              drivers={bulkDrivers}
+              existingResults={results.map((r) => ({
+                driverId: r.driverId,
+                position: r.position,
+                bestTime: r.bestTime,
+                timeText: r.timeText,
+                status: r.status,
+                fastestLap: r.fastestLap
+              }))}
+              action={bulkUpsertResults.bind(null, league, l, raceId)}
+            />
+          )}
+        </div>
+
         <form
           action={upsertResult.bind(null, league, l, raceId)}
           className="mt-6 grid gap-4 md:grid-cols-2"
         >
+          <div className="md:col-span-2 text-xs font-semibold uppercase tracking-wider text-white/60">
+            Einzel-Eintrag
+          </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
               Fahrer

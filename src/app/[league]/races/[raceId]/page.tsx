@@ -76,6 +76,7 @@ export default async function RaceDetailPage({
         startsAt: true,
         imagePath: true,
         twitchChannel: true,
+        resultsPublishedAt: true,
         circuitRef: { select: { imagePath: true } }
       }
     })
@@ -87,9 +88,10 @@ export default async function RaceDetailPage({
   const start = new Date(race.startsAt);
   const startMs = start.getTime();
   const broadcastCloseMs = startMs + 3 * 60 * 60 * 1000;
-  const showBroadcast = Boolean(race.twitchChannel) && now <= broadcastCloseMs;
-  const showStartTime = now <= broadcastCloseMs;
-  const showResults = now > broadcastCloseMs;
+  const published = Boolean(race.resultsPublishedAt);
+  const showResults = published;
+  const showBroadcast = !published && Boolean(race.twitchChannel) && now <= broadcastCloseMs;
+  const showStartTime = !published && now <= broadcastCloseMs;
 
   const hero = imageUrl(race.imagePath) ?? imageUrl(race.circuitRef?.imagePath ?? null);
   const subLine = [race.location, race.circuit].filter(Boolean).join(" · ");
@@ -330,7 +332,9 @@ export default async function RaceDetailPage({
               <TwitchEmbed channel={race.twitchChannel} startsAtMs={startMs} />
             ) : (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-                Noch kein Live-Stream hinterlegt.
+                {now > broadcastCloseMs
+                  ? "Ergebnisse sind noch nicht veröffentlicht."
+                  : "Noch kein Live-Stream hinterlegt."}
               </div>
             )}
           </div>

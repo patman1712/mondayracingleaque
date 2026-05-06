@@ -27,7 +27,7 @@ export default async function LeagueStandingsPage({
 
   try {
     const rows = await prisma.raceResult.findMany({
-      where: { race: { league: l } },
+      where: { race: { league: l, resultsPublishedAt: { not: null } } },
       select: {
         driverId: true,
         points: true,
