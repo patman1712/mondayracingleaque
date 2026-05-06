@@ -48,37 +48,6 @@ function heroBg(color: string | null | undefined) {
   return `radial-gradient(900px circle at 30% 10%, ${a}, transparent 60%), linear-gradient(180deg, ${b}, rgba(0,0,0,0.65))`;
 }
 
-function parseGapMs(s: string | null | undefined) {
-  const raw = (s ?? "").trim();
-  if (!raw.startsWith("+")) return null;
-  const t = raw.slice(1);
-  const m1 = t.match(/^(\d+)\.(\d{3})$/);
-  if (m1) {
-    const sec = Number(m1[1]);
-    const ms = Number(m1[2]);
-    if (!Number.isFinite(sec) || !Number.isFinite(ms)) return null;
-    return sec * 1000 + ms;
-  }
-  const m2 = t.match(/^(\d+):(\d{2})\.(\d{3})$/);
-  if (m2) {
-    const min = Number(m2[1]);
-    const sec = Number(m2[2]);
-    const ms = Number(m2[3]);
-    if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
-    return (min * 60 + sec) * 1000 + ms;
-  }
-  return null;
-}
-
-function formatGapMs(ms: number) {
-  const total = Math.max(0, Math.round(ms));
-  const minutes = Math.floor(total / 60000);
-  const seconds = Math.floor((total % 60000) / 1000);
-  const milli = total % 1000;
-  if (minutes > 0) return `+${minutes}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
-  return `+${seconds}.${String(milli).padStart(3, "0")}`;
-}
-
 function f1Dots() {
   return {
     backgroundImage:
@@ -229,11 +198,6 @@ export default async function RaceDetailPage({
   const splitAt = Math.ceil(results.length / 2);
   const leftResults = results.slice(0, splitAt);
   const rightResults = results.slice(splitAt);
-  const gapByPos = new Map<number, number>();
-  for (const r of results) {
-    const g = parseGapMs(r.timeText);
-    if (typeof g === "number") gapByPos.set(r.position, g);
-  }
 
   return (
     <>
@@ -357,20 +321,19 @@ export default async function RaceDetailPage({
                     const accent = d?.accent ?? null;
                     const endOrStatus = r.status ? r.status : r.timeText ? r.timeText : "";
                     const best = r.bestTime ?? "";
-                    const gap = parseGapMs(r.timeText);
-                    const aheadGap = r.position > 1 ? gapByPos.get(r.position - 1) ?? null : null;
-                    const gapToAhead =
-                      typeof gap === "number" && typeof aheadGap === "number" && gap >= aheadGap ? formatGapMs(gap - aheadGap) : null;
                     const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
 
                     return (
                       <Link
                         key={r.id}
                         href={`/${league}/drivers/${r.driver.id}`}
-                        className="group grid grid-cols-[64px_1fr_96px] gap-3"
+                        className="group grid grid-cols-[56px_1fr_88px] gap-2"
                       >
-                        <div className="flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25">
-                          <div className="text-2xl font-extrabold text-white">{r.position}</div>
+                        <div
+                          className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
+                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                        >
+                          <div className="text-xl font-extrabold text-white">{r.position}</div>
                         </div>
 
                         <div
@@ -408,12 +371,6 @@ export default async function RaceDetailPage({
                               {endOrStatus}
                             </div>
 
-                            {gapToAhead ? (
-                              <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/70">
-                                Abstand zum Vordermann {gapToAhead}
-                              </div>
-                            ) : null}
-
                             {best ? (
                               <div className={"mt-2 text-sm font-semibold " + bestClass}>
                                 Best Lap {best}
@@ -422,9 +379,12 @@ export default async function RaceDetailPage({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end overflow-hidden rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+                        <div
+                          className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
+                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                        >
                           <div>
-                            <div className="text-2xl font-extrabold text-white">{r.points.toFixed(0)}</div>
+                            <div className="text-xl font-extrabold text-white">{r.points.toFixed(0)}</div>
                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
                               PTS
                             </div>
