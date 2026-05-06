@@ -1398,6 +1398,19 @@ export default async function AdminRaceResultsPage({
                   className="h-[220px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 outline-none"
                 />
               ) : null}
+
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
+                <div className="font-semibold text-white">Telemetry (F1 2025 UDP)</div>
+                <div className="mt-2">
+                  Race ID: <span className="font-mono text-white/90">{raceId}</span>
+                </div>
+                <div className="mt-1">
+                  Endpoint: <span className="font-mono text-white/90">/api/telemetry/ingest</span>
+                </div>
+                <div className="mt-2 text-xs text-white/70">
+                  PC-Bridge: scripts/telemetry-bridge.mjs (Env: TELEMETRY_RACE_ID, TELEMETRY_TARGET_URL, TELEMETRY_INGEST_TOKEN)
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
