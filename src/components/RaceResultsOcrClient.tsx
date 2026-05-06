@@ -168,15 +168,46 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
   function extractRowsFromWords(
     words: Array<{ text: string; confidence?: number; bbox?: { x0: number; y0: number; x1: number; y1: number } }>,
     w: number,
-    h: number
+    h: number,
+    opts?: {
+      minConf: number;
+      yFactor: number;
+      posEnd: number;
+      driverStart: number;
+      driverEnd: number;
+      gridStart: number;
+      gridEnd: number;
+      stopsStart: number;
+      stopsEnd: number;
+      bestStart: number;
+      bestEnd: number;
+      timeStart: number;
+      timeEnd: number;
+    }
   ) {
+    const o = opts ?? {
+      minConf: 22,
+      yFactor: 0.82,
+      posEnd: 0.12,
+      driverStart: 0.12,
+      driverEnd: 0.66,
+      gridStart: 0.66,
+      gridEnd: 0.75,
+      stopsStart: 0.75,
+      stopsEnd: 0.82,
+      bestStart: 0.82,
+      bestEnd: 0.92,
+      timeStart: 0.92,
+      timeEnd: 1.02
+    };
+
     const usable = words
       .map((x) => ({
         t: String(x.text ?? "").trim(),
         c: typeof x.confidence === "number" ? x.confidence : 0,
         b: x.bbox ?? null
       }))
-      .filter((x) => x.t && x.b && x.c >= 12)
+      .filter((x) => x.t && x.b && x.c >= o.minConf)
       .filter((x) => x.t.length > 1 || /[0-9]/.test(x.t))
       .filter((x) => !/^[\.\-—–_:;,'"“”‘’\[\]\(\)\{\}\|]+$/.test(x.t));
 
@@ -197,7 +228,7 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       })
       .sort((a, b) => a.yMid - b.yMid || a.xMid - b.xMid);
 
-    const yThreshold = Math.max(9, Math.round(medianHeight * 0.65));
+    const yThreshold = Math.max(9, Math.round(medianHeight * o.yFactor));
     const lines: Array<{ y: number; words: Array<{ text: string; xMid: number }> }> = [];
     for (const it of items) {
       const last = lines[lines.length - 1] ?? null;
@@ -254,14 +285,14 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
     }> = [];
 
     for (const ln of lines) {
-      const posWords = ln.words.filter((w2) => inCol(w2.xMid, 0.0, 0.16));
+      const posWords = ln.words.filter((w2) => inCol(w2.xMid, 0.0, o.posEnd));
       const pos = pickPosition(posWords);
 
-      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.14, 0.70)));
-      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.70, 0.79)));
-      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.79, 0.86)));
-      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.86, 0.94)));
-      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, 0.94, 1.03)));
+      const driverStr = join(ln.words.filter((w2) => inCol(w2.xMid, o.driverStart, o.driverEnd)));
+      const gridStr = join(ln.words.filter((w2) => inCol(w2.xMid, o.gridStart, o.gridEnd)));
+      const stopsStr = join(ln.words.filter((w2) => inCol(w2.xMid, o.stopsStart, o.stopsEnd)));
+      const bestStr = join(ln.words.filter((w2) => inCol(w2.xMid, o.bestStart, o.bestEnd)));
+      const timeStr = join(ln.words.filter((w2) => inCol(w2.xMid, o.timeStart, o.timeEnd)));
 
       if (!driverStr) continue;
       const lineStr = (posWords.map((x) => x.text).join(" ") + " " + driverStr + " " + gridStr + " " + stopsStr + " " + bestStr + " " + timeStr)
@@ -296,15 +327,23 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       }
     }
 
-    return rows.map((r) => ({
-      position: r.position ?? 0,
-      driver: r.driver,
-      grid: r.grid,
-      stops: r.stops,
-      bestTime: r.bestTime,
-      timeText: r.timeText,
-      status: r.status
-    }));
+    const n = rows.length;
+    const maxPos = Math.max(0, ...rows.map((r) => r.position ?? 0));
+    if (n > 0 && maxPos > n) {
+      for (let i = 0; i < rows.length; i++) rows[i].position = i + 1;
+    }
+
+    return rows
+      .map((r) => ({
+        position: r.position ?? 0,
+        driver: r.driver,
+        grid: r.grid,
+        stops: r.stops,
+        bestTime: r.bestTime,
+        timeText: r.timeText,
+        status: r.status
+      }))
+      .filter((r) => r.position >= 1 && r.position <= 30);
   }
 
   async function runOcr() {
@@ -332,7 +371,16 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
       });
 
       const texts: string[] = [];
-      const structured: Array<{
+      const structuredStrict: Array<{
+        position: number;
+        driver: string;
+        grid: number | null;
+        stops: number | null;
+        bestTime: string | null;
+        timeText: string | null;
+        status: string | null;
+      }> = [];
+      const structuredLenient: Array<{
         position: number;
         driver: string;
         grid: number | null;
@@ -353,12 +401,45 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
         const res = await worker.recognize(canvas);
         const text = String(res?.data?.text ?? "").trim();
         if (text) texts.push(text);
-        const rows = extractRowsFromWords(res?.data?.words ?? [], canvas.width, canvas.height);
-        for (const r of rows) structured.push(r);
+
+        const words = res?.data?.words ?? [];
+        const strictRows = extractRowsFromWords(words, canvas.width, canvas.height, {
+          minConf: 22,
+          yFactor: 0.82,
+          posEnd: 0.12,
+          driverStart: 0.12,
+          driverEnd: 0.66,
+          gridStart: 0.66,
+          gridEnd: 0.75,
+          stopsStart: 0.75,
+          stopsEnd: 0.82,
+          bestStart: 0.82,
+          bestEnd: 0.92,
+          timeStart: 0.92,
+          timeEnd: 1.02
+        });
+        for (const r of strictRows) structuredStrict.push(r);
+
+        const lenientRows = extractRowsFromWords(words, canvas.width, canvas.height, {
+          minConf: 12,
+          yFactor: 0.65,
+          posEnd: 0.16,
+          driverStart: 0.14,
+          driverEnd: 0.70,
+          gridStart: 0.70,
+          gridEnd: 0.79,
+          stopsStart: 0.79,
+          stopsEnd: 0.86,
+          bestStart: 0.86,
+          bestEnd: 0.94,
+          timeStart: 0.94,
+          timeEnd: 1.03
+        });
+        for (const r of lenientRows) structuredLenient.push(r);
       }
 
       let combined = texts.join("\n\n").trim();
-      if (!combined && structured.length === 0) {
+      if (!combined && structuredStrict.length === 0 && structuredLenient.length === 0) {
         setError("OCR hat keinen Text erkannt.");
         setProgress(null);
         return;
@@ -373,16 +454,18 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
         return;
       }
 
-      if (structured.length) {
-        const byPos = new Map<number, (typeof structured)[number]>();
-        for (const r of structured) {
+      function mergeByPos<T extends { position: number; driver: string; grid: number | null; stops: number | null; bestTime: string | null; timeText: string | null; status: string | null }>(
+        rows: T[]
+      ) {
+        const byPos = new Map<number, T>();
+        for (const r of rows) {
           const prev = byPos.get(r.position) ?? null;
           if (!prev) {
             byPos.set(r.position, r);
             continue;
           }
           byPos.set(r.position, {
-            position: r.position,
+            ...r,
             driver: prev.driver.length >= r.driver.length ? prev.driver : r.driver,
             grid: prev.grid ?? r.grid,
             stops: prev.stops ?? r.stops,
@@ -391,11 +474,25 @@ export function RaceResultsOcrClient({ formId, imageUrls }: { formId: string; im
             status: prev.status ?? r.status
           });
         }
-        const merged = Array.from(byPos.values()).sort((a, b) => a.position - b.position).slice(0, 30);
-        if (jsonField) jsonField.value = JSON.stringify(merged);
+        return Array.from(byPos.values()).sort((a, b) => a.position - b.position).slice(0, 30);
+      }
 
+      function score(rows: Array<{ position: number }>) {
+        const s = new Set(rows.map((r) => r.position));
+        const maxPos = Math.max(0, ...rows.map((r) => r.position));
+        let penalty = 0;
+        if (rows.length > 0 && maxPos > rows.length) penalty += 3;
+        return s.size * 10 - penalty;
+      }
+
+      const mergedStrict = mergeByPos(structuredStrict);
+      const mergedLenient = mergeByPos(structuredLenient);
+      const chosen = score(mergedStrict) >= score(mergedLenient) ? mergedStrict : mergedLenient;
+
+      if (chosen.length) {
+        if (jsonField) jsonField.value = JSON.stringify(chosen);
         if (!combined) {
-          combined = merged
+          combined = chosen
             .map((r) => `${r.position} ${r.driver} ${r.grid ?? ""} ${r.stops ?? ""} ${r.bestTime ?? ""} ${r.timeText ?? ""}`.trim())
             .join("\n");
         }
