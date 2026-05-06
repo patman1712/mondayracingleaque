@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/AdminShell";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { getActiveSeason } from "@/lib/currentSeason";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function AdminStandingsPage({
   const cfg = await resolveLeagueByAdminSlug(league);
   if (!cfg) notFound();
   const l = cfg.league;
+  const season = await getActiveSeason({ league: l, select: { year: true, seasonNo: true, isTest: true } }).catch(() => null);
+  if (!season) notFound();
 
   type StandingRow = {
     driverId: string;
@@ -29,7 +32,7 @@ export default async function AdminStandingsPage({
 
   try {
     const rows = await prisma.raceResult.findMany({
-      where: { race: { league: l } },
+      where: { race: { league: l, season: season.year, seasonNo: season.seasonNo, seasonIsTest: season.isTest } },
       select: { driverId: true, points: true, driver: { select: { name: true, team: true } } }
     });
 

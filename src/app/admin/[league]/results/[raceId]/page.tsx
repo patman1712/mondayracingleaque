@@ -7,6 +7,7 @@ import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
+import { applyRaceScoring } from "@/lib/scoring";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
@@ -322,6 +323,7 @@ async function bulkUpsertResults(
   });
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
+  await applyRaceScoring(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -391,6 +393,7 @@ async function applyPenalties(
   });
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
+  await applyRaceScoring(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -686,6 +689,7 @@ async function importResultsFromCsv(
   });
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
+  await applyRaceScoring(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);

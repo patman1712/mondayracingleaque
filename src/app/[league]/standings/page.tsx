@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { getActiveSeason } from "@/lib/currentSeason";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function LeagueStandingsPage({
   const cfg = await resolveLeagueByPublicSlug(league);
   if (!cfg || !cfg.isActive) notFound();
   const l = cfg.league;
+  const season = await getActiveSeason({ league: l, select: { year: true, seasonNo: true, isTest: true } }).catch(() => null);
+  if (!season) notFound();
 
   type StandingRow = {
     driverId: string;
@@ -27,7 +30,15 @@ export default async function LeagueStandingsPage({
 
   try {
     const rows = await prisma.raceResult.findMany({
-      where: { race: { league: l, resultsPublishedAt: { not: null } } },
+      where: {
+        race: {
+          league: l,
+          season: season.year,
+          seasonNo: season.seasonNo,
+          seasonIsTest: season.isTest,
+          resultsPublishedAt: { not: null }
+        }
+      },
       select: {
         driverId: true,
         points: true,

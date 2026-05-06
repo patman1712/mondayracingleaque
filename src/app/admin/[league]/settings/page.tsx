@@ -4,6 +4,7 @@ import { League } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { applyRaceScoring, getLeagueScoring, setLeagueScoring } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,43 @@ async function setActiveSeason(formData: FormData) {
   redirect(`/admin/${slugs.adminSlug}/settings?ok=1`);
 }
 
+async function saveScoring(formData: FormData) {
+  "use server";
+  const leagueRaw = String(formData.get("league") ?? "");
+  if (!isLeagueValue(leagueRaw)) redirect("/admin?error=invalid");
+  const league = leagueRaw;
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findUnique({ where: { league }, select: { adminSlug: true, publicSlug: true } })
+      .catch(() => null)) ?? fallbackSlugsFor(league);
+
+  const fieldRaw = String(formData.get("fieldSize") ?? "").trim();
+  const fieldSize = Number(fieldRaw);
+  if (!Number.isFinite(fieldSize)) redirect(`/admin/${slugs.adminSlug}/settings?error=invalid`);
+
+  const size = Math.max(1, Math.min(60, Math.floor(fieldSize)));
+  const points: number[] = [];
+  for (let i = 1; i <= size; i++) {
+    const raw = String(formData.get(`p${i}`) ?? "").trim();
+    const v = raw === "" ? 0 : Number(raw);
+    points.push(Number.isFinite(v) ? Math.max(0, Number(v)) : 0);
+  }
+
+  await setLeagueScoring(prisma, league, { fieldSize: size, pointsByPosition: points }).catch(() => null);
+  const races = await prisma.race.findMany({ where: { league }, select: { id: true }, take: 5000 }).catch(() => []);
+  for (const r of races) {
+    await applyRaceScoring(prisma, r.id).catch(() => null);
+  }
+
+  revalidatePath(`/admin/${slugs.adminSlug}/settings`);
+  revalidatePath(`/admin/${slugs.adminSlug}/results`);
+  revalidatePath(`/admin/${slugs.adminSlug}/standings`);
+  revalidatePath(`/${slugs.publicSlug}/standings`);
+  revalidatePath(`/${slugs.publicSlug}/results`);
+  redirect(`/admin/${slugs.adminSlug}/settings?ok=1`);
+}
+
 export default async function AdminLeagueSettingsPage({
   params,
   searchParams
@@ -93,6 +131,10 @@ export default async function AdminLeagueSettingsPage({
     .findUnique({ where: { key: activeKey(l) }, select: { value: true } })
     .catch(() => null);
   const activeId = active?.value ?? "";
+  const scoring = await getLeagueScoring(prisma, l).catch(() => ({
+    fieldSize: 20,
+    pointsByPosition: Array.from({ length: 20 }).map(() => 0)
+  }));
 
   return (
     <AdminShell>
@@ -139,6 +181,57 @@ export default async function AdminLeagueSettingsPage({
             <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
               Speichern
             </button>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold">Einstellungen · WM Punkte</div>
+          <div className="mt-1 text-sm text-white/60">
+            Anzahl Fahrer im Feld und Punktevergabe pro Platz. Diese Punkte werden beim Speichern von Ergebnissen automatisch vergeben.
+          </div>
+
+          <form action={saveScoring} className="mt-4 space-y-4">
+            <input type="hidden" name="league" value={l} />
+
+            <div className="grid gap-4 md:grid-cols-[240px_1fr] md:items-start">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-white/70">Fahrerfeld (Anzahl)</label>
+                <input
+                  name="fieldSize"
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={1}
+                  defaultValue={scoring.fieldSize}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                />
+                <div className="mt-1 text-xs text-white/60">Nach Änderung erneut speichern, um die Punkte-Liste anzupassen.</div>
+              </div>
+
+              <div>
+                <div className="mb-1 block text-xs font-semibold text-white/70">Punkte pro Platz</div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: scoring.fieldSize }).map((_, idx) => {
+                    const pos = idx + 1;
+                    return (
+                      <div key={pos} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div className="w-10 shrink-0 text-xs font-semibold text-white/70">P{pos}</div>
+                        <input
+                          name={`p${pos}`}
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          defaultValue={scoring.pointsByPosition[idx] ?? 0}
+                          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">Speichern</button>
           </form>
         </div>
       </div>
