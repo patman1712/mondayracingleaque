@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { Container } from "@/components/Container";
 import { SignOutButton } from "@/components/SignOutButton";
 import { listAdminLeagues } from "@/lib/league";
 
@@ -16,7 +15,7 @@ export async function AdminShell({ children }: { children: ReactNode }) {
   const leagues = await listAdminLeagues();
 
   return (
-    <Container>
+    <div className="mx-auto w-full max-w-screen-2xl px-4">
       <div className="mt-8 flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold">Admin</div>
@@ -25,7 +24,7 @@ export async function AdminShell({ children }: { children: ReactNode }) {
         <SignOutButton />
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-[260px_1fr]">
+      <div className="mt-6 grid gap-6 md:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
             Allgemein
@@ -131,6 +130,6 @@ export async function AdminShell({ children }: { children: ReactNode }) {
 
         <section className="min-w-0">{children}</section>
       </div>
-    </Container>
+    </div>
   );
 }

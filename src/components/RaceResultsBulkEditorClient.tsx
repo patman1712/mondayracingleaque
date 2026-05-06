@@ -164,7 +164,7 @@ export function RaceResultsBulkEditorClient({
               onDragStart={(e) => onDragStart(e, idx)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => onDrop(e, idx)}
-              className="grid grid-cols-[56px_1fr_140px_140px_90px_130px_110px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+              className="grid grid-cols-[56px_minmax(260px,1fr)_150px_150px_110px_130px_60px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             >
               <div className="text-xs font-semibold text-white/70">P{idx + 1}</div>
 
