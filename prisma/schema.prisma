@@ -153,6 +153,7 @@ model Race {
   twitchChannel String?
   resultsImagePath String?
   resultsOcrText String?
+  resultsCsvDraftJson String?
   resultsPublishedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

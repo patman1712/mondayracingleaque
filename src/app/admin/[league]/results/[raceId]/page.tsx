@@ -11,6 +11,7 @@ import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
 import { RaceEntriesBulkEditorClient } from "@/components/RaceEntriesBulkEditorClient";
+import { RaceResultsCsvImportClient } from "@/components/RaceResultsCsvImportClient";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -21,14 +22,14 @@ const driverSelect = {
   driverId: true,
   role: true,
   teamId: true,
-  driver: { select: { id: true, name: true, portraitPath: true } },
+  driver: { select: { id: true, name: true, gamertag: true, portraitPath: true } },
   teamRef: { select: { name: true, color: true } }
 } as const;
 type DriverRow = {
   driverId: string;
   role: "MAIN" | "RESERVE";
   teamId: string | null;
-  driver: { id: string; name: string; portraitPath: string | null };
+  driver: { id: string; name: string; gamertag: string | null; portraitPath: string | null };
   teamRef: { name: string; color: string | null } | null;
 };
 
@@ -468,6 +469,8 @@ async function bulkUpsertResults(
   let rows: Array<{
     driverId: string;
     position: number;
+    grid: number | null;
+    stops: number | null;
     bestTime: string | null;
     timeText: string | null;
     status: string | null;
@@ -483,6 +486,10 @@ async function bulkUpsertResults(
           const obj = r as Record<string, unknown>;
           const driverId = String(obj.driverId ?? "").trim();
           const position = Number(obj.position ?? "");
+          const gridRaw = obj.grid != null && String(obj.grid).trim() !== "" ? Number(obj.grid) : null;
+          const stopsRaw = obj.stops != null && String(obj.stops).trim() !== "" ? Number(obj.stops) : null;
+          const grid = Number.isFinite(gridRaw as number) ? Math.floor(gridRaw as number) : null;
+          const stops = Number.isFinite(stopsRaw as number) ? Math.floor(stopsRaw as number) : null;
           const bestTime = obj.bestTime ? String(obj.bestTime).trim() : null;
           const timeText = obj.timeText ? String(obj.timeText).trim() : null;
           const status = obj.status ? String(obj.status).trim() : null;
@@ -492,6 +499,8 @@ async function bulkUpsertResults(
           return {
             driverId,
             position: Math.floor(position),
+            grid,
+            stops,
             bestTime: bestTime || null,
             timeText: timeText || null,
             status: status || null,
@@ -502,6 +511,8 @@ async function bulkUpsertResults(
           (x): x is {
             driverId: string;
             position: number;
+            grid: number | null;
+            stops: number | null;
             bestTime: string | null;
             timeText: string | null;
             status: string | null;
@@ -566,6 +577,8 @@ async function bulkUpsertResults(
   const unique: Array<{
     driverId: string;
     position: number;
+    grid: number | null;
+    stops: number | null;
     bestTime: string | null;
     timeText: string | null;
     status: string | null;
@@ -614,6 +627,8 @@ async function bulkUpsertResults(
         where: { raceId_driverId: { raceId, driverId: r.driverId } },
         data: {
           position: pos,
+          grid: r.grid,
+          stops: r.stops,
           bestTime: r.bestTime,
           timeText: r.timeText,
           status: r.status,
@@ -1097,6 +1112,262 @@ async function ocrImportResultsFromImages(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
+async function importResultsFromCsv(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const replace = formData.get("replace") === "on";
+  const raw = String(formData.get("csvJson") ?? "").trim();
+  if (!raw) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  let rows: Array<{
+    position: number;
+    driverName: string;
+    driverId: string | null;
+    grid: number | null;
+    stops: number | null;
+    bestTime: string | null;
+    timeText: string | null;
+    status: string | null;
+    points: number | null;
+    fastestLap: boolean;
+  }> = [];
+
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (Array.isArray(v)) {
+      rows = v
+        .map((r) => {
+          if (!r || typeof r !== "object") return null;
+          const obj = r as Record<string, unknown>;
+          const position = Number(obj.position ?? "");
+          const driverName = String(obj.driverName ?? "").trim();
+          const driverIdRaw = obj.driverId ? String(obj.driverId).trim() : "";
+          const driverId = driverIdRaw ? driverIdRaw : null;
+          const gridRaw = obj.grid != null && String(obj.grid).trim() !== "" ? Number(obj.grid) : null;
+          const stopsRaw = obj.stops != null && String(obj.stops).trim() !== "" ? Number(obj.stops) : null;
+          const grid = Number.isFinite(gridRaw as number) ? Math.floor(gridRaw as number) : null;
+          const stops = Number.isFinite(stopsRaw as number) ? Math.floor(stopsRaw as number) : null;
+          const bestTime = obj.bestTime ? String(obj.bestTime).trim() : null;
+          const timeText = obj.timeText ? String(obj.timeText).trim() : null;
+          const status = obj.status ? String(obj.status).trim() : null;
+          const pointsRaw = obj.points != null && String(obj.points).trim() !== "" ? Number(obj.points) : null;
+          const points = Number.isFinite(pointsRaw as number) ? Number(pointsRaw) : null;
+          const fastestLap = Boolean(obj.fastestLap);
+          if (!Number.isFinite(position) || position < 1 || position > 60) return null;
+          return {
+            position: Math.floor(position),
+            driverName,
+            driverId,
+            grid,
+            stops,
+            bestTime: bestTime || null,
+            timeText: timeText || null,
+            status: status || null,
+            points,
+            fastestLap
+          };
+        })
+        .filter(
+          (x): x is {
+            position: number;
+            driverName: string;
+            driverId: string | null;
+            grid: number | null;
+            stops: number | null;
+            bestTime: string | null;
+            timeText: string | null;
+            status: string | null;
+            points: number | null;
+            fastestLap: boolean;
+          } => Boolean(x)
+        );
+    }
+  } catch {}
+
+  if (rows.length === 0) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const race = await prisma.race
+    .findUnique({
+      where: { id: raceId },
+      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true }
+    })
+    .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const season = await prisma.season
+    .findUnique({
+      where: {
+        league_year_seasonNo_isTest: {
+          league,
+          year: race.season,
+          seasonNo: race.seasonNo,
+          isTest: race.seasonIsTest
+        }
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+  if (!season) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  const eligible = new Set(
+    (
+      await prisma.driverSeason
+        .findMany({ where: { seasonId: season.id }, distinct: ["driverId"], select: { driverId: true }, take: 5000 })
+        .catch(() => [])
+    ).map((e) => e.driverId)
+  );
+
+  const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
+  const participating = anyEntries
+    ? new Set(
+        (
+          await prisma.raceEntry
+            .findMany({ where: { raceId, participates: true }, select: { driverId: true }, take: 5000 })
+            .catch(() => [])
+        ).map((e) => e.driverId)
+      )
+    : null;
+
+  const existing = new Map(
+    (
+      await prisma.raceResult
+        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true }, take: 5000 })
+        .catch(() => [])
+    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
+  );
+
+  const used = new Set<string>();
+  const included = rows
+    .filter((r) => Boolean(r.driverId))
+    .map((r) => ({
+      driverId: r.driverId as string,
+      position: r.position,
+      grid: r.grid,
+      stops: r.stops,
+      bestTime: r.bestTime,
+      timeText: r.timeText,
+      status: r.status,
+      fastestLap: r.fastestLap
+    }))
+    .sort((a, b) => a.position - b.position)
+    .filter((r) => {
+      if (used.has(r.driverId)) return false;
+      used.add(r.driverId);
+      if (!eligible.has(r.driverId)) return false;
+      if (participating && !participating.has(r.driverId)) return false;
+      return Boolean(r.timeText || r.status || r.bestTime);
+    });
+
+  const fastestDriverId = included.find((r) => r.fastestLap)?.driverId ?? null;
+
+  const draft = rows
+    .filter((r) => !r.driverId)
+    .sort((a, b) => a.position - b.position)
+    .map((r) => ({
+      position: r.position,
+      driverName: r.driverName,
+      driverId: null,
+      grid: r.grid,
+      stops: r.stops,
+      bestTime: r.bestTime,
+      timeText: r.timeText,
+      status: r.status,
+      points: r.points,
+      fastestLap: r.fastestLap
+    }));
+
+  const base = 1000 + (Date.now() % 100000);
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < included.length; i++) {
+      const r = included[i];
+      const tempPos = base + i;
+      const current = existing.get(r.driverId) ?? null;
+
+      await tx.raceEntry
+        .upsert({
+          where: { raceId_driverId: { raceId, driverId: r.driverId } },
+          create: { raceId, driverId: r.driverId, participates: true, teamId: null },
+          update: { participates: true }
+        })
+        .catch(() => null);
+
+      await tx.raceResult.upsert({
+        where: { raceId_driverId: { raceId, driverId: r.driverId } },
+        create: {
+          raceId,
+          driverId: r.driverId,
+          position: tempPos,
+          points: current ? current.points : 0,
+          grid: null,
+          stops: null,
+          bestTime: null,
+          timeText: null,
+          status: null,
+          fastestLap: false
+        },
+        update: { position: tempPos }
+      });
+    }
+
+    for (let i = 0; i < included.length; i++) {
+      const r = included[i];
+      const pos = i + 1;
+      await tx.raceResult.update({
+        where: { raceId_driverId: { raceId, driverId: r.driverId } },
+        data: {
+          position: pos,
+          grid: r.grid,
+          stops: r.stops,
+          bestTime: r.bestTime,
+          timeText: r.timeText,
+          status: r.status,
+          fastestLap: false
+        }
+      });
+    }
+
+    await tx.raceResult.updateMany({ where: { raceId }, data: { fastestLap: false } });
+    if (fastestDriverId) {
+      await tx.raceResult
+        .update({ where: { raceId_driverId: { raceId, driverId: fastestDriverId } }, data: { fastestLap: true } })
+        .catch(() => null);
+    }
+
+    if (replace) {
+      const ids = included.map((r) => r.driverId);
+      await tx.raceResult.deleteMany({ where: { raceId, driverId: { notIn: ids } } }).catch(() => null);
+    }
+
+    await tx.race.update({ where: { id: raceId }, data: { resultsCsvDraftJson: draft.length ? JSON.stringify(draft) : null } });
+  });
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/races/${raceId}`);
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
 async function bulkUpsertRaceEntries(
   adminLeague: string,
   league: League,
@@ -1207,6 +1478,7 @@ export default async function AdminRaceResultsPage({
         twitchChannel: true,
         resultsImagePath: true,
         resultsOcrText: true,
+        resultsCsvDraftJson: true,
         resultsPublishedAt: true,
         resultImages: {
           select: { id: true, imagePath: true, createdAt: true },
@@ -1222,6 +1494,7 @@ export default async function AdminRaceResultsPage({
   type DriverItem = {
     id: string;
     name: string;
+    gamertag: string | null;
     role: "MAIN" | "RESERVE";
     teamName: string | null;
     teamColor: string | null;
@@ -1287,6 +1560,7 @@ export default async function AdminRaceResultsPage({
     drivers = rows.map((r) => ({
       id: r.driver.id,
       name: r.driver.name,
+      gamertag: r.driver.gamertag ?? null,
       role: r.role,
       teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null,
       teamColor: r.role === "MAIN" ? r.teamRef?.color ?? null : null,
@@ -1575,6 +1849,14 @@ export default async function AdminRaceResultsPage({
                 <div className="mt-2 text-xs text-white/70">
                   PC-Bridge: scripts/telemetry-bridge.mjs (Env: TELEMETRY_RACE_ID, TELEMETRY_TARGET_URL, TELEMETRY_INGEST_TOKEN)
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <RaceResultsCsvImportClient
+                  drivers={participatingDrivers.map((d) => ({ id: d.id, name: d.name, gamertag: d.gamertag }))}
+                  existingDraftJson={race.resultsCsvDraftJson ?? null}
+                  action={importResultsFromCsv.bind(null, league, l, raceId)}
+                />
               </div>
             </div>
           </div>
