@@ -10,7 +10,6 @@ import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResult
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
-import { RaceEntriesBulkEditorClient } from "@/components/RaceEntriesBulkEditorClient";
 import { RaceResultsCsvImportClient } from "@/components/RaceResultsCsvImportClient";
 import { RaceResultsPenaltiesEditorClient } from "@/components/RaceResultsPenaltiesEditorClient";
 
@@ -857,81 +856,6 @@ async function importResultsFromCsv(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
-async function bulkUpsertRaceEntries(
-  adminLeague: string,
-  league: League,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-
-  const raw = String(formData.get("entriesJson") ?? "").trim();
-  let rows: Array<{ driverId?: unknown; participates?: unknown; teamId?: unknown }> = [];
-  try {
-    rows = raw ? JSON.parse(raw) : [];
-  } catch {
-    redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
-  }
-
-  const race = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
-    .catch(() => null);
-  if (!race || race.league !== league) return;
-
-  const season = await prisma.season
-    .findUnique({
-      where: {
-        league_year_seasonNo_isTest: {
-          league,
-          year: race.season,
-          seasonNo: race.seasonNo,
-          isTest: race.seasonIsTest
-        }
-      },
-      select: { id: true }
-    })
-    .catch(() => null);
-  if (!season) return;
-
-  const eligible = await prisma.driverSeason
-    .findMany({
-      where: { seasonId: season.id },
-      select: { driverId: true, role: true },
-      take: 5000
-    })
-    .catch((): Array<{ driverId: string; role: "MAIN" | "RESERVE" }> => []);
-  const roleByDriverId = new Map(eligible.map((e) => [e.driverId, e.role] as const));
-
-  const allowedTeams = await prisma.teamLeague
-    .findMany({ where: { league }, select: { teamId: true }, take: 5000 })
-    .catch((): Array<{ teamId: string }> => []);
-  const allowedTeamIds = new Set(allowedTeams.map((t) => t.teamId));
-
-  for (const r of rows) {
-    const driverId = String(r?.driverId ?? "").trim();
-    if (!driverId) continue;
-    const role = roleByDriverId.get(driverId) ?? null;
-    if (!role) continue;
-
-    const participates = String(r?.participates ?? "").trim() === "true" || String(r?.participates ?? "").trim() === "1";
-    const teamIdRaw = String(r?.teamId ?? "").trim();
-    const teamId =
-      role === "RESERVE" && participates && teamIdRaw && allowedTeamIds.has(teamIdRaw) ? teamIdRaw : null;
-
-    await prisma.raceEntry
-      .upsert({
-        where: { raceId_driverId: { raceId, driverId } },
-        create: { raceId, driverId, participates, teamId },
-        update: { participates, teamId: participates ? teamId : null }
-      })
-      .catch(() => null);
-  }
-
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#driver-field`);
-}
-
 export default async function AdminRaceResultsPage({
   params
   , searchParams
@@ -1006,7 +930,6 @@ export default async function AdminRaceResultsPage({
     teamId: string | null;
     team: { id: string; name: string; color: string | null } | null;
   }> = [];
-  let leagueTeams: Array<{ id: string; name: string }> = [];
 
   const season = await prisma.season
     .findUnique({
@@ -1081,16 +1004,6 @@ export default async function AdminRaceResultsPage({
       take: 5000
     })
     .catch(() => []);
-
-  const leagueTeamRows = await prisma.teamLeague
-    .findMany({
-      where: { league: l },
-      orderBy: [{ team: { name: "asc" } }],
-      select: { team: { select: { id: true, name: true } } },
-      take: 2000
-    })
-    .catch((): Array<{ team: { id: string; name: string } }> => []);
-  leagueTeams = leagueTeamRows.map((r) => r.team);
 
   const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
   const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
@@ -1258,35 +1171,12 @@ export default async function AdminRaceResultsPage({
         </div>
       </details>
 
-      <details id="driver-field" className="rounded-2xl border border-white/10 bg-white/5">
-        <summary className="cursor-pointer list-none px-6 py-5 text-base font-semibold text-white">
-          Fahrerfeld
-          <div className="mt-2 text-sm font-normal text-white/70">
-            Teilnahme pro Fahrer bestätigen. Mehrere Fahrer anklicken und unten einmal speichern.
-          </div>
-        </summary>
-        <div className="px-6 pb-6">
-          {drivers.length === 0 ? (
-            <div className="text-sm text-white/60">Keine Fahrer gefunden.</div>
-          ) : (
-            <RaceEntriesBulkEditorClient
-              drivers={drivers.map((d) => {
-                const entry = entryByDriverId.get(d.id) ?? null;
-                return {
-                  driverId: d.id,
-                  name: d.name,
-                  role: d.role,
-                  teamName: d.teamName,
-                  participates: entry?.participates ?? false,
-                  teamId: entry?.teamId ?? null
-                };
-              })}
-              teams={leagueTeams}
-              action={bulkUpsertRaceEntries.bind(null, league, l, raceId)}
-            />
-          )}
-        </div>
-      </details>
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+        Fahrerfeld pflegst du jetzt im Rennkalender:
+        <Link href={`/admin/${league}/races/${raceId}#driver-field`} className="ml-2 font-semibold text-white hover:underline">
+          Fahrerfeld öffnen
+        </Link>
+      </div>
 
       <div id="manual-results" className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

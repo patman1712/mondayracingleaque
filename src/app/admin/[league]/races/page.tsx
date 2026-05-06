@@ -701,10 +701,16 @@ export default async function AdminRacesPage({
                     </button>
                   </form>
                   <Link
+                    href={`/admin/${league}/races/${r.id}`}
+                    className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                  >
+                    Fahrerfeld
+                  </Link>
+                  <Link
                     href={`/admin/${league}/results/${r.id}`}
                     className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
                   >
-                    Details
+                    Ergebnis
                   </Link>
                   <form action={deleteRace}>
                     <input type="hidden" name="id" value={r.id} />

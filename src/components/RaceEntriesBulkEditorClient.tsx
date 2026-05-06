@@ -22,11 +22,13 @@ type RowState = {
 export function RaceEntriesBulkEditorClient({
   drivers,
   teams,
-  action
+  action,
+  resultsPageHref
 }: {
   drivers: DriverRow[];
   teams: Team[];
   action: (formData: FormData) => void | Promise<void>;
+  resultsPageHref?: string;
 }) {
   const initial = useMemo(() => {
     const m = new Map<string, RowState>();
@@ -82,7 +84,13 @@ export function RaceEntriesBulkEditorClient({
             const s = state.get(d.driverId) ?? { participates: false, teamId: "" };
             const participates = Boolean(s.participates);
             const reserve = d.role === "RESERVE";
-            const resultHref = participates ? `#result-${d.driverId}` : "#manual-results";
+            const resultHref = resultsPageHref
+              ? participates
+                ? `${resultsPageHref}#result-${d.driverId}`
+                : `${resultsPageHref}#manual-results`
+              : participates
+                ? `#result-${d.driverId}`
+                : "#manual-results";
             return (
               <div
                 key={d.driverId}
