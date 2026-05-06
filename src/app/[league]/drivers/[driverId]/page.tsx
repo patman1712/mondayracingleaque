@@ -55,7 +55,7 @@ function heroBg(color: string) {
   } as const;
 }
 
-function stat(label: string, value: number) {
+function stat(label: string, value: string | number) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-4">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
@@ -211,6 +211,56 @@ export default async function DriverDetailPage({
     : null;
   const displayName = driver.gamertag ?? driver.name;
 
+  let currentSeasonPoints = 0;
+  let currentSeasonRank: number | null = null;
+  if (currentSeason) {
+    const seasonDrivers = await prisma.driverSeason
+      .findMany({
+        where: { seasonId: currentSeason.id },
+        distinct: ["driverId"],
+        select: { driverId: true, driver: { select: { name: true } } },
+        take: 5000
+      })
+      .catch(() => []);
+
+    const pointsRows = await prisma.raceResult
+      .findMany({
+        where: {
+          race: {
+            league: l,
+            season: currentSeason.year,
+            seasonNo: currentSeason.seasonNo,
+            seasonIsTest: currentSeason.isTest,
+            resultsPublishedAt: { not: null }
+          }
+        },
+        select: { driverId: true, points: true },
+        take: 50000
+      })
+      .catch(() => []);
+
+    const pointsByDriverId = new Map<string, number>();
+    for (const r of pointsRows) {
+      const p = Number.isFinite(r.points) ? r.points : 0;
+      pointsByDriverId.set(r.driverId, (pointsByDriverId.get(r.driverId) ?? 0) + p);
+    }
+
+    currentSeasonPoints = pointsByDriverId.get(driver.id) ?? 0;
+
+    if (pointsRows.length > 0) {
+      const table = seasonDrivers.map((d) => ({
+        driverId: d.driverId,
+        name: d.driver.name,
+        points: pointsByDriverId.get(d.driverId) ?? 0
+      }));
+      table.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name, "de-DE"));
+      const idx = table.findIndex((x) => x.driverId === driver.id);
+      currentSeasonRank = idx >= 0 ? idx + 1 : null;
+    }
+  }
+
+  const currentSeasonPointsDisplay = Math.round(currentSeasonPoints * 10) / 10;
+
   return (
     <>
       <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen overflow-hidden border-b border-white/10">
@@ -327,11 +377,13 @@ export default async function DriverDetailPage({
               <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
                 Aktuelle Saison
               </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 {stat("Rennstarts", currentSeasonRow?.starts ?? 0)}
                 {stat("Siege", currentSeasonRow?.wins ?? 0)}
                 {stat("Podien", currentSeasonRow?.podiums ?? 0)}
                 {stat("Fahrer des Tages", currentSeasonRow?.driverOfDay ?? 0)}
+                {stat("WM Punkte", currentSeasonPointsDisplay)}
+                {stat("WM Platz", currentSeasonRank ?? "—")}
               </div>
             </div>
             <div>
