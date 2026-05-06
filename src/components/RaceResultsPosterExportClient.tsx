@@ -210,29 +210,31 @@ export function RaceResultsPosterExportClient({
       </div>
       {msg ? <div className="mt-2 text-xs text-white/70">{msg}</div> : null}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#090b10]">
-        <div
-          ref={ref}
-          className="w-[1080px] bg-[#090b10] p-10 text-white"
-          style={{ fontFamily: "inherit" }}
-        >
-          <div className="text-center">
-            <div className="text-4xl font-extrabold tracking-wide">{title}</div>
-            <div className="mt-2 text-sm font-semibold uppercase tracking-wider text-white/70">
-              {subtitle}
+      <details className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#090b10]">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white">
+          Vorschau anzeigen
+          <div className="mt-1 text-xs font-normal text-white/60">1080×1080</div>
+        </summary>
+        <div className="border-t border-white/10">
+          <div
+            ref={ref}
+            className="w-[1080px] bg-[#090b10] p-10 text-white"
+            style={{ fontFamily: "inherit" }}
+          >
+            <div className="text-center">
+              <div className="text-4xl font-extrabold tracking-wide">{title}</div>
+              <div className="mt-2 text-sm font-semibold uppercase tracking-wider text-white/70">{subtitle}</div>
             </div>
-          </div>
 
-          <div className="mt-10 grid gap-8">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="grid gap-3">{left.map((r) => <RowTile key={r.driverId} {...r} />)}</div>
-              <div className="grid gap-3">{right.map((r) => <RowTile key={r.driverId} {...r} />)}</div>
+            <div className="mt-10 grid gap-8">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid gap-3">{left.map((r) => <RowTile key={r.driverId} {...r} />)}</div>
+                <div className="grid gap-3">{right.map((r) => <RowTile key={r.driverId} {...r} />)}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div className="mt-2 text-xs text-white/60">Preview ist 1080×1080.</div>
+      </details>
     </div>
   );
 }
-

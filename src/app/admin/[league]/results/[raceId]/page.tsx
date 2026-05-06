@@ -10,6 +10,7 @@ import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsOcrClient } from "@/components/RaceResultsOcrClient";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
+import { RaceEntriesBulkEditorClient } from "@/components/RaceEntriesBulkEditorClient";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -1096,7 +1097,7 @@ async function ocrImportResultsFromImages(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
-async function setParticipation(
+async function bulkUpsertRaceEntries(
   adminLeague: string,
   league: League,
   raceId: string,
@@ -1104,9 +1105,14 @@ async function setParticipation(
 ) {
   "use server";
   await requireAdmin();
-  const driverId = String(formData.get("driverId") ?? "").trim();
-  const participates = String(formData.get("participates") ?? "").trim() === "1";
-  if (!driverId) return;
+
+  const raw = String(formData.get("entriesJson") ?? "").trim();
+  let rows: Array<{ driverId?: unknown; participates?: unknown; teamId?: unknown }> = [];
+  try {
+    rows = raw ? JSON.parse(raw) : [];
+  } catch {
+    redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+  }
 
   const race = await prisma.race
     .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
@@ -1129,77 +1135,41 @@ async function setParticipation(
   if (!season) return;
 
   const eligible = await prisma.driverSeason
-    .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { role: true } })
-    .catch(() => null);
-  if (!eligible) return;
-
-  await prisma.raceEntry
-    .upsert({
-      where: { raceId_driverId: { raceId, driverId } },
-      create: { raceId, driverId, participates, teamId: null },
-      update: { participates, ...(participates ? {} : { teamId: null }) }
+    .findMany({
+      where: { seasonId: season.id },
+      select: { driverId: true, role: true },
+      take: 5000
     })
-    .catch(() => null);
+    .catch((): Array<{ driverId: string; role: "MAIN" | "RESERVE" }> => []);
+  const roleByDriverId = new Map(eligible.map((e) => [e.driverId, e.role] as const));
 
-  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#manual-results`);
-}
+  const allowedTeams = await prisma.teamLeague
+    .findMany({ where: { league }, select: { teamId: true }, take: 5000 })
+    .catch((): Array<{ teamId: string }> => []);
+  const allowedTeamIds = new Set(allowedTeams.map((t) => t.teamId));
 
-async function setReserveTeamForRace(
-  adminLeague: string,
-  league: League,
-  raceId: string,
-  formData: FormData
-) {
-  "use server";
-  await requireAdmin();
-  const driverId = String(formData.get("driverId") ?? "").trim();
-  const teamIdRaw = String(formData.get("teamId") ?? "").trim();
-  const teamId = teamIdRaw ? teamIdRaw : null;
-  if (!driverId) return;
+  for (const r of rows) {
+    const driverId = String(r?.driverId ?? "").trim();
+    if (!driverId) continue;
+    const role = roleByDriverId.get(driverId) ?? null;
+    if (!role) continue;
 
-  const race = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
-    .catch(() => null);
-  if (!race || race.league !== league) return;
+    const participates = String(r?.participates ?? "").trim() === "true" || String(r?.participates ?? "").trim() === "1";
+    const teamIdRaw = String(r?.teamId ?? "").trim();
+    const teamId =
+      role === "RESERVE" && participates && teamIdRaw && allowedTeamIds.has(teamIdRaw) ? teamIdRaw : null;
 
-  const season = await prisma.season
-    .findUnique({
-      where: {
-        league_year_seasonNo_isTest: {
-          league,
-          year: race.season,
-          seasonNo: race.seasonNo,
-          isTest: race.seasonIsTest
-        }
-      },
-      select: { id: true }
-    })
-    .catch(() => null);
-  if (!season) return;
-
-  const ds = await prisma.driverSeason
-    .findUnique({ where: { driverId_seasonId: { driverId, seasonId: season.id } }, select: { role: true } })
-    .catch(() => null);
-  if (!ds || ds.role !== "RESERVE") return;
-
-  if (teamId) {
-    const allowed = await prisma.teamLeague
-      .findUnique({ where: { teamId_league: { teamId, league } }, select: { teamId: true } })
+    await prisma.raceEntry
+      .upsert({
+        where: { raceId_driverId: { raceId, driverId } },
+        create: { raceId, driverId, participates, teamId },
+        update: { participates, teamId: participates ? teamId : null }
+      })
       .catch(() => null);
-    if (!allowed) return;
   }
 
-  await prisma.raceEntry
-    .upsert({
-      where: { raceId_driverId: { raceId, driverId } },
-      create: { raceId, driverId, participates: true, teamId },
-      update: { participates: true, teamId }
-    })
-    .catch(() => null);
-
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
-  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#manual-results`);
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1#driver-field`);
 }
 
 export default async function AdminRaceResultsPage({
@@ -1612,102 +1582,35 @@ export default async function AdminRaceResultsPage({
         </div>
       </details>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-base font-semibold">Fahrerfeld</div>
-        <div className="mt-2 text-sm text-white/70">
-          Teilnahme pro Fahrer bestätigen. Bei Ersatzfahrern kannst du fürs einzelne Rennen ein Team setzen.
-        </div>
-
-        <div className="mt-4 space-y-2">
+      <details id="driver-field" className="rounded-2xl border border-white/10 bg-white/5">
+        <summary className="cursor-pointer list-none px-6 py-5 text-base font-semibold text-white">
+          Fahrerfeld
+          <div className="mt-2 text-sm font-normal text-white/70">
+            Teilnahme pro Fahrer bestätigen. Mehrere Fahrer anklicken und unten einmal speichern.
+          </div>
+        </summary>
+        <div className="px-6 pb-6">
           {drivers.length === 0 ? (
             <div className="text-sm text-white/60">Keine Fahrer gefunden.</div>
           ) : (
-            drivers.map((d) => {
-              const entry = entryByDriverId.get(d.id) ?? null;
-              const participates = entry?.participates ?? false;
-              const reserve = d.role === "RESERVE";
-              const resultHref = participates ? `#result-${d.id}` : "#manual-results";
-              return (
-                <div
-                  key={d.id}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">
-                      <a href={resultHref} className="hover:underline">
-                        {d.name}
-                      </a>
-                      <span className="text-white/60"> · {reserve ? "Ersatzfahrer" : "Stammfahrer"}</span>
-                      {d.teamName ? <span className="text-white/60"> · {d.teamName}</span> : null}
-                    </div>
-                    {reserve && participates ? (
-                      <div className="mt-2 text-sm text-white/70">
-                        Team (nur für dieses Rennen): {entry?.team?.name ?? "(keins)"}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <form action={setParticipation.bind(null, league, l, raceId)}>
-                      <input type="hidden" name="driverId" value={d.id} />
-                      <input type="hidden" name="participates" value={participates ? "0" : "1"} />
-                      <button
-                        className={
-                          "rounded-lg px-3 py-2 text-xs font-semibold " +
-                          (participates ? "bg-mrl-red text-white" : "bg-white/10 text-white hover:bg-white/15")
-                        }
-                      >
-                        {participates ? "Nimmt teil" : "Nimmt nicht teil"}
-                      </button>
-                    </form>
-
-                    {participates ? (
-                      <a
-                        href={`#result-${d.id}`}
-                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                      >
-                        Zum Ergebnis
-                      </a>
-                    ) : (
-                      <a
-                        href="#manual-results"
-                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                      >
-                        Ergebnis
-                      </a>
-                    )}
-
-                    {reserve ? (
-                      <form action={setReserveTeamForRace.bind(null, league, l, raceId)} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="driverId" value={d.id} />
-                        <select
-                          name="teamId"
-                          defaultValue={entry?.teamId ?? ""}
-                          disabled={!participates}
-                          className="w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25 disabled:opacity-50"
-                        >
-                          <option value="">(kein Team)</option>
-                          {leagueTeams.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          disabled={!participates}
-                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-50"
-                        >
-                          Team setzen
-                        </button>
-                      </form>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })
+            <RaceEntriesBulkEditorClient
+              drivers={drivers.map((d) => {
+                const entry = entryByDriverId.get(d.id) ?? null;
+                return {
+                  driverId: d.id,
+                  name: d.name,
+                  role: d.role,
+                  teamName: d.teamName,
+                  participates: entry?.participates ?? false,
+                  teamId: entry?.teamId ?? null
+                };
+              })}
+              teams={leagueTeams}
+              action={bulkUpsertRaceEntries.bind(null, league, l, raceId)}
+            />
           )}
         </div>
-      </div>
+      </details>
 
       <div id="manual-results" className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
