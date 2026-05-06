@@ -20,6 +20,7 @@ export default async function LeagueResultsPage({
     position: number;
     points: number;
     status: string | null;
+    penaltySeconds: number;
     driver: { name: string; number: number | null; team: string | null };
   };
 
@@ -53,6 +54,7 @@ export default async function LeagueResultsPage({
             position: true,
             points: true,
             status: true,
+            penaltySeconds: true,
             driver: { select: { name: true, number: true, team: true } }
           }
         }
@@ -113,6 +115,9 @@ export default async function LeagueResultsPage({
                         <div className="truncate text-xs text-white/60">
                           {r.driver.team ?? ""}
                           {r.status ? ` · ${r.status}` : ""}
+                          {r.penaltySeconds ? (
+                            <span className="ml-2 font-semibold text-red-300">+{r.penaltySeconds}s</span>
+                          ) : null}
                         </div>
                       </div>
                       <div className="text-right font-semibold">

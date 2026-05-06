@@ -14,6 +14,7 @@ type ExistingResult = {
   position: number;
   bestTime: string | null;
   timeText: string | null;
+  penaltySeconds: number;
   status: string | null;
   fastestLap: boolean;
 };
@@ -25,6 +26,7 @@ type Row = {
   teamName: string | null;
   bestTime: string;
   timeText: string;
+  penaltySeconds: string;
   status: string;
   fastestLap: boolean;
 };
@@ -56,6 +58,7 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
       teamName: d.teamName,
       bestTime: r?.bestTime ?? "",
       timeText: r?.timeText ?? "",
+      penaltySeconds: r && typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? String(r.penaltySeconds) : "",
       status: r?.status ?? "",
       fastestLap: Boolean(r?.fastestLap)
     };
@@ -99,6 +102,7 @@ export function RaceResultsBulkEditorClient({
         position: idx + 1,
         bestTime: r.bestTime.trim() || null,
         timeText: r.timeText.trim() || null,
+        penaltySeconds: Number.isFinite(Number(r.penaltySeconds)) ? Math.max(0, Math.floor(Number(r.penaltySeconds))) : 0,
         status: r.status.trim() || null,
         fastestLap: Boolean(r.fastestLap)
       }))
@@ -145,7 +149,7 @@ export function RaceResultsBulkEditorClient({
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="text-sm font-semibold text-white">Schnell-Eingabe</div>
       <div className="mt-1 text-xs text-white/60">
-        Reihenfolge per Drag & Drop = Position. Endzeit + Bestzeit direkt pro Fahrer eintragen.
+        Reihenfolge per Drag & Drop = Position. Endzeit + Bestzeit + Strafe direkt pro Fahrer eintragen.
       </div>
 
       <form className="mt-4 space-y-3" action={action}>
@@ -160,7 +164,7 @@ export function RaceResultsBulkEditorClient({
               onDragStart={(e) => onDragStart(e, idx)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => onDrop(e, idx)}
-              className="grid grid-cols-[56px_1fr_140px_140px_130px_110px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+              className="grid grid-cols-[56px_1fr_140px_140px_90px_130px_110px] items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             >
               <div className="text-xs font-semibold text-white/70">P{idx + 1}</div>
 
@@ -181,6 +185,14 @@ export function RaceResultsBulkEditorClient({
                 onChange={(e) => updateRow(r.driverId, { bestTime: e.target.value })}
                 className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
                 placeholder="Bestzeit"
+              />
+
+              <input
+                value={r.penaltySeconds}
+                onChange={(e) => updateRow(r.driverId, { penaltySeconds: e.target.value })}
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
+                placeholder="Strafe (s)"
+                inputMode="numeric"
               />
 
               <select
@@ -206,7 +218,7 @@ export function RaceResultsBulkEditorClient({
                 FL
               </label>
 
-              <div className="col-span-6 flex items-center justify-end gap-2">
+              <div className="col-span-7 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => move(idx, Math.max(0, idx - 1))}

@@ -6,11 +6,13 @@ import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
 import { RaceEntriesBulkEditorClient } from "@/components/RaceEntriesBulkEditorClient";
 import { RaceResultsCsvImportClient } from "@/components/RaceResultsCsvImportClient";
+import { RaceResultsPenaltiesEditorClient } from "@/components/RaceResultsPenaltiesEditorClient";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -161,6 +163,7 @@ async function bulkUpsertResults(
     bestTime: string | null;
     timeText: string | null;
     status: string | null;
+    penaltySeconds: number;
     fastestLap: boolean;
   }> = [];
 
@@ -177,6 +180,8 @@ async function bulkUpsertResults(
           const stopsRaw = obj.stops != null && String(obj.stops).trim() !== "" ? Number(obj.stops) : null;
           const grid = Number.isFinite(gridRaw as number) ? Math.floor(gridRaw as number) : null;
           const stops = Number.isFinite(stopsRaw as number) ? Math.floor(stopsRaw as number) : null;
+          const penaltyRaw = obj.penaltySeconds != null && String(obj.penaltySeconds).trim() !== "" ? Number(obj.penaltySeconds) : 0;
+          const penaltySeconds = Number.isFinite(penaltyRaw) ? Math.max(0, Math.floor(penaltyRaw)) : 0;
           const bestTime = obj.bestTime ? String(obj.bestTime).trim() : null;
           const timeText = obj.timeText ? String(obj.timeText).trim() : null;
           const status = obj.status ? String(obj.status).trim() : null;
@@ -191,6 +196,7 @@ async function bulkUpsertResults(
             bestTime: bestTime || null,
             timeText: timeText || null,
             status: status || null,
+            penaltySeconds,
             fastestLap
           };
         })
@@ -203,6 +209,7 @@ async function bulkUpsertResults(
             bestTime: string | null;
             timeText: string | null;
             status: string | null;
+            penaltySeconds: number;
             fastestLap: boolean;
           } => Boolean(x)
         );
@@ -237,9 +244,9 @@ async function bulkUpsertResults(
   const existing = new Map(
     (
       await prisma.raceResult
-        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true }, take: 5000 })
+        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true, penaltySeconds: true }, take: 5000 })
         .catch(() => [])
-    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
+    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap, penaltySeconds: r.penaltySeconds }] as const)
   );
 
   const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
@@ -269,6 +276,7 @@ async function bulkUpsertResults(
     bestTime: string | null;
     timeText: string | null;
     status: string | null;
+    penaltySeconds: number;
     fastestLap: boolean;
   }> = [];
   const used = new Set<string>();
@@ -285,6 +293,37 @@ async function bulkUpsertResults(
 
   const fastestDriverId = included.find((r) => r.fastestLap)?.driverId ?? null;
 
+  const baseMs =
+    included
+      .map((r) => (r.timeText && !r.timeText.trim().startsWith("+") ? parseRaceTimeMs(r.timeText) : null))
+      .filter((x): x is number => typeof x === "number")
+      .sort((a, b) => a - b)[0] ?? null;
+
+  const finishMsByDriverId = new Map<string, number | null>();
+  for (const r of included) {
+    const tt = (r.timeText ?? "").trim();
+    const status = (r.status ?? "").trim().toUpperCase();
+    if (status && ["DNF", "DSQ", "DNS", "RET"].includes(status)) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt && ["DNF", "DSQ", "DNS", "RET"].includes(tt.toUpperCase())) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (!tt) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt.startsWith("+")) {
+      const gap = parseGapMs(tt);
+      finishMsByDriverId.set(r.driverId, typeof gap === "number" && typeof baseMs === "number" ? baseMs + gap : null);
+      continue;
+    }
+    const ms = parseRaceTimeMs(tt);
+    finishMsByDriverId.set(r.driverId, typeof ms === "number" ? ms : null);
+  }
+
   const base = 1000 + (Date.now() % 100000);
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < included.length; i++) {
@@ -298,6 +337,8 @@ async function bulkUpsertResults(
           driverId: r.driverId,
           position: tempPos,
           points: current ? current.points : 0,
+          penaltySeconds: current ? current.penaltySeconds : 0,
+          finishTimeMs: null,
           bestTime: null,
           timeText: null,
           status: null,
@@ -310,6 +351,9 @@ async function bulkUpsertResults(
     for (let i = 0; i < included.length; i++) {
       const r = included[i];
       const pos = i + 1;
+      const current = existing.get(r.driverId) ?? null;
+      const penaltySeconds = typeof r.penaltySeconds === "number" ? r.penaltySeconds : current ? current.penaltySeconds : 0;
+      const finishTimeMs = finishMsByDriverId.get(r.driverId) ?? null;
       await tx.raceResult.update({
         where: { raceId_driverId: { raceId, driverId: r.driverId } },
         data: {
@@ -319,6 +363,8 @@ async function bulkUpsertResults(
           bestTime: r.bestTime,
           timeText: r.timeText,
           status: r.status,
+          penaltySeconds,
+          finishTimeMs,
           fastestLap: false
         }
       });
@@ -336,6 +382,77 @@ async function bulkUpsertResults(
       await tx.raceResult.deleteMany({ where: { raceId, driverId: { notIn: ids } } }).catch(() => null);
     }
   });
+
+  await recalcRaceResults(prisma, raceId).catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/races/${raceId}`);
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
+async function applyPenalties(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const raw = String(formData.get("penaltiesJson") ?? "").trim();
+  if (!raw) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  let rows: Array<{ driverId: string; penaltySeconds: number }> = [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (Array.isArray(v)) {
+      rows = v
+        .map((r) => {
+          if (!r || typeof r !== "object") return null;
+          const obj = r as Record<string, unknown>;
+          const driverId = String(obj.driverId ?? "").trim();
+          const penRaw = obj.penaltySeconds != null && String(obj.penaltySeconds).trim() !== "" ? Number(obj.penaltySeconds) : 0;
+          const penaltySeconds = Number.isFinite(penRaw) ? Math.max(0, Math.floor(penRaw)) : 0;
+          if (!driverId) return null;
+          return { driverId, penaltySeconds };
+        })
+        .filter((x): x is { driverId: string; penaltySeconds: number } => Boolean(x));
+    }
+  } catch {}
+
+  const race = await prisma.race
+    .findUnique({ where: { id: raceId }, select: { id: true, league: true } })
+    .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  await prisma.$transaction(async (tx) => {
+    for (const r of rows) {
+      await tx.raceResult
+        .update({
+          where: { raceId_driverId: { raceId, driverId: r.driverId } },
+          data: { penaltySeconds: r.penaltySeconds }
+        })
+        .catch(() => null);
+    }
+  });
+
+  await recalcRaceResults(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -570,9 +687,9 @@ async function importResultsFromCsv(
   const existing = new Map(
     (
       await prisma.raceResult
-        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true }, take: 5000 })
+        .findMany({ where: { raceId }, select: { driverId: true, points: true, fastestLap: true, penaltySeconds: true }, take: 5000 })
         .catch(() => [])
-    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap }] as const)
+    ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap, penaltySeconds: r.penaltySeconds }] as const)
   );
 
   const used = new Set<string>();
@@ -598,6 +715,37 @@ async function importResultsFromCsv(
     });
 
   const fastestDriverId = included.find((r) => r.fastestLap)?.driverId ?? null;
+
+  const baseMs =
+    included
+      .map((r) => (r.timeText && !r.timeText.trim().startsWith("+") ? parseRaceTimeMs(r.timeText) : null))
+      .filter((x): x is number => typeof x === "number")
+      .sort((a, b) => a - b)[0] ?? null;
+
+  const finishMsByDriverId = new Map<string, number | null>();
+  for (const r of included) {
+    const tt = (r.timeText ?? "").trim();
+    const status = (r.status ?? "").trim().toUpperCase();
+    if (status && ["DNF", "DSQ", "DNS", "RET"].includes(status)) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt && ["DNF", "DSQ", "DNS", "RET"].includes(tt.toUpperCase())) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (!tt) {
+      finishMsByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt.startsWith("+")) {
+      const gap = parseGapMs(tt);
+      finishMsByDriverId.set(r.driverId, typeof gap === "number" && typeof baseMs === "number" ? baseMs + gap : null);
+      continue;
+    }
+    const ms = parseRaceTimeMs(tt);
+    finishMsByDriverId.set(r.driverId, typeof ms === "number" ? ms : null);
+  }
 
   const draft = rows
     .filter((r) => !r.driverId)
@@ -637,6 +785,8 @@ async function importResultsFromCsv(
           driverId: r.driverId,
           position: tempPos,
           points: current ? current.points : 0,
+          penaltySeconds: current ? current.penaltySeconds : 0,
+          finishTimeMs: null,
           grid: null,
           stops: null,
           bestTime: null,
@@ -651,6 +801,8 @@ async function importResultsFromCsv(
     for (let i = 0; i < included.length; i++) {
       const r = included[i];
       const pos = i + 1;
+      const current = existing.get(r.driverId) ?? null;
+      const finishTimeMs = finishMsByDriverId.get(r.driverId) ?? null;
       await tx.raceResult.update({
         where: { raceId_driverId: { raceId, driverId: r.driverId } },
         data: {
@@ -660,6 +812,8 @@ async function importResultsFromCsv(
           bestTime: r.bestTime,
           timeText: r.timeText,
           status: r.status,
+          penaltySeconds: current ? current.penaltySeconds : 0,
+          finishTimeMs,
           fastestLap: false
         }
       });
@@ -679,6 +833,8 @@ async function importResultsFromCsv(
 
     await tx.race.update({ where: { id: raceId }, data: { resultsCsvDraftJson: draft.length ? JSON.stringify(draft) : null } });
   });
+
+  await recalcRaceResults(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -835,6 +991,8 @@ export default async function AdminRaceResultsPage({
     stops: number | null;
     bestTime: string | null;
     timeText: string | null;
+    finishTimeMs: number | null;
+    penaltySeconds: number;
     status: string | null;
     fastestLap: boolean;
     driver: { name: string };
@@ -907,6 +1065,8 @@ export default async function AdminRaceResultsPage({
         stops: true,
         bestTime: true,
         timeText: true,
+        finishTimeMs: true,
+        penaltySeconds: true,
         status: true,
         fastestLap: true,
         driver: { select: { name: true } }
@@ -955,6 +1115,7 @@ export default async function AdminRaceResultsPage({
       accent,
       points: r.points,
       timeText: r.timeText,
+      penaltySeconds: r.penaltySeconds,
       status: r.status,
       bestTime: r.bestTime,
       fastestLap: r.fastestLap
@@ -1184,6 +1345,7 @@ export default async function AdminRaceResultsPage({
                 position: r.position,
                 bestTime: r.bestTime,
                 timeText: r.timeText,
+                penaltySeconds: r.penaltySeconds,
                 status: r.status,
                 fastestLap: r.fastestLap
               }))}
@@ -1191,6 +1353,27 @@ export default async function AdminRaceResultsPage({
             />
           )}
         </div>
+
+        {results.length > 0 ? (
+          <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
+            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
+              Stewards (Strafen)
+              <div className="mt-1 text-xs font-normal text-white/70">
+                Sekunden-Strafen werden zur Endzeit addiert und das Ergebnis wird automatisch neu sortiert.
+              </div>
+            </summary>
+            <div className="px-4 pb-4">
+              <RaceResultsPenaltiesEditorClient
+                results={results.map((r) => ({
+                  driverId: r.driverId,
+                  driverName: r.driver.name,
+                  penaltySeconds: r.penaltySeconds
+                }))}
+                action={applyPenalties.bind(null, league, l, raceId)}
+              />
+            </div>
+          </details>
+        ) : null}
       </div>
       </div>
     </AdminShell>

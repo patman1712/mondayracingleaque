@@ -204,6 +204,8 @@ model RaceResult {
   stops      Int?
   bestTime   String?
   timeText   String?
+  finishTimeMs Int?
+  penaltySeconds Int @default(0)
   status     String?
   fastestLap Boolean  @default(false)
   createdAt  DateTime @default(now())

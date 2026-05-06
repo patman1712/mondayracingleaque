@@ -170,6 +170,7 @@ export default async function RaceDetailPage({
     status: string | null;
     bestTime: string | null;
     timeText: string | null;
+    penaltySeconds: number;
     fastestLap: boolean;
     driver: { id: string; name: string; team: string | null; number: number | null; portraitPath: string | null };
   };
@@ -187,6 +188,7 @@ export default async function RaceDetailPage({
           status: true,
           bestTime: true,
           timeText: true,
+          penaltySeconds: true,
           fastestLap: true,
           driver: { select: { id: true, name: true, team: true, number: true, portraitPath: true } }
         }
@@ -326,6 +328,7 @@ export default async function RaceDetailPage({
                     const endOrStatus = r.status ? r.status : r.timeText ? r.timeText : "";
                     const best = r.bestTime ?? "";
                     const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
+                    const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
 
                     return (
                       <Link
@@ -371,8 +374,13 @@ export default async function RaceDetailPage({
                               {r.driver.name}
                             </div>
 
-                            <div className="mt-2 text-base font-extrabold text-white">
-                              {endOrStatus}
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
+                              <span>{endOrStatus}</span>
+                              {penalty ? (
+                                <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
+                                  +{penalty}s
+                                </span>
+                              ) : null}
                             </div>
 
                             {best ? (
