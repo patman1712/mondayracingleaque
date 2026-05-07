@@ -11,6 +11,19 @@ type LiveTimingEntry = {
   gap: string;
   lastLap: string;
   bestLap?: string;
+  sector1?: string;
+  sector2?: string;
+  sector3?: string;
+  sector1Color?: string;
+  sector2Color?: string;
+  sector3Color?: string;
+  drs?: boolean;
+  ers?: number;
+  tyre?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  angle?: number;
   penalties?: string;
   stops?: number;
   accent: string;
@@ -81,6 +94,24 @@ function formatGapFromMs(deltaMs: number) {
   return `+${m}:${String(s).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
 }
 
+function sectorClass(color: string | undefined) {
+  const c = (color ?? "").trim().toLowerCase();
+  if (c === "purple") return "border-violet-400/60 bg-violet-500/20 text-violet-100";
+  if (c === "green") return "border-emerald-400/60 bg-emerald-500/20 text-emerald-100";
+  if (c === "yellow") return "border-amber-400/60 bg-amber-500/20 text-amber-100";
+  return "border-white/10 bg-black/25 text-white/85";
+}
+
+function tyreStyle(tyre: string | undefined) {
+  const t = (tyre ?? "").trim().toLowerCase();
+  if (t === "soft") return { label: "Soft", cls: "border-red-400/60 bg-red-500/15 text-red-100" };
+  if (t === "medium") return { label: "Medium", cls: "border-amber-300/60 bg-amber-500/15 text-amber-100" };
+  if (t === "hard") return { label: "Hard", cls: "border-white/25 bg-white/5 text-white/90" };
+  if (t === "inter" || t === "intermediate") return { label: "Inter", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
+  if (t === "wet") return { label: "Wet", cls: "border-sky-400/60 bg-sky-500/15 text-sky-100" };
+  return { label: tyre?.trim() || "—", cls: "border-white/10 bg-black/25 text-white/80" };
+}
+
 function formatUpdated(ms: number) {
   if (!ms) return "—";
   return new Date(ms).toLocaleTimeString("de-DE", {
@@ -99,12 +130,19 @@ export default function LiveTimingPage() {
   useEffect(() => {
     let cancelled = false;
     let t: number | null = null;
+    let lastSeenUpdatedAt = 0;
 
     async function poll() {
       try {
         const r = await fetch("/api/live-timing", { cache: "no-store" });
         const j = (await r.json()) as LiveTimingState;
         if (cancelled) return;
+        const nextUpdatedAt = typeof j?.updatedAtMs === "number" ? j.updatedAtMs : 0;
+        if (nextUpdatedAt && nextUpdatedAt === lastSeenUpdatedAt) {
+          setError(null);
+          return;
+        }
+        lastSeenUpdatedAt = nextUpdatedAt;
         setData(j);
         setError(null);
       } catch {
@@ -171,7 +209,14 @@ export default function LiveTimingPage() {
         team: x.e.team,
         bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "NO TIME",
         gap,
+        sector1: x.e.sector1?.trim() ? x.e.sector1 : "—",
+        sector2: x.e.sector2?.trim() ? x.e.sector2 : "—",
+        sector3: x.e.sector3?.trim() ? x.e.sector3 : "—",
+        sector1Color: x.e.sector1Color,
+        sector2Color: x.e.sector2Color,
+        sector3Color: x.e.sector3Color,
         lastLap: x.e.lastLap?.trim() ? x.e.lastLap : "—",
+        tyre: x.e.tyre?.trim() ? x.e.tyre : "—",
         accent: x.e.accent,
         portraitUrl: x.e.portraitUrl
       };
@@ -238,17 +283,22 @@ export default function LiveTimingPage() {
             <div className="divide-y divide-white/10">
               {view.mode === "practice" ? (
                 <>
-                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.3fr_1.1fr_130px_120px_130px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur md:grid">
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.25fr_1.05fr_120px_110px_78px_78px_78px_120px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur xl:grid">
                     <div>Pos</div>
                     <div>Fahrer</div>
                     <div>Team</div>
                     <div className="text-right">Best Lap</div>
                     <div className="text-right">Gap</div>
+                    <div className="text-right">S1</div>
+                    <div className="text-right">S2</div>
+                    <div className="text-right">S3</div>
                     <div className="text-right">Last Lap</div>
+                    <div className="text-right">Tyre</div>
                   </div>
 
                   {view.rows.map((r) => {
                     const accent = r.accent ?? "#E10600";
+                    const tyre = tyreStyle(r.tyre);
                     return (
                       <div
                         key={`${r.position}-${r.driver}`}
@@ -259,7 +309,7 @@ export default function LiveTimingPage() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
                         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
 
-                        <div className="relative grid gap-3 md:grid-cols-[64px_1.3fr_1.1fr_130px_120px_130px] md:items-center">
+                        <div className="relative grid gap-3 md:grid-cols-[64px_1fr_110px_110px_110px] md:items-center xl:grid-cols-[64px_1.25fr_1.05fr_120px_110px_78px_78px_78px_120px_90px]">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
                               {r.position}
@@ -291,18 +341,40 @@ export default function LiveTimingPage() {
                             </div>
                           </div>
 
-                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 md:block">
+                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 xl:block">
                             <div className="truncate">{r.team}</div>
                           </div>
 
-                          <div className="text-right text-sm font-extrabold text-white md:text-base">
-                            {r.bestLap}
-                          </div>
-                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">
-                            {r.gap}
-                          </div>
-                          <div className="text-right text-sm font-semibold text-white/85 md:text-base">
+                          <div className="text-right text-sm font-extrabold text-white md:text-base">{r.bestLap}</div>
+                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">{r.gap}</div>
+
+                          <div className="text-right text-sm font-semibold text-white/85 md:text-base xl:hidden">
                             {r.lastLap}
+                          </div>
+
+                          <div className="hidden justify-end xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
+                              {r.sector1}
+                            </div>
+                          </div>
+                          <div className="hidden justify-end xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
+                              {r.sector2}
+                            </div>
+                          </div>
+                          <div className="hidden justify-end xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
+                              {r.sector3}
+                            </div>
+                          </div>
+
+                          <div className="hidden text-right text-sm font-semibold text-white/85 xl:block">
+                            {r.lastLap}
+                          </div>
+                          <div className="hidden justify-end xl:flex">
+                            <div className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
+                              {tyre.label}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -311,19 +383,27 @@ export default function LiveTimingPage() {
                 </>
               ) : (
                 <>
-                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.2fr_1fr_90px_120px_130px_130px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur lg:grid">
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.2fr_1fr_80px_110px_78px_78px_78px_120px_72px_140px_90px_120px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur 2xl:grid">
                     <div>Pos</div>
                     <div>Fahrer</div>
                     <div>Team</div>
                     <div className="text-right">Lap</div>
                     <div className="text-right">Gap</div>
+                    <div className="text-right">S1</div>
+                    <div className="text-right">S2</div>
+                    <div className="text-right">S3</div>
                     <div className="text-right">Last Lap</div>
+                    <div className="text-right">DRS</div>
+                    <div className="text-right">ERS</div>
+                    <div className="text-right">Tyre</div>
                     <div className="text-right">Penalties</div>
                     <div className="text-right">Stops</div>
                   </div>
 
                   {view.rows.map((r) => {
                     const accent = r.accent ?? "#E10600";
+                    const tyre = tyreStyle(r.tyre);
+                    const ers = typeof r.ers === "number" && Number.isFinite(r.ers) ? Math.max(0, Math.min(100, Math.round(r.ers))) : null;
                     return (
                       <div
                         key={`${r.position}-${r.driver}`}
@@ -334,7 +414,7 @@ export default function LiveTimingPage() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
                         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
 
-                        <div className="relative grid gap-3 lg:grid-cols-[64px_1.2fr_1fr_90px_120px_130px_130px_90px] lg:items-center">
+                        <div className="relative grid gap-3 lg:grid-cols-[64px_1fr_110px_110px_110px] lg:items-center 2xl:grid-cols-[64px_1.2fr_1fr_80px_110px_78px_78px_78px_120px_72px_140px_90px_120px_90px]">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
                               {r.position}
@@ -366,25 +446,60 @@ export default function LiveTimingPage() {
                             </div>
                           </div>
 
-                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 lg:block">
+                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 2xl:block">
                             <div className="truncate">{r.team}</div>
                           </div>
 
-                          <div className="text-right text-sm font-extrabold text-white lg:text-base">
-                            {r.lap}
+                          <div className="text-right text-sm font-extrabold text-white lg:text-base">{r.lap}</div>
+                          <div className="text-right text-sm font-semibold text-white/90 lg:text-base">{r.gap}</div>
+                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base 2xl:hidden">{r.lastLap}</div>
+
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
+                              {r.sector1?.trim() ? r.sector1 : "—"}
+                            </div>
                           </div>
-                          <div className="text-right text-sm font-semibold text-white/90 lg:text-base">
-                            {r.gap}
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
+                              {r.sector2?.trim() ? r.sector2 : "—"}
+                            </div>
                           </div>
-                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
-                            {r.lastLap}
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
+                              {r.sector3?.trim() ? r.sector3 : "—"}
+                            </div>
                           </div>
-                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
-                            {r.penalties ?? "—"}
+
+                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.lastLap}</div>
+                          <div className="hidden justify-end 2xl:flex">
+                            {r.drs ? (
+                              <div className="inline-flex items-center justify-center rounded-full border border-emerald-400/60 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-emerald-100">
+                                DRS
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center justify-center rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-white/70">
+                                —
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
-                            {typeof r.stops === "number" ? r.stops : "—"}
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className="w-[120px] rounded-full border border-white/10 bg-black/25 p-1">
+                              <div
+                                className="h-2 rounded-full bg-gradient-to-r from-mrl-red via-amber-400 to-emerald-400 transition-[width] duration-300"
+                                style={{ width: `${ers ?? 0}%` }}
+                              />
+                            </div>
+                            <div className="ml-2 w-[42px] text-right text-xs font-extrabold text-white/85">
+                              {ers !== null ? `${ers}%` : "—"}
+                            </div>
                           </div>
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
+                              {tyre.label}
+                            </div>
+                          </div>
+                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.penalties ?? "—"}</div>
+                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{typeof r.stops === "number" ? r.stops : "—"}</div>
                         </div>
                       </div>
                     );
