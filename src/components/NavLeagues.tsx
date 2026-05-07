@@ -644,15 +644,15 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
 
-                                      <div className="relative flex min-h-[190px] items-center gap-6 px-6 py-8">
+                                      <div className="relative flex min-h-[150px] items-center gap-4 px-5 py-6">
                                         <div
-                                          className="shrink-0 text-[44px] font-extrabold leading-none"
+                                          className="shrink-0 text-[36px] font-extrabold leading-none"
                                           style={{ color: d.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-lg font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-base font-extrabold uppercase leading-snug tracking-wide text-white">
                                             {d.name}
                                           </div>
                                         </div>
@@ -664,11 +664,13 @@ export function NavLeagues() {
                                               width={120}
                                               height={120}
                                               unoptimized
-                                              className="h-24 w-24 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                                              className="h-20 w-20 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
                                             />
-                                          ) : null}
+                                          ) : (
+                                            <div className="h-20 w-20" />
+                                          )}
                                           <div className="text-right">
-                                            <div className="text-2xl font-extrabold text-white">{Math.round(d.points)}</div>
+                                            <div className="text-xl font-extrabold text-white">{Math.round(d.points)}</div>
                                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                           </div>
                                         </div>
@@ -694,15 +696,15 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
 
-                                      <div className="relative flex min-h-[190px] items-center gap-6 px-6 py-8">
+                                      <div className="relative flex min-h-[150px] items-center gap-4 px-5 py-6">
                                         <div
-                                          className="shrink-0 text-[44px] font-extrabold leading-none"
+                                          className="shrink-0 text-[36px] font-extrabold leading-none"
                                           style={{ color: t.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-lg font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-base font-extrabold uppercase leading-snug tracking-wide text-white">
                                             {t.name}
                                           </div>
                                         </div>
@@ -714,11 +716,13 @@ export function NavLeagues() {
                                               width={120}
                                               height={120}
                                               unoptimized
-                                              className="h-24 w-24 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                                              className="h-20 w-20 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
                                             />
-                                          ) : null}
+                                          ) : (
+                                            <div className="h-20 w-20" />
+                                          )}
                                           <div className="text-right">
-                                            <div className="text-2xl font-extrabold text-white">{Math.round(t.points)}</div>
+                                            <div className="text-xl font-extrabold text-white">{Math.round(t.points)}</div>
                                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                           </div>
                                         </div>
