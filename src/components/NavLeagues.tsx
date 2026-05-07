@@ -97,6 +97,14 @@ function teamBg(color: string | null | undefined) {
   return `radial-gradient(900px circle at 20% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
 }
 
+function teamBgSolid(color: string | null | undefined) {
+  const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
+  const a = c ? hexToRgba(c, 0.62) : "rgba(255,255,255,0.14)";
+  const b = c ? hexToRgba(c, 0.16) : "rgba(255,255,255,0.06)";
+  const d = c ? hexToRgba(c, 0.42) : "rgba(255,255,255,0.12)";
+  return `radial-gradient(900px circle at 22% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
+}
+
 function f1Dots() {
   return {
     backgroundImage:
@@ -620,37 +628,37 @@ export function NavLeagues() {
 
                           {standingsTop?.drivers?.length || standingsTop?.teams?.length ? (
                             <div className="mt-4 grid gap-4 md:grid-cols-2">
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div>
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Fahrer
                                 </div>
-                                <div className="mt-3 space-y-3">
+                                <div className="mt-3 grid gap-3">
                                   {standingsTop.drivers.map((d, idx) => (
                                     <Link
                                       key={d.id}
                                       href={`/${l.slug}/drivers/${d.id}`}
-                                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
-                                      style={{ backgroundImage: teamBg(d.accent ?? accent) }}
+                                      className="group relative overflow-hidden rounded-2xl border border-white/10"
+                                      style={{ backgroundImage: teamBgSolid(d.accent ?? accent) }}
                                     >
                                       <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
-                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-black/25 to-black/85" />
-                                      <div className="pointer-events-none absolute left-0 top-0 h-[4px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
+                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
+                                      <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
 
-                                      <div className="relative grid grid-cols-[44px_1fr_54px] items-center gap-3">
+                                      <div className="relative flex items-center gap-3 px-4 py-3">
                                         <div
-                                          className="flex h-10 items-center justify-center rounded-full border-2 bg-black/30 text-sm font-extrabold text-white"
+                                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-sm font-extrabold text-white"
                                           style={{ borderColor: d.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
-                                        <div className="min-w-0">
-                                          <div className="whitespace-normal break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white/95 group-hover:text-white">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {d.name}
                                           </div>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="shrink-0 text-right">
                                           <div className="text-base font-extrabold text-white">{Math.round(d.points)}</div>
-                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
+                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                         </div>
                                       </div>
                                     </Link>
@@ -658,37 +666,37 @@ export function NavLeagues() {
                                 </div>
                               </div>
 
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div>
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Teams
                                 </div>
-                                <div className="mt-3 space-y-3">
+                                <div className="mt-3 grid gap-3">
                                   {standingsTop.teams.map((t, idx) => (
                                     <Link
                                       key={t.id}
                                       href={`/${l.slug}/teams/${t.id}`}
-                                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
-                                      style={{ backgroundImage: teamBg(t.accent ?? accent) }}
+                                      className="group relative overflow-hidden rounded-2xl border border-white/10"
+                                      style={{ backgroundImage: teamBgSolid(t.accent ?? accent) }}
                                     >
                                       <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
-                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-black/25 to-black/85" />
-                                      <div className="pointer-events-none absolute left-0 top-0 h-[4px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
+                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
+                                      <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
 
-                                      <div className="relative grid grid-cols-[44px_1fr_54px] items-center gap-3">
+                                      <div className="relative flex items-center gap-3 px-4 py-3">
                                         <div
-                                          className="flex h-10 items-center justify-center rounded-full border-2 bg-black/30 text-sm font-extrabold text-white"
+                                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-sm font-extrabold text-white"
                                           style={{ borderColor: t.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
-                                        <div className="min-w-0">
-                                          <div className="whitespace-normal break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white/95 group-hover:text-white">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {t.name}
                                           </div>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="shrink-0 text-right">
                                           <div className="text-base font-extrabold text-white">{Math.round(t.points)}</div>
-                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
+                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                         </div>
                                       </div>
                                     </Link>
