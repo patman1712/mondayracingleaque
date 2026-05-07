@@ -211,6 +211,11 @@ export default async function LeagueStandingsPage({
       })
       .catch(() => []);
 
+    const teamsSeasonFiltered = teamsSeason.filter((t) => {
+      const n = (t.team.name ?? "").trim().toLowerCase();
+      return n !== "ersatzfahrer" && n !== "reserve" && n !== "reserves";
+    });
+
     const races = await prisma.race
       .findMany({
         where: {
@@ -281,7 +286,7 @@ export default async function LeagueStandingsPage({
       }))
       .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name)));
 
-    teamStandings = teamsSeason
+    teamStandings = teamsSeasonFiltered
       .map((t) => ({
         teamId: t.team.id,
         points: teamPoints.get(t.team.id) ?? 0,
