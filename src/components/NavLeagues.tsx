@@ -18,7 +18,9 @@ const sub = [
   { key: "archive", label: "Archiv" }
 ] as const;
 
-type SubKey = (typeof sub)[number]["key"];
+const tvItem = { key: "tv", label: "MRL TV" } as const;
+
+type SubKey = (typeof sub)[number]["key"] | typeof tvItem.key;
 
 type ScheduleCard = {
   id: string;
@@ -77,6 +79,11 @@ type StandingsTop = {
   season: { year: number; seasonNo: number; isTest: boolean } | null;
   drivers: Array<{ id: string; name: string; points: number; accent: string | null; portraitUrl: string | null }>;
   teams: Array<{ id: string; name: string; points: number; accent: string | null; logoUrl: string | null }>;
+};
+
+type OnAir = {
+  hasOnAir: boolean;
+  race: { id: string; title: string; round: number; startsAtMs: number; twitchChannel: string | null } | null;
 };
 
 function hexToRgba(hex: string, a: number) {
@@ -143,6 +150,7 @@ export function NavLeagues() {
   const [standingsTopByLeague, setStandingsTopByLeague] = useState<
     Partial<Record<string, StandingsTop>>
   >({});
+  const [onAirByLeague, setOnAirByLeague] = useState<Partial<Record<string, OnAir>>>({});
   const [loadingLeague, setLoadingLeague] = useState<string | null>(null);
   const closeTimer = useRef<number | null>(null);
 
@@ -238,6 +246,18 @@ export function NavLeagues() {
       .finally(() => setLoadingLeague(null));
   }, [open, active, standingsTopByLeague, loadingLeague]);
 
+  useEffect(() => {
+    const league = open;
+    if (!league) return;
+    if (onAirByLeague[league]) return;
+    fetch(`/api/league/onair?league=${encodeURIComponent(league)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: OnAir) => {
+        setOnAirByLeague((prev) => ({ ...prev, [league]: data }));
+      })
+      .catch(() => {});
+  }, [open, onAirByLeague]);
+
   function scheduleClose() {
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setOpen(null), 240);
@@ -258,6 +278,9 @@ export function NavLeagues() {
         const teams = teamsByLeague[l.slug]?.teams ?? [];
         const drivers = driversByLeague[l.slug]?.drivers ?? [];
         const standingsTop = standingsTopByLeague[l.slug];
+        const onAir = onAirByLeague[l.slug];
+        const showTv = Boolean(onAir?.hasOnAir);
+        const subItems = showTv ? ([sub[0], sub[1], tvItem, sub[2], sub[3], sub[4]] as const) : sub;
 
         return (
           <div
@@ -306,12 +329,13 @@ export function NavLeagues() {
 
                 <div className="grid h-[calc(70vh-56px)] gap-3 overflow-hidden p-2 md:grid-cols-[240px_1fr]">
                   <div className="grid gap-2">
-                    {sub.map((s) => {
+                    {subItems.map((s) => {
                       const isActive = active === s.key;
+                      const href = s.key === "tv" ? `/${l.slug}/tv` : `/${l.slug}/${s.key}`;
                       return (
                         <Link
                           key={s.key}
-                          href={`/${l.slug}/${s.key}`}
+                          href={href}
                           className={[
                             "group rounded-xl border border-white/10 px-4 py-3 transition",
                             isActive ? "bg-white/10" : "bg-white/5 hover:bg-white/10"
@@ -752,9 +776,40 @@ export function NavLeagues() {
                             </div>
                           )}
                         </>
+                      ) : active === "tv" ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                              MRL TV
+                            </div>
+                            <Link
+                              href={`/${l.slug}/tv`}
+                              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                            >
+                              Öffnen
+                            </Link>
+                          </div>
+                          {onAir?.race ? (
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                                ROUND {onAir.race.round}
+                              </div>
+                              <div className="mt-1 text-lg font-extrabold text-white">
+                                {onAir.race.title}
+                              </div>
+                              <div className="mt-2 text-sm text-white/70">
+                                Livefenster: 30 Min vor Start bis 3 Std danach
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+                              Kein Rennen im Livefenster.
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="flex h-[220px] items-center justify-center text-sm text-white/60">
-                          Abschnitt öffnen: {sub.find((s) => s.key === active)?.label ?? ""}
+                          Abschnitt öffnen: {subItems.find((s) => s.key === active)?.label ?? ""}
                         </div>
                       )}
                     </div>
@@ -786,6 +841,7 @@ export function MobileNavLeagues({
   const [driversByLeague, setDriversByLeague] = useState<
     Partial<Record<League["slug"], LeagueDrivers>>
   >({});
+  const [onAirByLeague, setOnAirByLeague] = useState<Partial<Record<League["slug"], OnAir>>>({});
   const [loadingLeague, setLoadingLeague] = useState<League["slug"] | null>(null);
 
   useEffect(() => {
@@ -846,8 +902,22 @@ export function MobileNavLeagues({
       .finally(() => setLoadingLeague(null));
   }, [league, active, driversByLeague, loadingLeague]);
 
+  useEffect(() => {
+    if (!league) return;
+    if (onAirByLeague[league]) return;
+    fetch(`/api/league/onair?league=${encodeURIComponent(league)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: OnAir) => {
+        setOnAirByLeague((prev) => ({ ...prev, [league]: data }));
+      })
+      .catch(() => {});
+  }, [league, onAirByLeague]);
+
   const selected = leagues.find((l) => l.slug === league) ?? null;
   const accent = selected ? (scheduleByLeague[selected.slug]?.accent ?? selected.accent) : "rgba(225,6,0,1)";
+  const onAir = selected ? onAirByLeague[selected.slug] : null;
+  const showTv = Boolean(onAir?.hasOnAir);
+  const subItems = showTv ? ([sub[0], sub[1], tvItem, sub[2], sub[3], sub[4]] as const) : sub;
 
   if (!selected) {
     return (
@@ -892,10 +962,10 @@ export function MobileNavLeagues({
       </div>
 
       <div className="grid gap-2">
-        {sub.map((s) => (
+        {subItems.map((s) => (
           <Link
             key={s.key}
-            href={`/${selected.slug}/${s.key}`}
+            href={s.key === "tv" ? `/${selected.slug}/tv` : `/${selected.slug}/${s.key}`}
             onClick={() => onNavigate?.()}
             className={[
               "group rounded-xl border border-white/10 px-4 py-3 transition",
@@ -977,6 +1047,24 @@ export function MobileNavLeagues({
           </div>
           <div className="mt-3 text-sm text-white/70">
             {loadingLeague === selected.slug && !scheduleByLeague[selected.slug] ? "Lädt..." : "Übersicht öffnen"}
+          </div>
+        </div>
+      ) : active === "tv" ? (
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+              MRL TV
+            </div>
+            <Link
+              href={`/${selected.slug}/tv`}
+              onClick={() => onNavigate?.()}
+              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+            >
+              Öffnen
+            </Link>
+          </div>
+          <div className="mt-3 text-sm text-white/70">
+            {onAir?.race ? `ROUND ${onAir.race.round} · ${onAir.race.title}` : "Kein Rennen im Livefenster"}
           </div>
         </div>
       ) : null}
