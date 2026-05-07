@@ -1,4 +1,5 @@
 import { Container } from "@/components/Container";
+import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { getLeagueColors } from "@/lib/leagueColors";
@@ -95,6 +96,7 @@ export default async function DriverDetailPage({
         gamertag: true,
         number: true,
         country: true,
+        twitchChannel: true,
         portraitPath: true,
         starts: true,
         wins: true,
@@ -116,6 +118,26 @@ export default async function DriverDetailPage({
     })
     .catch(() => null);
   if (!leagueMembership) notFound();
+
+  const broadcastStartsAtMs = driver.twitchChannel
+    ? await (async () => {
+        const now = Date.now();
+        const startFrom = new Date(now - 3 * 60 * 60 * 1000);
+        const startTo = new Date(now + 30 * 60 * 1000);
+        const entry = await prisma.raceEntry
+          .findFirst({
+            where: {
+              driverId: driver.id,
+              participates: true,
+              race: { league: l, resultsPublishedAt: null, startsAt: { gte: startFrom, lte: startTo } }
+            },
+            orderBy: [{ race: { startsAt: "asc" } }],
+            select: { race: { select: { startsAt: true } } }
+          })
+          .catch(() => null);
+        return entry?.race.startsAt ? entry.race.startsAt.getTime() : null;
+      })()
+    : null;
 
   const currentSeasonRow =
     currentSeason?.id
@@ -434,6 +456,17 @@ export default async function DriverDetailPage({
             </div>
           </div>
         </div>
+
+        {broadcastStartsAtMs && driver.twitchChannel ? (
+          <div className="mt-10">
+            <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
+              Twitch
+            </div>
+            <div className="mt-4">
+              <TwitchEmbed channel={driver.twitchChannel} startsAtMs={broadcastStartsAtMs} />
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-10">
           <div className="flex flex-wrap items-baseline justify-between gap-3">

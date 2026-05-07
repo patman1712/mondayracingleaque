@@ -84,6 +84,7 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
   const gamertag = String(formData.get("gamertag") ?? "").trim();
   const numberRaw = String(formData.get("number") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
+  const twitchChannelRaw = String(formData.get("twitchChannel") ?? "").trim();
   const portrait = asUploadFile(formData.get("portrait"));
 
   if (!name) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=invalid`);
@@ -118,6 +119,7 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
         gamertag: gamertag || null,
         number: Number.isFinite(number) ? (number as number) : null,
         country: country || null,
+        twitchChannel: twitchChannelRaw || null,
         ...(portraitPath !== undefined ? { portraitPath } : {})
       }
     });
@@ -356,6 +358,7 @@ export default async function AdminDriverDetailPage({
         gamertag: true,
         number: true,
         country: true,
+        twitchChannel: true,
         portraitPath: true,
         starts: true,
         wins: true,
@@ -507,6 +510,18 @@ export default async function AdminDriverDetailPage({
                   <input
                     name="gamertag"
                     defaultValue={driver.gamertag ?? ""}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-white/70">
+                    Twitch (optional)
+                  </label>
+                  <input
+                    name="twitchChannel"
+                    defaultValue={driver.twitchChannel ?? ""}
+                    placeholder="channel oder https://twitch.tv/channel"
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                   />
                 </div>

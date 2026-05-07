@@ -266,6 +266,7 @@ export default async function AdminSettingsDriversPage() {
         number: true,
         country: true,
         team: true,
+        twitchChannel: true,
         seasons: { select: { seasonId: true, role: true, teamId: true, teamRef: { select: { name: true } } } }
       }
     })
@@ -442,6 +443,7 @@ export default async function AdminSettingsDriversPage() {
                             <div className="mt-1 text-sm text-white/60">
                               {d.gamertag ? `${d.gamertag} · ` : ""}
                               {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
+                              {d.twitchChannel ? ` · Twitch: ${d.twitchChannel}` : ""}
                               {activeLeagues.length
                                 ? ` · Ligen: ${activeLeagues
                                     .map((l) => labelByLeague.get(l) ?? String(l))
@@ -638,6 +640,7 @@ export default async function AdminSettingsDriversPage() {
                               <div className="mt-1 text-sm text-white/60">
                                 {d.gamertag ? `${d.gamertag} · ` : ""}
                                 {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
+                                {d.twitchChannel ? ` · Twitch: ${d.twitchChannel}` : ""}
                                 {activeLeagues.length
                                   ? ` · Ligen: ${activeLeagues
                                       .map((l) => labelByLeague.get(l) ?? String(l))

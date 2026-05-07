@@ -86,6 +86,7 @@ export default async function AdminSettingsDriverEditPage({
         status: true,
         number: true,
         country: true,
+        twitchChannel: true,
         portraitPath: true,
         starts: true,
         wins: true,
@@ -108,6 +109,7 @@ export default async function AdminSettingsDriverEditPage({
     const statusRaw = String(formData.get("status") ?? "").trim();
     const numberRaw = String(formData.get("number") ?? "").trim();
     const countryRaw = String(formData.get("country") ?? "").trim();
+    const twitchChannelRaw = String(formData.get("twitchChannel") ?? "").trim();
     const portrait = asUploadFile(formData.get("portrait"));
     const startsRaw = String(formData.get("starts") ?? "").trim();
     const winsRaw = String(formData.get("wins") ?? "").trim();
@@ -138,6 +140,7 @@ export default async function AdminSettingsDriverEditPage({
           status,
           number: Number.isFinite(number) ? (number as number) : null,
           country: countryRaw || null,
+          twitchChannel: twitchChannelRaw || null,
           starts: Number.isFinite(starts) ? (starts as number) : 0,
           wins: Number.isFinite(wins) ? (wins as number) : 0,
           podiums: Number.isFinite(podiums) ? (podiums as number) : 0,
@@ -235,6 +238,18 @@ export default async function AdminSettingsDriverEditPage({
                 name="country"
                 defaultValue={driver.country ?? ""}
                 placeholder="DE, AT, CH ..."
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-white/70">
+                Twitch (optional)
+              </label>
+              <input
+                name="twitchChannel"
+                defaultValue={driver.twitchChannel ?? ""}
+                placeholder="channel oder https://twitch.tv/channel"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
               />
             </div>

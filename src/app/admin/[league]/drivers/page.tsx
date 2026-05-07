@@ -52,6 +52,7 @@ export default async function AdminDriversPage({
     gamertag: string | null;
     number: number | null;
     country: string | null;
+    twitchChannel: string | null;
     portraitPath: string | null;
     role: "MAIN" | "RESERVE" | null;
     teamName: string | null;
@@ -69,6 +70,7 @@ export default async function AdminDriversPage({
           gamertag: true,
           number: true,
           country: true,
+          twitchChannel: true,
           portraitPath: true
         }
       }
@@ -106,6 +108,7 @@ export default async function AdminDriversPage({
       gamertag: r.driver.gamertag ?? null,
       number: r.driver.number ?? null,
       country: r.driver.country ?? null,
+      twitchChannel: r.driver.twitchChannel ?? null,
       portraitPath: r.driver.portraitPath ?? null,
       role: r.role ?? null,
       teamName: r.teamRef?.name ?? null
@@ -134,6 +137,7 @@ export default async function AdminDriversPage({
                   <div className="mt-1 text-sm text-white/60">
                     {(d.role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer")}{d.teamName ? ` · ${d.teamName}` : ""}{" "}
                     {d.country ? `· ${d.country}` : ""}
+                    {d.twitchChannel ? ` · Twitch: ${d.twitchChannel}` : ""}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
