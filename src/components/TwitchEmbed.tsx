@@ -40,7 +40,7 @@ export function TwitchEmbed({
   startsAtMs
 }: {
   channel: string;
-  startsAtMs: number;
+  startsAtMs: number | null;
 }) {
   const [showChat, setShowChat] = useState(false);
   const [live, setLive] = useState<boolean | null>(null);
@@ -50,6 +50,7 @@ export function TwitchEmbed({
 
   const timing = useMemo(() => {
     const startMs = startsAtMs;
+    if (!startMs) return null;
     const openMs = startMs - 30 * 60 * 1000;
     const closeMs = startMs + 3 * 60 * 60 * 1000;
     return { startMs, openMs, closeMs };
@@ -76,7 +77,7 @@ export function TwitchEmbed({
   }, [normalized]);
 
   const now = Date.now();
-  const inWindow = now >= timing.openMs && now <= timing.closeMs;
+  const inWindow = Boolean(timing && now >= timing.openMs && now <= timing.closeMs);
   const isOnAir = Boolean(inWindow && live);
   const liveLabel = live === null ? "unbekannt" : live ? "online" : "offline";
 
@@ -150,7 +151,9 @@ export function TwitchEmbed({
             ) : null}
           </div>
           <div className="mt-2 text-xs text-white/70">
-            On Air Fenster: {formatTimeBerlin(timing.openMs)}–{formatTimeBerlin(timing.closeMs)} (Start {formatTimeBerlin(timing.startMs)})
+            {timing
+              ? `On Air Fenster: ${formatTimeBerlin(timing.openMs)}–${formatTimeBerlin(timing.closeMs)} (Start ${formatTimeBerlin(timing.startMs)})`
+              : "On Air Fenster: 30 Min vor Rennstart bis 3 Std nach Start"}
             {checkedAt ? ` · Status: ${liveLabel} · Check ${formatDateTimeBerlin(checkedAt)}` : ` · Status: ${liveLabel}`}
           </div>
         </div>
@@ -183,17 +186,25 @@ export function TwitchEmbed({
           <div className="p-6">
             <div className="rounded-2xl border border-white/10 bg-black/30 p-6">
               <div className="text-sm font-semibold text-white/85">
-                {now < timing.openMs
-                  ? `Der Stream geht frühestens ab ${formatTimeBerlin(timing.openMs)} Uhr on air.`
-                  : now > timing.closeMs
-                    ? "Der Broadcast ist beendet."
-                    : live === null
-                      ? "Stream-Status wird geprüft…"
-                      : "Der Stream ist aktuell offline."}
+                {!timing
+                  ? "Kein Rennen geplant. Live wird nur im Rennfenster angezeigt."
+                  : now < timing.openMs
+                    ? `Der Stream geht frühestens ab ${formatTimeBerlin(timing.openMs)} Uhr on air.`
+                    : now > timing.closeMs
+                      ? "Der Broadcast ist beendet."
+                      : live === null
+                        ? "Stream-Status wird geprüft…"
+                        : "Der Stream ist aktuell offline."}
               </div>
-              <div className="mt-2 text-sm text-white/70">
-                Startzeit: {formatDateTimeBerlin(timing.startMs)} · On Air: {formatTimeBerlin(timing.openMs)}–{formatTimeBerlin(timing.closeMs)}
-              </div>
+              {timing ? (
+                <div className="mt-2 text-sm text-white/70">
+                  Startzeit: {formatDateTimeBerlin(timing.startMs)} · On Air: {formatTimeBerlin(timing.openMs)}–{formatTimeBerlin(timing.closeMs)}
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-white/70">
+                  Twitch-Stream ist sichtbar, aber das Livebild wird nur im Rennfenster freigeschaltet.
+                </div>
+              )}
             </div>
           </div>
         )}

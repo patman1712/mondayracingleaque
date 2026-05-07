@@ -284,8 +284,13 @@ export function NavLeagues() {
               onMouseLeave={() => scheduleClose()}
             >
               <div
-                className="h-[70vh] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl"
+                className="relative h-[70vh] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/60 p-3 shadow-2xl"
+                style={{ backgroundImage: teamBg(accent) }}
               >
+                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }} />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/80" />
+                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
+
                 <div className="flex items-center justify-between px-2 py-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                     {l.label}
@@ -336,7 +341,7 @@ export function NavLeagues() {
                   </div>
 
                   {wide ? (
-                    <div className="h-full overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="relative h-full overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-4">
                       {active === "calendar" ? (
                         <>
                           <div className="flex items-center justify-between">
@@ -605,13 +610,13 @@ export function NavLeagues() {
                             <div className="flex items-center gap-2">
                               <Link
                                 href={`/${l.slug}/standings`}
-                                className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                                className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 hover:text-white"
                               >
                                 Fahrer WM
                               </Link>
                               <Link
                                 href={`/${l.slug}/standings?tab=teams`}
-                                className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                                className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 hover:text-white"
                               >
                                 Team WM
                               </Link>
@@ -620,64 +625,86 @@ export function NavLeagues() {
 
                           {standingsTop?.drivers?.length || standingsTop?.teams?.length ? (
                             <div className="mt-4 grid gap-4 md:grid-cols-2">
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div className="relative overflow-hidden rounded-2xl border border-white/10" style={{ backgroundImage: teamBg(accent) }}>
+                                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/80" />
+                                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
+                                <div className="relative p-4">
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Fahrer
                                 </div>
-                                <div className="mt-3 space-y-2">
+                                <div className="mt-3 space-y-3">
                                   {standingsTop.drivers.map((d, idx) => (
                                     <Link
                                       key={d.id}
                                       href={`/${l.slug}/drivers/${d.id}`}
-                                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10"
+                                      className="group grid grid-cols-[56px_1fr_88px] items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
                                     >
-                                      <div className="flex min-w-0 items-center gap-3">
-                                        <div
-                                          className="flex h-8 w-8 items-center justify-center rounded-xl border-2 bg-black/25 text-sm font-extrabold text-white"
-                                          style={{ borderColor: accent }}
-                                        >
-                                          {idx + 1}
-                                        </div>
-                                        <div className="min-w-0 truncate text-sm font-semibold text-white/90">
+                                      <div
+                                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
+                                        style={{ borderColor: accent }}
+                                      >
+                                        <div className="text-xl font-extrabold text-white">{idx + 1}</div>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/95 group-hover:text-white">
                                           {d.name}
                                         </div>
                                       </div>
-                                      <div className="shrink-0 text-sm font-extrabold text-white">
-                                        {Math.round(d.points)}
+                                      <div
+                                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
+                                        style={{ borderColor: accent }}
+                                      >
+                                        <div>
+                                          <div className="text-lg font-extrabold text-white">{Math.round(d.points)}</div>
+                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
+                                        </div>
                                       </div>
                                     </Link>
                                   ))}
                                 </div>
                               </div>
+                              </div>
 
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div className="relative overflow-hidden rounded-2xl border border-white/10" style={{ backgroundImage: teamBg(accent) }}>
+                                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/80" />
+                                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
+                                <div className="relative p-4">
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Teams
                                 </div>
-                                <div className="mt-3 space-y-2">
+                                <div className="mt-3 space-y-3">
                                   {standingsTop.teams.map((t, idx) => (
                                     <Link
                                       key={t.id}
                                       href={`/${l.slug}/teams/${t.id}`}
-                                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10"
+                                      className="group grid grid-cols-[56px_1fr_88px] items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
                                     >
-                                      <div className="flex min-w-0 items-center gap-3">
-                                        <div
-                                          className="flex h-8 w-8 items-center justify-center rounded-xl border-2 bg-black/25 text-sm font-extrabold text-white"
-                                          style={{ borderColor: accent }}
-                                        >
-                                          {idx + 1}
-                                        </div>
-                                        <div className="min-w-0 truncate text-sm font-semibold text-white/90">
+                                      <div
+                                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
+                                        style={{ borderColor: accent }}
+                                      >
+                                        <div className="text-xl font-extrabold text-white">{idx + 1}</div>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/95 group-hover:text-white">
                                           {t.name}
                                         </div>
                                       </div>
-                                      <div className="shrink-0 text-sm font-extrabold text-white">
-                                        {Math.round(t.points)}
+                                      <div
+                                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
+                                        style={{ borderColor: accent }}
+                                      >
+                                        <div>
+                                          <div className="text-lg font-extrabold text-white">{Math.round(t.points)}</div>
+                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
+                                        </div>
                                       </div>
                                     </Link>
                                   ))}
                                 </div>
+                              </div>
                               </div>
                             </div>
                           ) : (

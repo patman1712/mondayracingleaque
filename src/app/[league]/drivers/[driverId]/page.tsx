@@ -124,7 +124,8 @@ export default async function DriverDetailPage({
         const now = Date.now();
         const startFrom = new Date(now - 3 * 60 * 60 * 1000);
         const startTo = new Date(now + 30 * 60 * 1000);
-        const entry = await prisma.raceEntry
+
+        const inWindow = await prisma.raceEntry
           .findFirst({
             where: {
               driverId: driver.id,
@@ -135,7 +136,22 @@ export default async function DriverDetailPage({
             select: { race: { select: { startsAt: true } } }
           })
           .catch(() => null);
-        return entry?.race.startsAt ? entry.race.startsAt.getTime() : null;
+
+        if (inWindow?.race.startsAt) return inWindow.race.startsAt.getTime();
+
+        const upcoming = await prisma.raceEntry
+          .findFirst({
+            where: {
+              driverId: driver.id,
+              participates: true,
+              race: { league: l, resultsPublishedAt: null, startsAt: { gt: startTo } }
+            },
+            orderBy: [{ race: { startsAt: "asc" } }],
+            select: { race: { select: { startsAt: true } } }
+          })
+          .catch(() => null);
+
+        return upcoming?.race.startsAt ? upcoming.race.startsAt.getTime() : null;
       })()
     : null;
 
@@ -457,7 +473,7 @@ export default async function DriverDetailPage({
           </div>
         </div>
 
-        {broadcastStartsAtMs && driver.twitchChannel ? (
+        {driver.twitchChannel ? (
           <div className="mt-10">
             <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
               Twitch
