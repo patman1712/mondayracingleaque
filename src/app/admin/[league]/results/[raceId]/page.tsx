@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
 import { applyRaceScoring } from "@/lib/scoring";
+import { applyPublishedRaceStats, recalcSeasonStatsForRace } from "@/lib/seasonStats";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { RaceResultsBulkEditorClient } from "@/components/RaceResultsBulkEditorClient";
 import { RaceResultsPosterExportClient } from "@/components/RaceResultsPosterExportClient";
@@ -59,6 +60,8 @@ async function setResultsPublished(
       data: { resultsPublishedAt: publish ? new Date() : null }
     })
     .catch(() => null);
+
+  await recalcSeasonStatsForRace(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -324,6 +327,7 @@ async function bulkUpsertResults(
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
   await applyRaceScoring(prisma, raceId).catch(() => null);
+  await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -394,6 +398,7 @@ async function applyPenalties(
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
   await applyRaceScoring(prisma, raceId).catch(() => null);
+  await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -410,6 +415,57 @@ async function applyPenalties(
   for (const l of list) {
     revalidatePath(`/${l.publicSlug}/races/${raceId}`);
     revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
+async function setDriverOfDay(
+  adminLeague: string,
+  league: League,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+
+  const driverId = String(formData.get("driverOfDayDriverId") ?? "").trim();
+
+  const race = await prisma.race.findUnique({ where: { id: raceId }, select: { id: true, league: true } }).catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  if (driverId) {
+    const ok =
+      (await prisma.raceEntry
+        .findFirst({ where: { raceId, driverId, participates: true }, select: { id: true } })
+        .catch(() => null)) ??
+      (await prisma.raceResult.findFirst({ where: { raceId, driverId }, select: { id: true } }).catch(() => null));
+    if (!ok) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+  }
+
+  await prisma.race
+    .update({
+      where: { id: raceId },
+      data: { driverOfDayDriverId: driverId || null }
+    })
+    .catch(() => null);
+
+  await applyPublishedRaceStats(prisma, raceId).catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/drivers`);
     revalidatePath(`/${l.publicSlug}/standings`);
   }
 
@@ -690,6 +746,7 @@ async function importResultsFromCsv(
 
   await recalcRaceResults(prisma, raceId).catch(() => null);
   await applyRaceScoring(prisma, raceId).catch(() => null);
+  await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
   revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/results`);
@@ -745,6 +802,7 @@ export default async function AdminRaceResultsPage({
         location: true,
         startsAt: true,
         twitchChannel: true,
+        driverOfDayDriverId: true,
         resultsCsvDraftJson: true,
         resultsPublishedAt: true,
       }
@@ -1028,6 +1086,45 @@ export default async function AdminRaceResultsPage({
             />
           )}
         </div>
+
+        {results.length > 0 ? (
+          <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
+            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
+              Fahrer des Tages
+              <div className="mt-1 text-xs font-normal text-white/70">
+                Wird zur Fahrer-Statistik addiert (Saison + Gesamt), sobald Ergebnisse veröffentlicht sind.
+              </div>
+            </summary>
+            <div className="px-4 pb-4">
+              <form
+                action={setDriverOfDay.bind(null, league, l, raceId)}
+                className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]"
+              >
+                <select
+                  name="driverOfDayDriverId"
+                  defaultValue={race.driverOfDayDriverId ?? ""}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                >
+                  <option value="">(Kein Fahrer des Tages)</option>
+                  {results
+                    .slice()
+                    .sort((a, b) => a.position - b.position)
+                    .map((r) => (
+                      <option key={r.driverId} value={r.driverId}>
+                        P{r.position} · {r.driver.name}
+                      </option>
+                    ))}
+                </select>
+                <FormSubmitButton
+                  className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                  pendingText="Speichern…"
+                >
+                  Speichern
+                </FormSubmitButton>
+              </form>
+            </div>
+          </details>
+        ) : null}
 
         {results.length > 0 ? (
           <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
