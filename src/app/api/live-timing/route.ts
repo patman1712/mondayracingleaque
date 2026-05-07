@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   sessionId: z.string(),
+  sessionName: z.string().optional(),
+  sessionType: z.number().optional(),
   entries: z.array(
     z.object({
       position: z.number(),
@@ -15,7 +17,10 @@ const schema = z.object({
       lap: z.number(),
       gap: z.string(),
       lastLap: z.string(),
-      accent: z.string()
+      bestLap: z.string().optional(),
+      accent: z.string(),
+      penalties: z.string().optional(),
+      stops: z.number().optional()
     })
   )
 });
@@ -28,6 +33,8 @@ type LiveTimingEntry = LiveTimingPostEntry & {
 
 type LiveTimingState = {
   sessionId: string;
+  sessionName: string | null;
+  sessionType: number | null;
   updatedAtMs: number;
   entries: LiveTimingEntry[];
 };
@@ -134,6 +141,8 @@ function getState(): LiveTimingState {
   if (!globalThis.__mrlLiveTimingState) {
     globalThis.__mrlLiveTimingState = {
       sessionId: "default",
+      sessionName: null,
+      sessionType: null,
       updatedAtMs: 0,
       entries: []
     };
@@ -154,6 +163,8 @@ export async function GET() {
     {
       ok: true,
       sessionId: state.sessionId,
+      sessionName: state.sessionName,
+      sessionType: state.sessionType,
       updatedAtMs: state.updatedAtMs,
       entries: state.entries
     },
@@ -182,6 +193,8 @@ export async function POST(req: Request) {
   const state = getState();
 
   state.sessionId = data.sessionId;
+  state.sessionName = data.sessionName ?? null;
+  state.sessionType = typeof data.sessionType === "number" ? data.sessionType : null;
   state.updatedAtMs = Date.now();
   const portraitByName = await resolvePortraitUrlsByDriverName(data.entries.map((e) => e.driver));
   state.entries = data.entries
@@ -196,6 +209,8 @@ export async function POST(req: Request) {
     {
       ok: true,
       sessionId: state.sessionId,
+      sessionName: state.sessionName,
+      sessionType: state.sessionType,
       updatedAtMs: state.updatedAtMs,
       entries: state.entries
     },

@@ -6,21 +6,28 @@ import { useEffect, useMemo, useState } from "react";
 type LiveTimingEntry = {
   position: number;
   driver: string;
-  team: string | null;
-  lap: number | null;
-  gap: string | null;
-  lastLap: string | null;
-  accent: string | null;
+  team: string;
+  lap: number;
+  gap: string;
+  lastLap: string;
+  bestLap?: string;
+  penalties?: string;
+  stops?: number;
+  accent: string;
   portraitUrl: string | null;
-  teamLogoUrl: string | null;
 };
 
 type LiveTimingState = {
   ok: boolean;
   sessionId: string;
+  sessionName?: string | null;
+  sessionType?: number | null;
   updatedAtMs: number;
   entries: LiveTimingEntry[];
 };
+
+const TRAINING_QUALI_TYPES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 13]);
+const RACE_TYPES = new Set([10, 11, 12]);
 
 function hexToRgba(hex: string, a: number) {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
@@ -47,6 +54,31 @@ function f1Dots() {
     backgroundSize: "8px 8px, 18px 18px",
     backgroundPosition: "0 0, 2px 2px"
   } as const;
+}
+
+function parseLapTimeMs(raw: string | undefined | null) {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const m = /^(\d+):(\d{1,2})\.(\d{1,3})$/.exec(s);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3].padEnd(3, "0"));
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return min * 60000 + sec * 1000 + ms;
+}
+
+function formatGapFromMs(deltaMs: number) {
+  const ms = Math.max(0, Math.round(deltaMs));
+  if (ms < 60_000) return `+${(ms / 1000).toFixed(3)}`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const milli = ms % 1000;
+  const s = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const m = totalMinutes % 60;
+  const h = Math.floor(totalMinutes / 60);
+  if (h > 0) return `+${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
+  return `+${m}:${String(s).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
 }
 
 function formatUpdated(ms: number) {
@@ -95,10 +127,58 @@ export default function LiveTimingPage() {
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const isLive = Boolean(last && now - last <= 2000);
+  const sessionType = typeof data?.sessionType === "number" ? data.sessionType : null;
+  const isRace = Boolean(sessionType !== null && RACE_TYPES.has(sessionType));
+  const isPracticeOrQuali = Boolean(sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType));
+  const headerLabel = (data?.sessionName ?? (isRace ? "Race" : "Live")).toString().trim();
 
-  const rows = useMemo(() => {
-    return (data?.entries ?? []).slice().sort((a, b) => a.position - b.position);
-  }, [data]);
+  const view = useMemo(() => {
+    const entries = data?.entries ?? [];
+    if (!isPracticeOrQuali) {
+      const rows = entries.slice().sort((a, b) => a.position - b.position);
+      return { mode: "race" as const, rows };
+    }
+
+    const scored = entries
+      .map((e) => {
+        const bestMs = parseLapTimeMs(e.bestLap);
+        const lastMs = parseLapTimeMs(e.lastLap);
+        return { e, bestMs, lastMs };
+      })
+      .sort((a, b) => {
+        const am = a.bestMs;
+        const bm = b.bestMs;
+        if (am === null && bm === null) return 0;
+        if (am === null) return 1;
+        if (bm === null) return -1;
+        return am - bm;
+      });
+
+    const fastestMs = scored.find((x) => x.bestMs !== null)?.bestMs ?? null;
+    const rows = scored.map((x, idx) => {
+      const best = x.bestMs;
+      const gap =
+        best === null
+          ? "NO TIME"
+          : fastestMs === null
+            ? "FASTEST"
+            : best === fastestMs
+              ? "FASTEST"
+              : formatGapFromMs(best - fastestMs);
+      return {
+        position: best === null ? "—" : String(idx + 1),
+        driver: x.e.driver,
+        team: x.e.team,
+        bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "NO TIME",
+        gap,
+        lastLap: x.e.lastLap?.trim() ? x.e.lastLap : "—",
+        accent: x.e.accent,
+        portraitUrl: x.e.portraitUrl
+      };
+    });
+
+    return { mode: "practice" as const, rows };
+  }, [data?.entries, isPracticeOrQuali]);
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-[#07080A] text-white">
@@ -117,6 +197,9 @@ export default function LiveTimingPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
+              LIVE • {headerLabel.toUpperCase()}
+            </div>
             <div
               className={[
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-extrabold uppercase tracking-wider",
@@ -129,10 +212,14 @@ export default function LiveTimingPage() {
           </div>
         </div>
 
-        <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-black/30">
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:hidden">
+          LIVE • {headerLabel.toUpperCase()}
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-black/30">
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div className="text-sm font-semibold text-white/90">
-              Timing Tabelle
+              {isPracticeOrQuali ? "Timing · Best Laps" : isRace ? "Timing · Race" : "Timing Tabelle"}
             </div>
             <div className="text-xs font-semibold text-white/60">
               Session: {data?.sessionId ?? "—"}
@@ -143,96 +230,167 @@ export default function LiveTimingPage() {
             <div className="p-5 text-sm text-white/70">
               {error}
             </div>
-          ) : rows.length === 0 ? (
+          ) : view.rows.length === 0 ? (
             <div className="p-5 text-sm text-white/70">
               Noch keine Daten. Sende per POST an <span className="font-semibold text-white">/api/live-timing</span>.
             </div>
           ) : (
             <div className="divide-y divide-white/10">
-              <div className="hidden grid-cols-[64px_1.2fr_1fr_90px_120px_130px] gap-3 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 md:grid">
-                <div>Pos</div>
-                <div>Fahrer</div>
-                <div>Team</div>
-                <div className="text-right">Runde</div>
-                <div className="text-right">Gap</div>
-                <div className="text-right">Letzte Runde</div>
-              </div>
+              {view.mode === "practice" ? (
+                <>
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.3fr_1.1fr_130px_120px_130px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur md:grid">
+                    <div>Pos</div>
+                    <div>Fahrer</div>
+                    <div>Team</div>
+                    <div className="text-right">Best Lap</div>
+                    <div className="text-right">Gap</div>
+                    <div className="text-right">Last Lap</div>
+                  </div>
 
-              {rows.map((r) => {
-                const accent = r.accent ?? "#E10600";
-                return (
-                  <div
-                    key={`${r.position}-${r.driver}`}
-                    className="relative px-4 py-4 md:px-5"
-                    style={{ backgroundImage: teamBgSolid(accent) }}
-                  >
-                    <div className="pointer-events-none absolute inset-0 opacity-20" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
-                    <div className="pointer-events-none absolute left-0 top-0 h-[5px] w-full" style={{ backgroundColor: accent }} />
+                  {view.rows.map((r) => {
+                    const accent = r.accent ?? "#E10600";
+                    return (
+                      <div
+                        key={`${r.position}-${r.driver}`}
+                        className="relative px-4 py-4 md:px-5"
+                        style={{ backgroundImage: teamBgSolid(accent) }}
+                      >
+                        <div className="pointer-events-none absolute inset-0 opacity-20" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
+                        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
 
-                    <div className="relative grid gap-3 md:grid-cols-[64px_1.2fr_1fr_90px_120px_130px] md:items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
-                          {r.position}
-                        </div>
-                      </div>
+                        <div className="relative grid gap-3 md:grid-cols-[64px_1.3fr_1.1fr_130px_120px_130px] md:items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
+                              {r.position}
+                            </div>
+                          </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-3">
-                          {r.portraitUrl ? (
-                            <Image
-                              src={r.portraitUrl}
-                              alt=""
-                              width={52}
-                              height={52}
-                              unoptimized
-                              className="h-11 w-11 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
-                            />
-                          ) : (
-                            <div className="h-11 w-11 rounded-xl bg-black/25" />
-                          )}
                           <div className="min-w-0">
-                            <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
-                              {r.driver}
+                            <div className="flex items-center gap-3">
+                              {r.portraitUrl ? (
+                                <Image
+                                  src={r.portraitUrl}
+                                  alt=""
+                                  width={52}
+                                  height={52}
+                                  unoptimized
+                                  className="h-11 w-11 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                                />
+                              ) : (
+                                <div className="h-11 w-11 rounded-xl bg-black/25" />
+                              )}
+                              <div className="min-w-0">
+                                <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                  {r.driver}
+                                </div>
+                                <div className="mt-1 text-xs font-semibold text-white/75 md:hidden">
+                                  {r.team}
+                                </div>
+                              </div>
                             </div>
-                            <div className="mt-1 text-xs font-semibold text-white/75 md:hidden">
-                              {r.team ?? "—"}
-                            </div>
+                          </div>
+
+                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 md:block">
+                            <div className="truncate">{r.team}</div>
+                          </div>
+
+                          <div className="text-right text-sm font-extrabold text-white md:text-base">
+                            {r.bestLap}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">
+                            {r.gap}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/85 md:text-base">
+                            {r.lastLap}
                           </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.2fr_1fr_90px_120px_130px_130px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur lg:grid">
+                    <div>Pos</div>
+                    <div>Fahrer</div>
+                    <div>Team</div>
+                    <div className="text-right">Lap</div>
+                    <div className="text-right">Gap</div>
+                    <div className="text-right">Last Lap</div>
+                    <div className="text-right">Penalties</div>
+                    <div className="text-right">Stops</div>
+                  </div>
 
-                      <div className="min-w-0 hidden items-center gap-3 md:flex">
-                        {r.teamLogoUrl ? (
-                          <Image
-                            src={r.teamLogoUrl}
-                            alt=""
-                            width={44}
-                            height={44}
-                            unoptimized
-                            className="h-9 w-9 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
-                          />
-                        ) : (
-                          <div className="h-9 w-9" />
-                        )}
-                        <div className="truncate text-sm font-semibold text-white/90">
-                          {r.team ?? "—"}
+                  {view.rows.map((r) => {
+                    const accent = r.accent ?? "#E10600";
+                    return (
+                      <div
+                        key={`${r.position}-${r.driver}`}
+                        className="relative px-4 py-4 md:px-5"
+                        style={{ backgroundImage: teamBgSolid(accent) }}
+                      >
+                        <div className="pointer-events-none absolute inset-0 opacity-20" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
+                        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
+
+                        <div className="relative grid gap-3 lg:grid-cols-[64px_1.2fr_1fr_90px_120px_130px_130px_90px] lg:items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
+                              {r.position}
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-3">
+                              {r.portraitUrl ? (
+                                <Image
+                                  src={r.portraitUrl}
+                                  alt=""
+                                  width={52}
+                                  height={52}
+                                  unoptimized
+                                  className="h-11 w-11 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                                />
+                              ) : (
+                                <div className="h-11 w-11 rounded-xl bg-black/25" />
+                              )}
+                              <div className="min-w-0">
+                                <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                  {r.driver}
+                                </div>
+                                <div className="mt-1 text-xs font-semibold text-white/75 lg:hidden">
+                                  {r.team}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 hidden text-sm font-semibold text-white/90 lg:block">
+                            <div className="truncate">{r.team}</div>
+                          </div>
+
+                          <div className="text-right text-sm font-extrabold text-white lg:text-base">
+                            {r.lap}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/90 lg:text-base">
+                            {r.gap}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
+                            {r.lastLap}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
+                            {r.penalties ?? "—"}
+                          </div>
+                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base">
+                            {typeof r.stops === "number" ? r.stops : "—"}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="text-right text-sm font-extrabold text-white md:text-base">
-                        {r.lap ?? "—"}
-                      </div>
-                      <div className="text-right text-sm font-semibold text-white/90 md:text-base">
-                        {r.gap ?? "—"}
-                      </div>
-                      <div className="text-right text-sm font-semibold text-white/85 md:text-base">
-                        {r.lastLap ?? "—"}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -240,4 +398,3 @@ export default function LiveTimingPage() {
     </div>
   );
 }
-
