@@ -5,7 +5,8 @@ import { getLeagueColors } from "@/lib/leagueColors";
 import { League } from "@prisma/client";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { listPublicLeagues, resolveLeagueByPublicSlug } from "@/lib/league";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -67,11 +68,15 @@ function stat(label: string, value: string | number) {
 }
 
 export default async function DriverDetailPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ league: string; driverId: string }>;
+  searchParams: Promise<{ allRaces?: string }>;
 }) {
   const { league, driverId } = await params;
+  const sp = await searchParams;
+  const showAllRaces = String(sp.allRaces ?? "").trim() === "1";
   const cfg = await resolveLeagueByPublicSlug(league);
   if (!cfg || !cfg.isActive) notFound();
   const l = cfg.league;
@@ -261,6 +266,34 @@ export default async function DriverDetailPage({
 
   const currentSeasonPointsDisplay = Math.round(currentSeasonPoints * 10) / 10;
 
+  const publicLeagues = await listPublicLeagues().catch(() => []);
+  const publicSlugByLeague = new Map(publicLeagues.map((x) => [x.league, x.publicSlug]));
+  const publicNameByLeague = new Map(publicLeagues.map((x) => [x.league, x.name]));
+
+  const raceRows = await prisma.raceResult
+    .findMany({
+      where: { driverId: driver.id, race: { resultsPublishedAt: { not: null } } },
+      orderBy: [{ race: { startsAt: "desc" } }],
+      select: {
+        position: true,
+        status: true,
+        race: {
+          select: {
+            id: true,
+            startsAt: true,
+            league: true,
+            season: true,
+            seasonNo: true,
+            seasonIsTest: true,
+            round: true,
+            name: true
+          }
+        }
+      },
+      take: showAllRaces ? 500 : 5
+    })
+    .catch(() => []);
+
   return (
     <>
       <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen overflow-hidden border-b border-white/10">
@@ -400,6 +433,68 @@ export default async function DriverDetailPage({
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-10">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wider text-white/60">
+                Rennteilnahmen
+              </div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/50">
+                {showAllRaces ? "Alle Rennen" : "Letzte 5 Rennen"} · Alle Ligen
+              </div>
+            </div>
+            <Link
+              href={
+                showAllRaces
+                  ? `/${league}/drivers/${driver.id}`
+                  : `/${league}/drivers/${driver.id}?allRaces=1`
+              }
+              className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 hover:text-white"
+            >
+              {showAllRaces ? "Nur letzte 5" : "Alle Rennen"}
+            </Link>
+          </div>
+
+          {raceRows.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+              Noch keine Rennen.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5">
+              <div className="grid grid-cols-[120px_170px_1fr_88px] gap-4 border-b border-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60">
+                <div>Liga</div>
+                <div>Saison</div>
+                <div>Rennen</div>
+                <div className="text-right">Platz</div>
+              </div>
+              {raceRows.map((r) => {
+                const publicSlug = publicSlugByLeague.get(r.race.league) ?? league;
+                const leagueName = publicNameByLeague.get(r.race.league) ?? r.race.league;
+                const seasonLabel = `Saison ${r.race.season} · Season ${r.race.seasonNo}${r.race.seasonIsTest ? " · TEST" : ""}`;
+                const raceLabel = `R${r.race.round} · ${r.race.name}`;
+                const posLabel = r.status ? r.status : r.position ? `P${r.position}` : "—";
+                return (
+                  <Link
+                    key={r.race.id}
+                    href={`/${publicSlug}/races/${r.race.id}`}
+                    className="grid grid-cols-[120px_170px_1fr_88px] gap-4 border-b border-white/10 px-5 py-4 last:border-b-0 hover:bg-white/5"
+                  >
+                    <div className="truncate font-semibold text-white">{leagueName}</div>
+                    <div className="truncate text-xs font-semibold text-white/60">{seasonLabel}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-white">{raceLabel}</div>
+                      <div className="mt-1 truncate text-xs font-semibold text-white/60">
+                        {new Date(r.race.startsAt).toLocaleDateString("de-DE")}
+                      </div>
+                    </div>
+                    <div className="text-right font-extrabold text-white">{posLabel}</div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </Container>
     </>
