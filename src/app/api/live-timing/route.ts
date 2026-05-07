@@ -5,49 +5,88 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const alertsSchema = z.object({
+  id: z.string(),
+  type: z.enum(["fastest_lap", "fastest_sector", "safety_car", "vsc", "red_flag", "green_flag"]),
+  title: z.string(),
+  message: z.string(),
+  driver: z.string().optional(),
+  sector: z.number().optional(),
+  createdAt: z.number()
+});
+
+const trackMapSchema = z
+  .object({
+    circuit: z.string().optional(),
+    length: z.number().optional()
+  })
+  .nullable()
+  .optional();
+
+const entrySchema = z.object({
+  position: z.number(),
+  driver: z.string(),
+  team: z.string(),
+  lap: z.number(),
+  gap: z.string(),
+  lastLap: z.string(),
+  bestLap: z.string().nullable().optional(),
+  currentLap: z.string().nullable().optional(),
+  sector1: z.string().nullable().optional(),
+  sector2: z.string().nullable().optional(),
+  sector3: z.string().nullable().optional(),
+  sector1Color: z.string().nullable().optional(),
+  sector2Color: z.string().nullable().optional(),
+  sector3Color: z.string().nullable().optional(),
+  drs: z.boolean().nullable().optional(),
+  ers: z.number().nullable().optional(),
+  tyre: z.string().nullable().optional(),
+  x: z.number().nullable().optional(),
+  y: z.number().nullable().optional(),
+  z: z.number().nullable().optional(),
+  angle: z.number().nullable().optional(),
+  accent: z.string().nullable().optional(),
+  penalties: z.string().optional(),
+  stops: z.number().optional()
+});
+
 const schema = z.object({
   sessionId: z.string(),
-  sessionName: z.string().optional(),
-  sessionType: z.number().optional(),
-  entries: z.array(
-    z.object({
-      position: z.number(),
-      driver: z.string(),
-      team: z.string(),
-      lap: z.number(),
-      gap: z.string(),
-      lastLap: z.string(),
-      bestLap: z.string().nullable().optional(),
-      sector1: z.string().nullable().optional(),
-      sector2: z.string().nullable().optional(),
-      sector3: z.string().nullable().optional(),
-      sector1Color: z.string().nullable().optional(),
-      sector2Color: z.string().nullable().optional(),
-      sector3Color: z.string().nullable().optional(),
-      drs: z.boolean().nullable().optional(),
-      ers: z.number().nullable().optional(),
-      tyre: z.string().nullable().optional(),
-      x: z.number().nullable().optional(),
-      y: z.number().nullable().optional(),
-      z: z.number().nullable().optional(),
-      angle: z.number().nullable().optional(),
-      accent: z.string(),
-      penalties: z.string().optional(),
-      stops: z.number().optional()
-    })
-  )
+  sessionName: z.string().nullable().optional(),
+  sessionType: z.number().nullable().optional(),
+  sessionTimeLeft: z.string().nullable().optional(),
+  sessionDuration: z.string().nullable().optional(),
+  totalLaps: z.number().nullable().optional(),
+  currentLap: z.number().nullable().optional(),
+  lapsRemaining: z.number().nullable().optional(),
+  trackStatus: z.string().nullable().optional(),
+  raceStatus: z.string().nullable().optional(),
+  trackMap: trackMapSchema,
+  alerts: z.array(alertsSchema).optional(),
+  entries: z.array(entrySchema)
 });
 
 type LiveTimingPostEntry = z.infer<typeof schema>["entries"][number];
+type LiveTimingAlert = z.infer<typeof alertsSchema>;
 
 type LiveTimingEntry = LiveTimingPostEntry & {
   portraitUrl: string | null;
+  accent: string;
 };
 
 type LiveTimingState = {
   sessionId: string;
   sessionName: string | null;
   sessionType: number | null;
+  sessionTimeLeft: string | null;
+  sessionDuration: string | null;
+  totalLaps: number | null;
+  currentLap: number | null;
+  lapsRemaining: number | null;
+  trackStatus: string | null;
+  raceStatus: string | null;
+  trackMap: { circuit?: string; length?: number } | null;
+  alerts: LiveTimingAlert[];
   updatedAtMs: number;
   entries: LiveTimingEntry[];
 };
@@ -156,6 +195,15 @@ function getState(): LiveTimingState {
       sessionId: "default",
       sessionName: null,
       sessionType: null,
+      sessionTimeLeft: null,
+      sessionDuration: null,
+      totalLaps: null,
+      currentLap: null,
+      lapsRemaining: null,
+      trackStatus: null,
+      raceStatus: null,
+      trackMap: null,
+      alerts: [],
       updatedAtMs: 0,
       entries: []
     };
@@ -178,6 +226,15 @@ export async function GET() {
       sessionId: state.sessionId,
       sessionName: state.sessionName,
       sessionType: state.sessionType,
+      sessionTimeLeft: state.sessionTimeLeft,
+      sessionDuration: state.sessionDuration,
+      totalLaps: state.totalLaps,
+      currentLap: state.currentLap,
+      lapsRemaining: state.lapsRemaining,
+      trackStatus: state.trackStatus,
+      raceStatus: state.raceStatus,
+      trackMap: state.trackMap,
+      alerts: state.alerts,
       updatedAtMs: state.updatedAtMs,
       entries: state.entries
     },
@@ -206,8 +263,17 @@ export async function POST(req: Request) {
   const state = getState();
 
   state.sessionId = data.sessionId;
-  state.sessionName = data.sessionName ?? null;
+  state.sessionName = typeof data.sessionName === "string" ? data.sessionName : null;
   state.sessionType = typeof data.sessionType === "number" ? data.sessionType : null;
+  state.sessionTimeLeft = typeof data.sessionTimeLeft === "string" ? data.sessionTimeLeft : null;
+  state.sessionDuration = typeof data.sessionDuration === "string" ? data.sessionDuration : null;
+  state.totalLaps = typeof data.totalLaps === "number" ? data.totalLaps : null;
+  state.currentLap = typeof data.currentLap === "number" ? data.currentLap : null;
+  state.lapsRemaining = typeof data.lapsRemaining === "number" ? data.lapsRemaining : null;
+  state.trackStatus = typeof data.trackStatus === "string" ? data.trackStatus : null;
+  state.raceStatus = typeof data.raceStatus === "string" ? data.raceStatus : null;
+  state.trackMap = data.trackMap ?? null;
+  state.alerts = Array.isArray(data.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
   state.updatedAtMs = Date.now();
   const portraitByName = await resolvePortraitUrlsByDriverName(data.entries.map((e) => e.driver));
   state.entries = data.entries
@@ -215,6 +281,7 @@ export async function POST(req: Request) {
     .sort((a, b) => a.position - b.position)
     .map((e) => ({
       ...e,
+      accent: typeof e.accent === "string" && e.accent.trim() ? e.accent : "#E10600",
       portraitUrl: portraitByName.get(e.driver) ?? null
     }));
 
@@ -224,6 +291,15 @@ export async function POST(req: Request) {
       sessionId: state.sessionId,
       sessionName: state.sessionName,
       sessionType: state.sessionType,
+      sessionTimeLeft: state.sessionTimeLeft,
+      sessionDuration: state.sessionDuration,
+      totalLaps: state.totalLaps,
+      currentLap: state.currentLap,
+      lapsRemaining: state.lapsRemaining,
+      trackStatus: state.trackStatus,
+      raceStatus: state.raceStatus,
+      trackMap: state.trackMap,
+      alerts: state.alerts,
       updatedAtMs: state.updatedAtMs,
       entries: state.entries
     },

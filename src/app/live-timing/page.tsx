@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type LiveTimingEntry = {
   position: number;
@@ -10,24 +10,35 @@ type LiveTimingEntry = {
   lap: number;
   gap: string;
   lastLap: string;
-  bestLap?: string;
-  sector1?: string;
-  sector2?: string;
-  sector3?: string;
-  sector1Color?: string;
-  sector2Color?: string;
-  sector3Color?: string;
-  drs?: boolean;
-  ers?: number;
-  tyre?: string;
-  x?: number;
-  y?: number;
-  z?: number;
-  angle?: number;
+  bestLap?: string | null;
+  currentLap?: string | null;
+  sector1?: string | null;
+  sector2?: string | null;
+  sector3?: string | null;
+  sector1Color?: string | null;
+  sector2Color?: string | null;
+  sector3Color?: string | null;
+  drs?: boolean | null;
+  ers?: number | null;
+  tyre?: string | null;
+  x?: number | null;
+  y?: number | null;
+  z?: number | null;
+  angle?: number | null;
   penalties?: string;
   stops?: number;
-  accent: string;
+  accent?: string;
   portraitUrl: string | null;
+};
+
+type LiveTimingAlert = {
+  id: string;
+  type: "fastest_lap" | "fastest_sector" | "safety_car" | "vsc" | "red_flag" | "green_flag";
+  title: string;
+  message: string;
+  driver?: string;
+  sector?: number;
+  createdAt: number;
 };
 
 type LiveTimingState = {
@@ -35,6 +46,15 @@ type LiveTimingState = {
   sessionId: string;
   sessionName?: string | null;
   sessionType?: number | null;
+  sessionTimeLeft?: string | null;
+  sessionDuration?: string | null;
+  totalLaps?: number | null;
+  currentLap?: number | null;
+  lapsRemaining?: number | null;
+  trackStatus?: string | null;
+  raceStatus?: string | null;
+  trackMap?: { circuit?: string; length?: number } | null;
+  alerts?: LiveTimingAlert[];
   updatedAtMs: number;
   entries: LiveTimingEntry[];
 };
@@ -94,7 +114,7 @@ function formatGapFromMs(deltaMs: number) {
   return `+${m}:${String(s).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
 }
 
-function sectorClass(color: string | undefined) {
+function sectorClass(color: string | undefined | null) {
   const c = (color ?? "").trim().toLowerCase();
   if (c === "purple") return "border-violet-400/60 bg-violet-500/20 text-violet-100";
   if (c === "green") return "border-emerald-400/60 bg-emerald-500/20 text-emerald-100";
@@ -102,7 +122,7 @@ function sectorClass(color: string | undefined) {
   return "border-white/10 bg-black/25 text-white/85";
 }
 
-function tyreStyle(tyre: string | undefined) {
+function tyreStyle(tyre: string | undefined | null) {
   const t = (tyre ?? "").trim().toLowerCase();
   if (t === "soft") return { label: "Soft", cls: "border-red-400/60 bg-red-500/15 text-red-100" };
   if (t === "medium") return { label: "Medium", cls: "border-amber-300/60 bg-amber-500/15 text-amber-100" };
@@ -122,10 +142,36 @@ function formatUpdated(ms: number) {
   });
 }
 
+function sessionModeByName(sessionName: string) {
+  const n = sessionName.trim().toLowerCase();
+  const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+  if (isRaceByName) return "race" as const;
+  const isPracticeOrQualiByName =
+    n.includes("practice") ||
+    n.includes("qualifying") ||
+    n.includes("q1") ||
+    n.includes("q2") ||
+    n.includes("q3") ||
+    n.includes("time trial");
+  if (isPracticeOrQualiByName) return "practice" as const;
+  return null;
+}
+
+function alertStyle(type: LiveTimingAlert["type"]) {
+  if (type === "fastest_lap") return { bar: "bg-violet-400", wrap: "border-violet-400/40 bg-violet-500/15" };
+  if (type === "fastest_sector") return { bar: "bg-emerald-400", wrap: "border-emerald-400/40 bg-emerald-500/15" };
+  if (type === "safety_car") return { bar: "bg-amber-300", wrap: "border-amber-300/40 bg-amber-500/15" };
+  if (type === "vsc") return { bar: "bg-orange-300", wrap: "border-orange-300/40 bg-orange-500/15" };
+  if (type === "red_flag") return { bar: "bg-red-400", wrap: "border-red-400/40 bg-red-500/15" };
+  return { bar: "bg-emerald-400", wrap: "border-emerald-400/40 bg-emerald-500/15" };
+}
+
 export default function LiveTimingPage() {
   const [data, setData] = useState<LiveTimingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toasts, setToasts] = useState<LiveTimingAlert[]>([]);
+  const seenAlertIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -162,14 +208,40 @@ export default function LiveTimingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const alerts = Array.isArray(data?.alerts) ? (data?.alerts as LiveTimingAlert[]) : [];
+    if (alerts.length === 0) return;
+    const next = alerts
+      .slice()
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .filter((a) => a?.id && !seenAlertIds.current.has(a.id));
+    if (next.length === 0) return;
+    for (const a of next) seenAlertIds.current.add(a.id);
+    setToasts((prev) => {
+      const merged = [...prev, ...next];
+      return merged.slice(-4);
+    });
+    for (const a of next) {
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((x) => x.id !== a.id));
+      }, 8000);
+    }
+  }, [data?.alerts]);
+
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const isLive = Boolean(last && now - last <= 2000);
   const sessionType = typeof data?.sessionType === "number" ? data.sessionType : null;
-  const isRace = Boolean(sessionType !== null && RACE_TYPES.has(sessionType));
-  const isPracticeOrQuali = Boolean(sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType));
-  const headerLabel = (data?.sessionName ?? (isRace ? "Race" : "Live")).toString().trim();
-  const currentLap = useMemo(() => {
+  const sessionNameRaw = (data?.sessionName ?? "").toString();
+  const modeByName = sessionModeByName(sessionNameRaw);
+  const isRace = Boolean(
+    modeByName ? modeByName === "race" : sessionType !== null && RACE_TYPES.has(sessionType)
+  );
+  const isPracticeOrQuali = Boolean(
+    modeByName ? modeByName === "practice" : sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType)
+  );
+  const headerLabel = (sessionNameRaw.trim() || (isRace ? "Race" : "Live")).toString().trim();
+  const computedLap = useMemo(() => {
     const entries = data?.entries ?? [];
     let max = 0;
     for (const e of entries) {
@@ -178,6 +250,17 @@ export default function LiveTimingPage() {
     }
     return max > 0 ? max : null;
   }, [data?.entries]);
+  const currentLap = typeof data?.currentLap === "number" && Number.isFinite(data.currentLap) ? data.currentLap : computedLap;
+  const totalLaps = typeof data?.totalLaps === "number" && Number.isFinite(data.totalLaps) ? data.totalLaps : null;
+  const lapsRemaining =
+    typeof data?.lapsRemaining === "number" && Number.isFinite(data.lapsRemaining)
+      ? data.lapsRemaining
+      : totalLaps !== null && currentLap !== null
+        ? Math.max(0, totalLaps - currentLap)
+        : null;
+  const sessionTimeLeft = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
+  const sessionDuration = typeof data?.sessionDuration === "string" ? data.sessionDuration.trim() : "";
+  const trackStatus = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
 
   const view = useMemo(() => {
     const entries = data?.entries ?? [];
@@ -216,7 +299,7 @@ export default function LiveTimingPage() {
         position: best === null ? "—" : String(idx + 1),
         driver: x.e.driver,
         team: x.e.team,
-        lap: x.e.lap,
+        currentLap: x.e.currentLap?.trim() ? x.e.currentLap : x.e.lastLap?.trim() ? x.e.lastLap : "—",
         bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "NO TIME",
         gap,
         sector1: x.e.sector1?.trim() ? x.e.sector1 : "—",
@@ -225,9 +308,8 @@ export default function LiveTimingPage() {
         sector1Color: x.e.sector1Color,
         sector2Color: x.e.sector2Color,
         sector3Color: x.e.sector3Color,
-        lastLap: x.e.lastLap?.trim() ? x.e.lastLap : "—",
         tyre: x.e.tyre?.trim() ? x.e.tyre : "—",
-        accent: x.e.accent,
+        accent: x.e.accent ?? "#E10600",
         portraitUrl: x.e.portraitUrl
       };
     });
@@ -237,6 +319,49 @@ export default function LiveTimingPage() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-[#07080A] text-white">
+      <style jsx global>{`
+        @keyframes mrl-toast-in {
+          from {
+            opacity: 0;
+            transform: translateX(14px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
+
+      {toasts.length ? (
+        <div className="fixed right-4 top-20 z-50 flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2 sm:top-24">
+          {toasts.map((a) => {
+            const s = alertStyle(a.type);
+            return (
+              <div
+                key={a.id}
+                className={["relative overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur", s.wrap].join(" ")}
+                style={{ animation: "mrl-toast-in 220ms ease-out" }}
+              >
+                <div className={["absolute left-0 top-0 bottom-0 w-1.5", s.bar].join(" ")} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-extrabold uppercase tracking-wider text-white/90">{a.title}</div>
+                    <div className="mt-1 text-sm font-semibold text-white/85">{a.message}</div>
+                    {(a.driver || typeof a.sector === "number") ? (
+                      <div className="mt-2 text-xs font-semibold text-white/70">
+                        {a.driver ? <span className="mr-2">{a.driver}</span> : null}
+                        {typeof a.sector === "number" ? <span>S{a.sector}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0 text-[11px] font-semibold text-white/55">{formatUpdated(a.createdAt)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       <div className="mx-auto w-full max-w-[1200px] px-4 pb-14 pt-10 md:px-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -251,15 +376,35 @@ export default function LiveTimingPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
-              LIVE • {headerLabel.toUpperCase()}
-              {currentLap ? (
-                <span className="ml-3 rounded-full bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                  LAP {currentLap}
-                </span>
-              ) : null}
+              {headerLabel.toUpperCase()}
             </div>
+            {sessionTimeLeft ? (
+              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
+                LEFT {sessionTimeLeft}
+              </div>
+            ) : null}
+            {sessionDuration ? (
+              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
+                DUR {sessionDuration}
+              </div>
+            ) : null}
+            {currentLap !== null ? (
+              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
+                LAP {currentLap}
+              </div>
+            ) : null}
+            {lapsRemaining !== null ? (
+              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
+                REM {lapsRemaining}
+              </div>
+            ) : null}
+            {trackStatus ? (
+              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
+                TRACK {trackStatus}
+              </div>
+            ) : null}
             <div
               className={[
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-extrabold uppercase tracking-wider",
@@ -274,10 +419,28 @@ export default function LiveTimingPage() {
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:hidden">
           <div className="flex items-center justify-between gap-3">
-            <div>LIVE • {headerLabel.toUpperCase()}</div>
-            {currentLap ? (
-              <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+            <div className="truncate">{headerLabel.toUpperCase()}</div>
+            <div className="shrink-0">{isLive ? "LIVE" : loading ? "LÄDT…" : "OFFLINE"}</div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sessionTimeLeft ? (
+              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                LEFT {sessionTimeLeft}
+              </div>
+            ) : null}
+            {currentLap !== null ? (
+              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                 LAP {currentLap}
+              </div>
+            ) : null}
+            {lapsRemaining !== null ? (
+              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                REM {lapsRemaining}
+              </div>
+            ) : null}
+            {trackStatus ? (
+              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                TRACK {trackStatus}
               </div>
             ) : null}
           </div>
@@ -305,16 +468,16 @@ export default function LiveTimingPage() {
             <div className="divide-y divide-white/10">
               {view.mode === "practice" ? (
                 <>
-                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.25fr_1.05fr_120px_110px_78px_78px_78px_120px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur xl:grid">
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.25fr_1.05fr_120px_120px_110px_78px_78px_78px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur xl:grid">
                     <div>Pos</div>
                     <div>Fahrer</div>
                     <div>Team</div>
-                    <div className="text-right">Best Lap</div>
+                    <div className="text-right">Current</div>
+                    <div className="text-right">Best</div>
                     <div className="text-right">Gap</div>
                     <div className="text-right">S1</div>
                     <div className="text-right">S2</div>
                     <div className="text-right">S3</div>
-                    <div className="text-right">Last Lap</div>
                     <div className="text-right">Tyre</div>
                   </div>
 
@@ -331,7 +494,7 @@ export default function LiveTimingPage() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
                         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
 
-                        <div className="relative grid gap-3 md:grid-cols-[64px_1fr_110px_110px_110px] md:items-center xl:grid-cols-[64px_1.25fr_1.05fr_120px_110px_78px_78px_78px_120px_90px]">
+                        <div className="relative grid gap-3 md:grid-cols-[64px_1fr_120px_120px_110px] md:items-center xl:grid-cols-[64px_1.25fr_1.05fr_120px_120px_110px_78px_78px_78px_90px]">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
                               {r.position}
@@ -360,13 +523,14 @@ export default function LiveTimingPage() {
                                   {r.team}
                                 </div>
                                 <div className="mt-2 flex flex-wrap items-center gap-2 xl:hidden">
-                                  {typeof r.lap === "number" && Number.isFinite(r.lap) ? (
-                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                                      LAP {r.lap}
-                                    </div>
-                                  ) : null}
+                                  <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                    CUR {r.currentLap}
+                                  </div>
                                   <div className={["inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
                                     {tyre.label}
+                                  </div>
+                                  <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                    {r.gap}
                                   </div>
                                 </div>
                               </div>
@@ -377,12 +541,9 @@ export default function LiveTimingPage() {
                             <div className="truncate">{r.team}</div>
                           </div>
 
+                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">{r.currentLap}</div>
                           <div className="text-right text-sm font-extrabold text-white md:text-base">{r.bestLap}</div>
                           <div className="text-right text-sm font-semibold text-white/90 md:text-base">{r.gap}</div>
-
-                          <div className="text-right text-sm font-semibold text-white/85 md:text-base xl:hidden">
-                            {r.lastLap}
-                          </div>
 
                           <div className="hidden justify-end xl:flex">
                             <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
@@ -400,9 +561,6 @@ export default function LiveTimingPage() {
                             </div>
                           </div>
 
-                          <div className="hidden text-right text-sm font-semibold text-white/85 xl:block">
-                            {r.lastLap}
-                          </div>
                           <div className="hidden justify-end xl:flex">
                             <div className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
                               {tyre.label}
@@ -415,27 +573,21 @@ export default function LiveTimingPage() {
                 </>
               ) : (
                 <>
-                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.2fr_1fr_80px_110px_78px_78px_78px_120px_72px_140px_90px_120px_90px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur 2xl:grid">
+                  <div className="sticky top-0 z-10 hidden grid-cols-[64px_1.2fr_1fr_80px_110px_120px_90px_120px_72px] gap-3 border-b border-white/10 bg-black/60 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur 2xl:grid">
                     <div>Pos</div>
                     <div>Fahrer</div>
                     <div>Team</div>
                     <div className="text-right">Lap</div>
                     <div className="text-right">Gap</div>
-                    <div className="text-right">S1</div>
-                    <div className="text-right">S2</div>
-                    <div className="text-right">S3</div>
                     <div className="text-right">Last Lap</div>
-                    <div className="text-right">DRS</div>
-                    <div className="text-right">ERS</div>
                     <div className="text-right">Tyre</div>
                     <div className="text-right">Penalties</div>
-                    <div className="text-right">Stops</div>
+                    <div className="text-right">DRS</div>
                   </div>
 
                   {view.rows.map((r) => {
                     const accent = r.accent ?? "#E10600";
                     const tyre = tyreStyle(r.tyre);
-                    const ers = typeof r.ers === "number" && Number.isFinite(r.ers) ? Math.max(0, Math.min(100, Math.round(r.ers))) : null;
                     return (
                       <div
                         key={`${r.position}-${r.driver}`}
@@ -446,7 +598,7 @@ export default function LiveTimingPage() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
                         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: accent }} />
 
-                        <div className="relative grid gap-3 lg:grid-cols-[64px_1fr_110px_110px_110px] lg:items-center 2xl:grid-cols-[64px_1.2fr_1fr_80px_110px_78px_78px_78px_120px_72px_140px_90px_120px_90px]">
+                        <div className="relative grid gap-3 lg:grid-cols-[64px_1fr_110px_110px_110px] lg:items-center 2xl:grid-cols-[64px_1.2fr_1fr_80px_110px_120px_90px_120px_72px]">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/35 text-lg font-extrabold text-white">
                               {r.position}
@@ -481,6 +633,16 @@ export default function LiveTimingPage() {
                                   <div className={["inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
                                     {tyre.label}
                                   </div>
+                                  {r.penalties?.trim() ? (
+                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                      PEN {r.penalties}
+                                    </div>
+                                  ) : null}
+                                  {r.drs ? (
+                                    <div className="inline-flex items-center justify-center rounded-full border border-emerald-400/60 bg-emerald-500/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-emerald-100">
+                                      DRS
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -494,23 +656,13 @@ export default function LiveTimingPage() {
                           <div className="text-right text-sm font-semibold text-white/90 lg:text-base">{r.gap}</div>
                           <div className="text-right text-sm font-semibold text-white/85 lg:text-base 2xl:hidden">{r.lastLap}</div>
 
-                          <div className="hidden justify-end 2xl:flex">
-                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
-                              {r.sector1?.trim() ? r.sector1 : "—"}
-                            </div>
-                          </div>
-                          <div className="hidden justify-end 2xl:flex">
-                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
-                              {r.sector2?.trim() ? r.sector2 : "—"}
-                            </div>
-                          </div>
-                          <div className="hidden justify-end 2xl:flex">
-                            <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
-                              {r.sector3?.trim() ? r.sector3 : "—"}
-                            </div>
-                          </div>
-
                           <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.lastLap}</div>
+                          <div className="hidden justify-end 2xl:flex">
+                            <div className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
+                              {tyre.label}
+                            </div>
+                          </div>
+                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.penalties ?? "—"}</div>
                           <div className="hidden justify-end 2xl:flex">
                             {r.drs ? (
                               <div className="inline-flex items-center justify-center rounded-full border border-emerald-400/60 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-emerald-100">
@@ -522,24 +674,6 @@ export default function LiveTimingPage() {
                               </div>
                             )}
                           </div>
-                          <div className="hidden justify-end 2xl:flex">
-                            <div className="w-[120px] rounded-full border border-white/10 bg-black/25 p-1">
-                              <div
-                                className="h-2 rounded-full bg-gradient-to-r from-mrl-red via-amber-400 to-emerald-400 transition-[width] duration-300"
-                                style={{ width: `${ers ?? 0}%` }}
-                              />
-                            </div>
-                            <div className="ml-2 w-[42px] text-right text-xs font-extrabold text-white/85">
-                              {ers !== null ? `${ers}%` : "—"}
-                            </div>
-                          </div>
-                          <div className="hidden justify-end 2xl:flex">
-                            <div className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
-                              {tyre.label}
-                            </div>
-                          </div>
-                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.penalties ?? "—"}</div>
-                          <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{typeof r.stops === "number" ? r.stops : "—"}</div>
                         </div>
                       </div>
                     );
