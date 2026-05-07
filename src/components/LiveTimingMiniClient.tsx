@@ -117,7 +117,8 @@ export function LiveTimingMiniClient({
   maxRows = 6,
   className,
   columns = 1,
-  splitAt = 11
+  splitAt = 11,
+  hideWhenNoLiveData = true
 }: {
   startsAtMs: number;
   disabled?: boolean;
@@ -126,6 +127,7 @@ export function LiveTimingMiniClient({
   className?: string;
   columns?: 1 | 2;
   splitAt?: number;
+  hideWhenNoLiveData?: boolean;
 }) {
   const [data, setData] = useState<State | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
@@ -186,7 +188,8 @@ export function LiveTimingMiniClient({
   const isLive = Boolean(last && now - last <= 2000);
   const rows = (data?.entries ?? []).slice().sort((a, b) => a.position - b.position).slice(0, Math.max(1, maxRows));
   const hasLiveData = isLive && rows.length > 0;
-  if (!enabled || !hasLiveData) return null;
+  if (!enabled) return null;
+  if (!hasLiveData && hideWhenNoLiveData) return null;
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
   const mode = sessionModeByName(sessionName);
@@ -231,11 +234,11 @@ export function LiveTimingMiniClient({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <div className="min-w-0 truncate text-sm font-extrabold uppercase tracking-wide text-white">
+                <div className="min-w-0 text-sm font-extrabold leading-snug tracking-wide text-white line-clamp-2">
                   {r.driver}
                 </div>
               </div>
-              <div className="mt-1 truncate text-[11px] font-semibold text-white/70">{r.team}</div>
+              <div className="mt-1 text-[11px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">
@@ -322,6 +325,12 @@ export function LiveTimingMiniClient({
         </div>
       </div>
 
+      {!hasLiveData ? (
+        <div className="p-4 text-sm font-semibold text-white/70">
+          Warte auf Live-Daten…
+        </div>
+      ) : null}
+
       {popupOpen ? (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/70" onClick={() => setPopupOpen(false)} />
@@ -367,7 +376,11 @@ export function LiveTimingMiniClient({
                   Close
                 </button>
               </div>
-              {columns === 2 ? (
+              {!hasLiveData ? (
+                <div className="p-4 text-sm font-semibold text-white/70">
+                  Warte auf Live-Daten…
+                </div>
+              ) : columns === 2 ? (
                 <div className="grid grid-cols-2 gap-3 p-3">
                   <div className="grid gap-3">{leftRows.map(renderRow)}</div>
                   <div className="grid gap-3">{rightRows.map(renderRow)}</div>
@@ -380,7 +393,7 @@ export function LiveTimingMiniClient({
         </div>
       ) : null}
 
-      {columns === 2 ? (
+      {hasLiveData ? columns === 2 ? (
         <div className="grid grid-cols-2 gap-3 p-3">
           <div className="grid gap-3">
             {leftRows.map(renderRow)}
@@ -393,7 +406,7 @@ export function LiveTimingMiniClient({
         <div className="grid gap-3 p-3">
           {leftRows.map(renderRow)}
         </div>
-      )}
+      ) : null}
 
       {data?.alerts?.length ? (
         <div className="border-t border-white/10 px-4 py-2 text-[11px] font-semibold text-white/60">

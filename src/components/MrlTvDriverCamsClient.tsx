@@ -147,7 +147,7 @@ export function MrlTvDriverCamsClient({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2">
       {liveCams.map((c) => (
         <div key={c.driverId} className="overflow-hidden rounded-3xl border border-white/10 bg-black/35">
           <div

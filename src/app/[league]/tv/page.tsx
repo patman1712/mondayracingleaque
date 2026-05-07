@@ -3,8 +3,9 @@ import Link from "next/link";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { TwitchEmbed } from "@/components/TwitchEmbed";
+import { LiveTimingMiniClient } from "@/components/LiveTimingMiniClient";
 import { MrlTvDriverCamsClient } from "@/components/MrlTvDriverCamsClient";
-import { TvBroadcastWithTimingClient } from "@/components/TvBroadcastWithTimingClient";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -219,36 +220,56 @@ export default async function LeagueTvPage({
         </div>
       </Container>
 
-      <Container>
-        <div className="mt-6 mx-auto max-w-[1200px]">
-          <TvBroadcastWithTimingClient channel={race.twitchChannel} startsAtMs={startsAtMs} />
-        </div>
-      </Container>
+      <div className="relative left-1/2 right-1/2 -mx-[50vw] mt-6 w-screen">
+        <div className="mx-auto w-full px-4 pb-14 md:px-8">
+          <div className="grid gap-6 xl:grid-cols-[640px_minmax(0,1fr)] xl:items-start">
+            <div className="xl:sticky xl:top-24">
+              <LiveTimingMiniClient
+                startsAtMs={startsAtMs}
+                title="Live Timing"
+                maxRows={22}
+                columns={2}
+                splitAt={11}
+                hideWhenNoLiveData={false}
+                className="max-w-none"
+              />
+            </div>
 
-      <Container>
-        <div className="mt-10">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                Fahrer Cams
-              </div>
-              <div className="mt-1 text-sm text-white/70">
-                Es werden nur Fahrer aus dem Starterfeld angezeigt, die Twitch hinterlegt haben und live sind.
+            <div className="min-w-0">
+              {race.twitchChannel ? (
+                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} />
+              ) : (
+                <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
+                  Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
+                </div>
+              )}
+
+              <div className="mt-8">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                      Fahrer Cams
+                    </div>
+                    <div className="mt-1 text-sm text-white/70">
+                      Es werden nur Fahrer aus dem Starterfeld angezeigt, die Twitch hinterlegt haben und live sind.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  {cams.length ? (
+                    <MrlTvDriverCamsClient cams={cams} startsAtMs={startsAtMs} />
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
+                      Im Starterfeld hat niemand Twitch hinterlegt.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-
-          <div className="mt-5">
-            {cams.length ? (
-              <MrlTvDriverCamsClient cams={cams} startsAtMs={startsAtMs} />
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
-                Im Starterfeld hat niemand Twitch hinterlegt.
-              </div>
-            )}
-          </div>
         </div>
-      </Container>
+      </div>
     </>
   );
 }
