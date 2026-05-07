@@ -2,6 +2,11 @@ import { prisma } from "@/lib/db";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
 
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("league") ?? "";
@@ -29,7 +34,7 @@ export async function GET(req: Request) {
         driverId: true,
         teamId: true,
         role: true,
-        driver: { select: { name: true, gamertag: true } },
+        driver: { select: { name: true, gamertag: true, portraitPath: true } },
         teamRef: { select: { id: true } }
       },
       take: 5000
@@ -38,14 +43,20 @@ export async function GET(req: Request) {
 
   const driverInfo = new Map<
     string,
-    { name: string; role: "MAIN" | "RESERVE"; teamId: string | null }
+    {
+      name: string;
+      role: "MAIN" | "RESERVE";
+      teamId: string | null;
+      portraitUrl: string | null;
+    }
   >();
   for (const r of seasonDrivers) {
     const name = (r.driver.gamertag ?? "").trim() ? String(r.driver.gamertag) : String(r.driver.name);
     driverInfo.set(r.driverId, {
       name,
       role: r.role,
-      teamId: r.teamId ?? r.teamRef?.id ?? null
+      teamId: r.teamId ?? r.teamRef?.id ?? null,
+      portraitUrl: imageUrl(r.driver.portraitPath)
     });
   }
 
@@ -56,15 +67,17 @@ export async function GET(req: Request) {
   const teamsSeason = await prisma.teamSeason
     .findMany({
       where: { seasonId: currentSeason.id },
-      select: { color: true, team: { select: { id: true, name: true, color: true } } },
+      select: { color: true, team: { select: { id: true, name: true, color: true, logoPath: true } } },
       take: 5000
     })
     .catch(() => []);
 
   const teamAccentById = new Map<string, string | null>();
+  const teamLogoUrlById = new Map<string, string | null>();
   for (const r of teamsSeason) {
     const accent = r.color ?? r.team.color ?? null;
     teamAccentById.set(r.team.id, accent);
+    teamLogoUrlById.set(r.team.id, imageUrl(r.team.logoPath));
   }
 
   const teamsSeasonFiltered = teamsSeason.filter((t) => {
@@ -128,7 +141,7 @@ export async function GET(req: Request) {
     .map(([id, d]) => {
       const accent =
         d.role === "MAIN" && d.teamId ? teamAccentById.get(d.teamId) ?? null : null;
-      return { id, name: d.name, points: driverPoints.get(id) ?? 0, accent };
+      return { id, name: d.name, points: driverPoints.get(id) ?? 0, accent, portraitUrl: d.portraitUrl };
     })
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);
@@ -138,7 +151,8 @@ export async function GET(req: Request) {
       id: t.team.id,
       name: t.team.name,
       points: teamPoints.get(t.team.id) ?? 0,
-      accent: teamAccentById.get(t.team.id) ?? null
+      accent: teamAccentById.get(t.team.id) ?? null,
+      logoUrl: teamLogoUrlById.get(t.team.id) ?? null
     }))
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);

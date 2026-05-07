@@ -75,8 +75,8 @@ type LeagueDrivers = {
 
 type StandingsTop = {
   season: { year: number; seasonNo: number; isTest: boolean } | null;
-  drivers: Array<{ id: string; name: string; points: number; accent: string | null }>;
-  teams: Array<{ id: string; name: string; points: number; accent: string | null }>;
+  drivers: Array<{ id: string; name: string; points: number; accent: string | null; portraitUrl: string | null }>;
+  teams: Array<{ id: string; name: string; points: number; accent: string | null; logoUrl: string | null }>;
 };
 
 function hexToRgba(hex: string, a: number) {
@@ -644,21 +644,35 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
 
-                                      <div className="relative flex items-center gap-3 px-4 py-3">
+                                      <div className="relative flex min-h-[96px] items-center gap-4 px-5 py-6">
                                         <div
-                                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-sm font-extrabold text-white"
+                                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-base font-extrabold text-white"
                                           style={{ borderColor: d.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-base font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {d.name}
                                           </div>
                                         </div>
-                                        <div className="shrink-0 text-right">
-                                          <div className="text-base font-extrabold text-white">{Math.round(d.points)}</div>
-                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
+                                        <div className="flex shrink-0 items-center gap-3">
+                                          {d.portraitUrl ? (
+                                            <Image
+                                              src={d.portraitUrl}
+                                              alt=""
+                                              width={64}
+                                              height={64}
+                                              unoptimized
+                                              className="h-14 w-14 rounded-2xl bg-black/25 object-contain"
+                                            />
+                                          ) : (
+                                            <div className="h-14 w-14 rounded-2xl bg-black/25" />
+                                          )}
+                                          <div className="text-right">
+                                            <div className="text-lg font-extrabold text-white">{Math.round(d.points)}</div>
+                                            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
+                                          </div>
                                         </div>
                                       </div>
                                     </Link>
@@ -682,21 +696,35 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
 
-                                      <div className="relative flex items-center gap-3 px-4 py-3">
+                                      <div className="relative flex min-h-[96px] items-center gap-4 px-5 py-6">
                                         <div
-                                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-sm font-extrabold text-white"
+                                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-base font-extrabold text-white"
                                           style={{ borderColor: t.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-base font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {t.name}
                                           </div>
                                         </div>
-                                        <div className="shrink-0 text-right">
-                                          <div className="text-base font-extrabold text-white">{Math.round(t.points)}</div>
-                                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
+                                        <div className="flex shrink-0 items-center gap-3">
+                                          {t.logoUrl ? (
+                                            <Image
+                                              src={t.logoUrl}
+                                              alt=""
+                                              width={64}
+                                              height={64}
+                                              unoptimized
+                                              className="h-14 w-14 rounded-2xl bg-black/25 object-contain p-2"
+                                            />
+                                          ) : (
+                                            <div className="h-14 w-14 rounded-2xl bg-black/25" />
+                                          )}
+                                          <div className="text-right">
+                                            <div className="text-lg font-extrabold text-white">{Math.round(t.points)}</div>
+                                            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
+                                          </div>
                                         </div>
                                       </div>
                                     </Link>
