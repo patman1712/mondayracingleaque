@@ -652,7 +652,14 @@ export function NavLeagues() {
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-base font-extrabold uppercase leading-snug tracking-wide text-white">
+                                          <div
+                                            className="break-words overflow-hidden text-sm font-extrabold uppercase leading-snug tracking-wide text-white"
+                                            style={{
+                                              display: "-webkit-box",
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: "vertical"
+                                            }}
+                                          >
                                             {d.name}
                                           </div>
                                         </div>
@@ -704,7 +711,14 @@ export function NavLeagues() {
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-base font-extrabold uppercase leading-snug tracking-wide text-white">
+                                          <div
+                                            className="break-words overflow-hidden text-sm font-extrabold uppercase leading-snug tracking-wide text-white"
+                                            style={{
+                                              display: "-webkit-box",
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: "vertical"
+                                            }}
+                                          >
                                             {t.name}
                                           </div>
                                         </div>
