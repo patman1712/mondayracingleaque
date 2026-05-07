@@ -37,10 +37,12 @@ function formatDateTimeBerlin(ms: number) {
 
 export function TwitchEmbed({
   channel,
-  startsAtMs
+  startsAtMs,
+  compact
 }: {
   channel: string;
   startsAtMs: number | null;
+  compact?: boolean;
 }) {
   const [showChat, setShowChat] = useState(false);
   const [live, setLive] = useState<boolean | null>(null);
@@ -75,6 +77,8 @@ export function TwitchEmbed({
     u.searchParams.set("parent", parent);
     return u.toString();
   }, [normalized]);
+
+  const videoAspect = compact ? "aspect-[21/9]" : "aspect-video";
 
   const now = Date.now();
   const inWindow = Boolean(timing && now >= timing.openMs && now <= timing.closeMs);
@@ -160,7 +164,7 @@ export function TwitchEmbed({
 
         {isOnAir ? (
           <div className={showChat ? "grid md:grid-cols-[1fr_360px]" : ""}>
-            <div className="aspect-video w-full">
+            <div className={videoAspect + " w-full"}>
               <iframe
                 src={src}
                 allow="autoplay; fullscreen"

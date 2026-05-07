@@ -201,9 +201,10 @@ export function LiveTimingMiniClient({
   const left = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
   const track = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
 
-  const leftRows = columns === 2 ? rows.slice(0, splitAt) : rows;
-  const rightRows = columns === 2 ? rows.slice(splitAt, splitAt * 2) : [];
   const rowsCount = Math.max(1, rowsPerColumn ?? splitAt);
+  const limited = columns === 2 ? rows.slice(0, rowsCount * 2) : rows;
+  const leftRows = columns === 2 ? limited.filter((_, idx) => idx % 2 === 0) : limited;
+  const rightRows = columns === 2 ? limited.filter((_, idx) => idx % 2 === 1) : [];
 
   const renderRow = (r: Entry) => {
     const tyre = tyreStyle(r.tyre);
@@ -215,7 +216,7 @@ export function LiveTimingMiniClient({
         key={`${r.position}-${r.driver}`}
         className={[
           "relative overflow-hidden rounded-xl border border-white/10",
-          equalHeights ? "h-full px-2 py-2" : "px-3 py-3"
+          equalHeights ? "h-full px-3 py-2" : "px-3 py-3"
         ].join(" ")}
         style={{ backgroundImage: teamBgSolid(accent) }}
       >
@@ -243,11 +244,11 @@ export function LiveTimingMiniClient({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <div className="min-w-0 text-sm font-extrabold leading-snug tracking-wide text-white line-clamp-2">
+                <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">
                   {r.driver}
                 </div>
               </div>
-              <div className="mt-1 text-[11px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
+              <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">

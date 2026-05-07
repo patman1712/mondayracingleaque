@@ -150,11 +150,27 @@ export default async function LeagueTvPage({
     }
   });
 
+  const driverIds = entries.map((e) => e.driver.id);
+  const driverSeasonRows = seasonRow?.id && driverIds.length
+    ? await prisma.driverSeason
+        .findMany({
+          where: { seasonId: seasonRow.id, driverId: { in: driverIds } },
+          select: {
+            driverId: true,
+            teamRef: { select: { id: true, name: true, color: true, logoPath: true } }
+          },
+          take: 5000
+        })
+        .catch(() => [])
+    : [];
+  const dsByDriverId = new Map(driverSeasonRows.map((r) => [r.driverId, r] as const));
+
   const teamIds = Array.from(
     new Set(
-      entries
-        .map((e) => e.teamId ?? e.team?.id ?? null)
-        .filter((v): v is string => Boolean(v))
+      [
+        ...entries.map((e) => e.teamId ?? e.team?.id ?? null),
+        ...driverSeasonRows.map((r) => r.teamRef?.id ?? null)
+      ].filter((v): v is string => Boolean(v))
     )
   );
   const teamSeasonColors = seasonRow?.id
@@ -171,8 +187,9 @@ export default async function LeagueTvPage({
     .map((e) => ({ e, d: e.driver }))
     .filter(({ d }) => Boolean(d.twitchChannel && d.twitchChannel.trim()))
     .map(({ e, d }) => {
-      const teamId = e.teamId ?? e.team?.id ?? null;
-      const team = e.team;
+      const ds = dsByDriverId.get(d.id) ?? null;
+      const team = e.team ?? ds?.teamRef ?? null;
+      const teamId = e.teamId ?? e.team?.id ?? ds?.teamRef?.id ?? null;
       const accent = (teamId ? teamSeasonColors.get(teamId) : null) ?? team?.color ?? leagueAccent;
       return {
         driverId: d.id,
@@ -243,7 +260,7 @@ export default async function LeagueTvPage({
 
             <div className="min-w-0">
               {race.twitchChannel ? (
-                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} />
+                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact />
               ) : (
                 <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
                   Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
