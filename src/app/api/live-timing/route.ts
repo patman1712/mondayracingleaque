@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,7 +20,11 @@ const schema = z.object({
   )
 });
 
-type LiveTimingEntry = z.infer<typeof schema>["entries"][number];
+type LiveTimingPostEntry = z.infer<typeof schema>["entries"][number];
+
+type LiveTimingEntry = LiveTimingPostEntry & {
+  portraitUrl: string | null;
+};
 
 type LiveTimingState = {
   sessionId: string;
@@ -30,6 +35,99 @@ type LiveTimingState = {
 declare global {
   // eslint-disable-next-line no-var
   var __mrlLiveTimingState: LiveTimingState | undefined;
+}
+
+function normalize(s: string) {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function levenshtein(a: string, b: string) {
+  if (a === b) return 0;
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+
+  const v0 = new Array(bl + 1);
+  const v1 = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) v0[j] = j;
+
+  for (let i = 0; i < al; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < bl; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+    for (let j = 0; j <= bl; j++) v0[j] = v1[j];
+  }
+
+  return v0[bl] as number;
+}
+
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
+async function resolvePortraitUrlsByDriverName(names: string[]) {
+  const wanted = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
+  if (wanted.length === 0) return new Map<string, string | null>();
+
+  const drivers = await prisma.driver
+    .findMany({
+      select: { id: true, name: true, gamertag: true, portraitPath: true },
+      take: 5000
+    })
+    .catch(() => []);
+
+  const byNorm = new Map<string, string | null>();
+  for (const d of drivers) {
+    const url = imageUrl(d.portraitPath);
+    const keys = [normalize(d.name), d.gamertag ? normalize(d.gamertag) : ""].filter(Boolean);
+    for (const k of keys) {
+      if (!k) continue;
+      if (byNorm.has(k)) continue;
+      byNorm.set(k, url);
+    }
+  }
+
+  const out = new Map<string, string | null>();
+  for (const raw of wanted) {
+    const n = normalize(raw);
+    if (!n) {
+      out.set(raw, null);
+      continue;
+    }
+    if (byNorm.has(n)) {
+      out.set(raw, byNorm.get(n) ?? null);
+      continue;
+    }
+    for (const [k, v] of byNorm) {
+      if (k.includes(n) || n.includes(k)) {
+        out.set(raw, v ?? null);
+        break;
+      }
+    }
+    if (out.has(raw)) continue;
+    let best: { v: string | null; dist: number; len: number } | null = null;
+    for (const [k, v] of byNorm) {
+      const d = levenshtein(n, k);
+      if (!best || d < best.dist) best = { v: v ?? null, dist: d, len: Math.max(n.length, k.length) };
+    }
+    if (!best) {
+      out.set(raw, null);
+      continue;
+    }
+    const ratio = best.len ? best.dist / best.len : 1;
+    const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
+    out.set(raw, best.dist <= maxDist && ratio <= 0.25 ? best.v : null);
+  }
+
+  return out;
 }
 
 function getState(): LiveTimingState {
@@ -85,10 +183,14 @@ export async function POST(req: Request) {
 
   state.sessionId = data.sessionId;
   state.updatedAtMs = Date.now();
+  const portraitByName = await resolvePortraitUrlsByDriverName(data.entries.map((e) => e.driver));
   state.entries = data.entries
     .slice()
     .sort((a, b) => a.position - b.position)
-    .map((e) => ({ ...e }));
+    .map((e) => ({
+      ...e,
+      portraitUrl: portraitByName.get(e.driver) ?? null
+    }));
 
   return NextResponse.json(
     {
