@@ -644,15 +644,15 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
 
-                                      <div className="relative flex min-h-[96px] items-center gap-4 px-5 py-6">
+                                      <div className="relative flex min-h-[190px] items-center gap-6 px-6 py-8">
                                         <div
-                                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-base font-extrabold text-white"
-                                          style={{ borderColor: d.accent ?? accent }}
+                                          className="shrink-0 text-[44px] font-extrabold leading-none"
+                                          style={{ color: d.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-base font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-lg font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {d.name}
                                           </div>
                                         </div>
@@ -661,16 +661,14 @@ export function NavLeagues() {
                                             <Image
                                               src={d.portraitUrl}
                                               alt=""
-                                              width={64}
-                                              height={64}
+                                              width={120}
+                                              height={120}
                                               unoptimized
-                                              className="h-14 w-14 rounded-2xl bg-black/25 object-contain"
+                                              className="h-24 w-24 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
                                             />
-                                          ) : (
-                                            <div className="h-14 w-14 rounded-2xl bg-black/25" />
-                                          )}
+                                          ) : null}
                                           <div className="text-right">
-                                            <div className="text-lg font-extrabold text-white">{Math.round(d.points)}</div>
+                                            <div className="text-2xl font-extrabold text-white">{Math.round(d.points)}</div>
                                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                           </div>
                                         </div>
@@ -696,15 +694,15 @@ export function NavLeagues() {
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
 
-                                      <div className="relative flex min-h-[96px] items-center gap-4 px-5 py-6">
+                                      <div className="relative flex min-h-[190px] items-center gap-6 px-6 py-8">
                                         <div
-                                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 bg-black/25 text-base font-extrabold text-white"
-                                          style={{ borderColor: t.accent ?? accent }}
+                                          className="shrink-0 text-[44px] font-extrabold leading-none"
+                                          style={{ color: t.accent ?? accent }}
                                         >
                                           {idx + 1}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                          <div className="break-words text-base font-extrabold uppercase leading-tight tracking-wide text-white">
+                                          <div className="break-words text-lg font-extrabold uppercase leading-tight tracking-wide text-white">
                                             {t.name}
                                           </div>
                                         </div>
@@ -713,16 +711,14 @@ export function NavLeagues() {
                                             <Image
                                               src={t.logoUrl}
                                               alt=""
-                                              width={64}
-                                              height={64}
+                                              width={120}
+                                              height={120}
                                               unoptimized
-                                              className="h-14 w-14 rounded-2xl bg-black/25 object-contain p-2"
+                                              className="h-24 w-24 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
                                             />
-                                          ) : (
-                                            <div className="h-14 w-14 rounded-2xl bg-black/25" />
-                                          )}
+                                          ) : null}
                                           <div className="text-right">
-                                            <div className="text-lg font-extrabold text-white">{Math.round(t.points)}</div>
+                                            <div className="text-2xl font-extrabold text-white">{Math.round(t.points)}</div>
                                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
                                           </div>
                                         </div>
