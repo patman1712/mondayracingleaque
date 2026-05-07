@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
 import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { MrlTvDriverCamsClient } from "@/components/MrlTvDriverCamsClient";
+import { LiveTimingMiniClient } from "@/components/LiveTimingMiniClient";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -207,13 +208,14 @@ export default async function LeagueTvPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col items-end gap-3 sm:w-auto">
               <Link
                 href={`/${league}/races/${race.id}`}
                 className="rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15"
               >
                 Zur Rennseite →
               </Link>
+              <LiveTimingMiniClient startsAtMs={startsAtMs} title="Live Timing" className="max-w-none sm:w-[460px]" />
             </div>
           </div>
         </div>

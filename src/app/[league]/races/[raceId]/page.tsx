@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { LiveTimingMiniClient } from "@/components/LiveTimingMiniClient";
 
 export const dynamic = "force-dynamic";
 
@@ -266,7 +267,9 @@ export default async function RaceDetailPage({
 
       <Container>
         {!showResults ? (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
+          <>
+            <LiveTimingMiniClient startsAtMs={startMs} title="Live Timing" className="mt-6 max-w-[640px]" />
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-5 py-4">
                 <div className="text-lg font-semibold">Fahrerfeld</div>
                 <div className="mt-1 text-sm text-white/70">
@@ -324,7 +327,8 @@ export default async function RaceDetailPage({
                   ))}
                 </div>
               )}
-          </div>
+            </div>
+          </>
         ) : null}
 
         {showResults ? (
