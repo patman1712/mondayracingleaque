@@ -439,12 +439,12 @@ export default async function AdminDriverDetailPage({
   );
 
   const totalComputed = {
-    starts: seasonTotals.starts + driver.starts,
-    wins: seasonTotals.wins + driver.wins,
-    podiums: seasonTotals.podiums + driver.podiums,
-    driverOfDay: seasonTotals.driverOfDay + driver.driverOfDay,
-    driverTitles: seasonTotals.driverTitles + driver.driverTitles,
-    constructorTitles: seasonTotals.constructorTitles + driver.constructorTitles
+    starts: seasonTotals.starts,
+    wins: seasonTotals.wins,
+    podiums: seasonTotals.podiums,
+    driverOfDay: seasonTotals.driverOfDay,
+    driverTitles: seasonTotals.driverTitles,
+    constructorTitles: seasonTotals.constructorTitles
   };
 
   return (

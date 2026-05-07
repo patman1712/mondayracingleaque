@@ -158,12 +158,12 @@ export default async function DriverDetailPage({
   );
 
   const totals = {
-    starts: sum.starts + driver.starts,
-    wins: sum.wins + driver.wins,
-    podiums: sum.podiums + driver.podiums,
-    driverOfDay: sum.driverOfDay + driver.driverOfDay,
-    driverTitles: sum.driverTitles + driver.driverTitles,
-    constructorTitles: sum.constructorTitles + driver.constructorTitles
+    starts: sum.starts,
+    wins: sum.wins,
+    podiums: sum.podiums,
+    driverOfDay: sum.driverOfDay,
+    driverTitles: sum.driverTitles,
+    constructorTitles: sum.constructorTitles
   };
 
   const seasonTeam = currentSeason

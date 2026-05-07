@@ -57,9 +57,6 @@ export async function recalcSeasonStats(prisma: PrismaClient, seasonId: string) 
     .findMany({ where: { seasonId }, select: { driverId: true, role: true }, take: 5000 })
     .catch(() => []);
 
-  const driverIds = driverSeasons.map((d) => d.driverId);
-  const roleByDriverId = new Map(driverSeasons.map((d) => [d.driverId, d.role] as const));
-
   const races = await prisma.race
     .findMany({
       where: {
@@ -114,36 +111,4 @@ export async function recalcSeasonStats(prisma: PrismaClient, seasonId: string) 
         .catch(() => null);
     }
   });
-
-  const totals = await prisma.driverSeason
-    .findMany({
-      where: { driverId: { in: driverIds } },
-      select: { driverId: true, starts: true, wins: true, podiums: true, driverOfDay: true },
-      take: 50000
-    })
-    .catch(() => []);
-
-  const agg = new Map<string, { starts: number; wins: number; podiums: number; driverOfDay: number }>();
-  for (const row of totals) {
-    const a = agg.get(row.driverId) ?? { starts: 0, wins: 0, podiums: 0, driverOfDay: 0 };
-    a.starts += row.starts;
-    a.wins += row.wins;
-    a.podiums += row.podiums;
-    a.driverOfDay += row.driverOfDay;
-    agg.set(row.driverId, a);
-  }
-
-  await prisma.$transaction(async (tx) => {
-    for (const driverId of driverIds) {
-      const a = agg.get(driverId) ?? { starts: 0, wins: 0, podiums: 0, driverOfDay: 0 };
-      await tx.driver
-        .update({
-          where: { id: driverId },
-          data: { starts: a.starts, wins: a.wins, podiums: a.podiums, driverOfDay: a.driverOfDay }
-        })
-        .catch(() => null);
-    }
-  });
-
-  return { seasonId, roleByDriverId };
 }
