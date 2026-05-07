@@ -13,7 +13,7 @@ export function TvBroadcastWithTimingClient({
   channel,
   startsAtMs
 }: {
-  channel: string;
+  channel?: string | null;
   startsAtMs: number;
 }) {
   const inWindow = useMemo(() => {
@@ -64,7 +64,13 @@ export function TvBroadcastWithTimingClient({
       ].join(" ")}
     >
       <div className="min-w-0">
-        <TwitchEmbed channel={channel} startsAtMs={startsAtMs} />
+        {channel ? (
+          <TwitchEmbed channel={channel} startsAtMs={startsAtMs} />
+        ) : (
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
+            Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
+          </div>
+        )}
       </div>
 
       {showTiming ? (
@@ -82,4 +88,3 @@ export function TvBroadcastWithTimingClient({
     </div>
   );
 }
-

@@ -221,13 +221,7 @@ export default async function LeagueTvPage({
 
       <Container>
         <div className="mt-6 mx-auto max-w-[1200px]">
-          {race.twitchChannel ? (
-            <TvBroadcastWithTimingClient channel={race.twitchChannel} startsAtMs={startsAtMs} />
-          ) : (
-            <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
-              Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
-            </div>
-          )}
+          <TvBroadcastWithTimingClient channel={race.twitchChannel} startsAtMs={startsAtMs} />
         </div>
       </Container>
 

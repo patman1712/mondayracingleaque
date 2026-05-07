@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Entry = {
   position: number;
@@ -128,6 +128,9 @@ export function LiveTimingMiniClient({
   splitAt?: number;
 }) {
   const [data, setData] = useState<State | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [popupSize, setPopupSize] = useState<{ w: number; h: number } | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
 
   const enabled = useMemo(() => {
     if (disabled) return false;
@@ -166,6 +169,17 @@ export function LiveTimingMiniClient({
       if (t) window.clearTimeout(t);
     };
   }, [enabled]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mrl_live_timing_popup_size");
+      if (!raw) return;
+      const v = JSON.parse(raw) as { w?: unknown; h?: unknown };
+      const w = typeof v?.w === "number" ? v.w : null;
+      const h = typeof v?.h === "number" ? v.h : null;
+      if (w && h) setPopupSize({ w, h });
+    } catch {}
+  }, []);
 
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
@@ -293,11 +307,78 @@ export function LiveTimingMiniClient({
             {track ? <span>TRACK {track}</span> : null}
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-mrl-red/35 bg-mrl-red/15 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
-          LIVE
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPopupOpen(true)}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 hover:bg-white/10"
+          >
+            Popup
+          </button>
+          <div className="flex items-center gap-2 rounded-full border border-mrl-red/35 bg-mrl-red/15 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
+            LIVE
+          </div>
         </div>
       </div>
+
+      {popupOpen ? (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setPopupOpen(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div
+              ref={popupRef}
+              className="w-[min(92vw,720px)] h-[min(82vh,760px)] overflow-auto rounded-2xl border border-white/10 bg-black/60 backdrop-blur"
+              style={{
+                resize: "both",
+                ...(popupSize ? { width: popupSize.w, height: popupSize.h } : null)
+              }}
+              onMouseUp={() => {
+                const el = popupRef.current;
+                if (!el) return;
+                const r = el.getBoundingClientRect();
+                const next = { w: Math.round(r.width), h: Math.round(r.height) };
+                setPopupSize(next);
+                try {
+                  localStorage.setItem("mrl_live_timing_popup_size", JSON.stringify(next));
+                } catch {}
+              }}
+              onTouchEnd={() => {
+                const el = popupRef.current;
+                if (!el) return;
+                const r = el.getBoundingClientRect();
+                const next = { w: Math.round(r.width), h: Math.round(r.height) };
+                setPopupSize(next);
+                try {
+                  localStorage.setItem("mrl_live_timing_popup_size", JSON.stringify(next));
+                } catch {}
+              }}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <div className="min-w-0 truncate text-xs font-extrabold uppercase tracking-wider text-white/85">
+                  {title}
+                  {sessionName ? ` · ${sessionName}` : ""}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPopupOpen(false)}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 hover:bg-white/10"
+                >
+                  Close
+                </button>
+              </div>
+              {columns === 2 ? (
+                <div className="grid grid-cols-2 gap-3 p-3">
+                  <div className="grid gap-3">{leftRows.map(renderRow)}</div>
+                  <div className="grid gap-3">{rightRows.map(renderRow)}</div>
+                </div>
+              ) : (
+                <div className="grid gap-3 p-3">{leftRows.map(renderRow)}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {columns === 2 ? (
         <div className="grid grid-cols-2 gap-3 p-3">

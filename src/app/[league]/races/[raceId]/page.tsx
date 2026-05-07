@@ -268,7 +268,14 @@ export default async function RaceDetailPage({
       <Container>
         {!showResults ? (
           <>
-            <LiveTimingMiniClient startsAtMs={startMs} title="Live Timing" className="mt-6 max-w-[640px]" />
+            <LiveTimingMiniClient
+              startsAtMs={startMs}
+              title="Live Timing"
+              maxRows={22}
+              columns={2}
+              splitAt={11}
+              className="mt-6 max-w-none"
+            />
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-5 py-4">
                 <div className="text-lg font-semibold">Fahrerfeld</div>
