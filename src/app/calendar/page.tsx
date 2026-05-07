@@ -142,6 +142,12 @@ export default async function CalendarPage({
     gridDays.push(d);
   }
 
+  function raceHref(r: RaceItem) {
+    const meta = metaByLeague.get(r.league);
+    if (!meta?.publicSlug) return null;
+    return `/${meta.publicSlug}/races/${r.id}`;
+  }
+
   return (
     <Container>
       <div className="mt-10">
@@ -240,13 +246,23 @@ export default async function CalendarPage({
                       </div>
                       <div className="space-y-1 text-xs text-white/70">
                         {races.slice(0, 2).map((r) => (
-                          <div key={r.id} className="truncate">
+                          <Link
+                            key={r.id}
+                            href={raceHref(r) ?? "/calendar"}
+                            className="block truncate rounded-md px-1 py-0.5 hover:bg-white/10 hover:text-white"
+                            title={`${metaByLeague.get(r.league)?.name ?? String(r.league)} · ${r.name}`}
+                          >
                             <span
                               className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
                               style={{ backgroundColor: metaByLeague.get(r.league)?.accentColor ?? "#ffffff" }}
                             />
+                            {new Date(r.startsAt).toLocaleTimeString("de-DE", {
+                              timeZone: "Europe/Berlin",
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}{" "}
                             {r.name}
-                          </div>
+                          </Link>
                         ))}
                       </div>
                     </div>
@@ -279,8 +295,9 @@ export default async function CalendarPage({
                 </div>
               ) : (
                 upcoming.map((r) => (
-                  <div
+                  <Link
                     key={r.id}
+                    href={raceHref(r) ?? "/calendar"}
                     className="rounded-xl border border-white/10 bg-black/20 p-3"
                   >
                     <div className="flex items-start gap-3">
@@ -306,7 +323,7 @@ export default async function CalendarPage({
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 ))
               )}
             </div>
