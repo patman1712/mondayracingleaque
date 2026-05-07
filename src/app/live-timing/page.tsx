@@ -169,6 +169,15 @@ export default function LiveTimingPage() {
   const isRace = Boolean(sessionType !== null && RACE_TYPES.has(sessionType));
   const isPracticeOrQuali = Boolean(sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType));
   const headerLabel = (data?.sessionName ?? (isRace ? "Race" : "Live")).toString().trim();
+  const currentLap = useMemo(() => {
+    const entries = data?.entries ?? [];
+    let max = 0;
+    for (const e of entries) {
+      const l = typeof e.lap === "number" && Number.isFinite(e.lap) ? e.lap : 0;
+      if (l > max) max = l;
+    }
+    return max > 0 ? max : null;
+  }, [data?.entries]);
 
   const view = useMemo(() => {
     const entries = data?.entries ?? [];
@@ -207,6 +216,7 @@ export default function LiveTimingPage() {
         position: best === null ? "—" : String(idx + 1),
         driver: x.e.driver,
         team: x.e.team,
+        lap: x.e.lap,
         bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "NO TIME",
         gap,
         sector1: x.e.sector1?.trim() ? x.e.sector1 : "—",
@@ -244,6 +254,11 @@ export default function LiveTimingPage() {
           <div className="flex items-center gap-3">
             <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
               LIVE • {headerLabel.toUpperCase()}
+              {currentLap ? (
+                <span className="ml-3 rounded-full bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  LAP {currentLap}
+                </span>
+              ) : null}
             </div>
             <div
               className={[
@@ -258,7 +273,14 @@ export default function LiveTimingPage() {
         </div>
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:hidden">
-          LIVE • {headerLabel.toUpperCase()}
+          <div className="flex items-center justify-between gap-3">
+            <div>LIVE • {headerLabel.toUpperCase()}</div>
+            {currentLap ? (
+              <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                LAP {currentLap}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-black/30">
@@ -336,6 +358,16 @@ export default function LiveTimingPage() {
                                 </div>
                                 <div className="mt-1 text-xs font-semibold text-white/75 md:hidden">
                                   {r.team}
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 xl:hidden">
+                                  {typeof r.lap === "number" && Number.isFinite(r.lap) ? (
+                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                      LAP {r.lap}
+                                    </div>
+                                  ) : null}
+                                  <div className={["inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
+                                    {tyre.label}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -441,6 +473,14 @@ export default function LiveTimingPage() {
                                 </div>
                                 <div className="mt-1 text-xs font-semibold text-white/75 lg:hidden">
                                   {r.team}
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 2xl:hidden">
+                                  <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                    LAP {r.lap}
+                                  </div>
+                                  <div className={["inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
+                                    {tyre.label}
+                                  </div>
                                 </div>
                               </div>
                             </div>
