@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Entry = {
   position: number;
+  participantIndex?: number;
   driver: string;
   team: string;
   lap: number;
@@ -20,6 +21,7 @@ type Entry = {
   sector3Color?: string | null;
   drs?: boolean | null;
   tyre?: string | null;
+  status?: "IN GARAGE" | "OUT LAP" | "FLYING LAP" | "PIT" | "RETIRED";
   penalties?: string;
   accent?: string | null;
   portraitUrl?: string | null;
@@ -58,6 +60,18 @@ function tyreStyle(tyre: string | null | undefined) {
   if (t === "wet") return { label: "W", cls: "border-sky-400/60 bg-sky-500/15 text-sky-100" };
   const raw = (tyre ?? "").trim();
   return { label: raw ? raw.slice(0, 3).toUpperCase() : "—", cls: "border-white/10 bg-black/25 text-white/80" };
+}
+
+function parseLapTimeMs(raw: string | undefined | null) {
+  const s = (raw ?? "").trim();
+  if (!s || s === "—") return null;
+  const m = /^(\d+):(\d{1,2})\.(\d{1,3})$/.exec(s);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3].padEnd(3, "0"));
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return min * 60000 + sec * 1000 + ms;
 }
 
 function hexToRgba(hex: string, a: number) {
@@ -190,14 +204,41 @@ export function LiveTimingMiniClient({
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const isFresh = Boolean(last && now - last <= 2000);
-  const sorted = (data?.entries ?? []).slice().sort((a, b) => a.position - b.position);
-  const rows = sorted.slice(0, Math.max(1, maxRows));
-  const hasAnyData = sorted.length > 0;
   if (!enabled) return null;
-  if (!hasAnyData && hideWhenNoLiveData) return null;
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
   const mode = sessionModeByName(sessionName);
+  const sorted = (data?.entries ?? [])
+    .slice()
+    .sort((a, b) => {
+      if (mode === "practice") {
+        const am = parseLapTimeMs(a.bestLap);
+        const bm = parseLapTimeMs(b.bestLap);
+        if (am === null && bm === null) {
+          const ai = typeof a.participantIndex === "number" ? a.participantIndex : Number.MAX_SAFE_INTEGER;
+          const bi = typeof b.participantIndex === "number" ? b.participantIndex : Number.MAX_SAFE_INTEGER;
+          if (ai !== bi) return ai - bi;
+          return a.position - b.position;
+        }
+        if (am === null) return 1;
+        if (bm === null) return -1;
+        if (am !== bm) return am - bm;
+        const ai = typeof a.participantIndex === "number" ? a.participantIndex : Number.MAX_SAFE_INTEGER;
+        const bi = typeof b.participantIndex === "number" ? b.participantIndex : Number.MAX_SAFE_INTEGER;
+        return ai - bi;
+      }
+
+      const ap = typeof a.position === "number" ? a.position : 0;
+      const bp = typeof b.position === "number" ? b.position : 0;
+      if (ap !== bp) return ap - bp;
+      const ai = typeof a.participantIndex === "number" ? a.participantIndex : Number.MAX_SAFE_INTEGER;
+      const bi = typeof b.participantIndex === "number" ? b.participantIndex : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+  const rows = sorted.slice(0, Math.max(1, maxRows));
+  const hasAnyData = sorted.length > 0;
+  if (!hasAnyData && hideWhenNoLiveData) return null;
+
   const left = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
   const track = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
 
@@ -249,6 +290,11 @@ export function LiveTimingMiniClient({
                 </div>
               </div>
               <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
+              {r.status ? (
+                <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
+                  {r.status}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">

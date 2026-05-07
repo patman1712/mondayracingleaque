@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type LiveTimingEntry = {
   position: number;
+  participantIndex?: number;
   driver: string;
   team: string;
   lap: number;
@@ -25,6 +26,7 @@ type LiveTimingEntry = {
   y?: number | null;
   z?: number | null;
   angle?: number | null;
+  status?: "IN GARAGE" | "OUT LAP" | "FLYING LAP" | "PIT" | "RETIRED";
   penalties?: string;
   stops?: number;
   accent?: string;
@@ -273,34 +275,42 @@ export default function LiveTimingPage() {
       .map((e) => {
         const bestMs = parseLapTimeMs(e.bestLap);
         const lastMs = parseLapTimeMs(e.lastLap);
-        return { e, bestMs, lastMs };
+        const pi = typeof e.participantIndex === "number" && Number.isFinite(e.participantIndex) ? e.participantIndex : null;
+        return { e, bestMs, lastMs, pi };
       })
       .sort((a, b) => {
         const am = a.bestMs;
         const bm = b.bestMs;
-        if (am === null && bm === null) return 0;
+        if (am === null && bm === null) {
+          const ai = a.pi ?? Number.MAX_SAFE_INTEGER;
+          const bi = b.pi ?? Number.MAX_SAFE_INTEGER;
+          if (ai !== bi) return ai - bi;
+          return 0;
+        }
         if (am === null) return 1;
         if (bm === null) return -1;
-        return am - bm;
+        if (am !== bm) return am - bm;
+        const ai = a.pi ?? Number.MAX_SAFE_INTEGER;
+        const bi = b.pi ?? Number.MAX_SAFE_INTEGER;
+        return ai - bi;
       });
 
     const fastestMs = scored.find((x) => x.bestMs !== null)?.bestMs ?? null;
     const rows = scored.map((x, idx) => {
       const best = x.bestMs;
       const gap =
-        best === null
-          ? "NO TIME"
-          : fastestMs === null
+        best === null || fastestMs === null
+          ? "—"
+          : best === fastestMs
             ? "FASTEST"
-            : best === fastestMs
-              ? "FASTEST"
-              : formatGapFromMs(best - fastestMs);
+            : formatGapFromMs(best - fastestMs);
       return {
-        position: best === null ? "—" : String(idx + 1),
+        position: String(idx + 1),
         driver: x.e.driver,
         team: x.e.team,
-        currentLap: x.e.currentLap?.trim() ? x.e.currentLap : x.e.lastLap?.trim() ? x.e.lastLap : "—",
-        bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "NO TIME",
+        participantIndex: x.pi,
+        currentLap: x.e.currentLap?.trim() ? x.e.currentLap : "—",
+        bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "—",
         gap,
         sector1: x.e.sector1?.trim() ? x.e.sector1 : "—",
         sector2: x.e.sector2?.trim() ? x.e.sector2 : "—",
@@ -308,9 +318,10 @@ export default function LiveTimingPage() {
         sector1Color: x.e.sector1Color,
         sector2Color: x.e.sector2Color,
         sector3Color: x.e.sector3Color,
-        tyre: x.e.tyre?.trim() ? x.e.tyre : "—",
+        tyre: x.e.tyre?.trim() ? x.e.tyre : null,
         accent: x.e.accent ?? "#E10600",
-        portraitUrl: x.e.portraitUrl
+        portraitUrl: x.e.portraitUrl,
+        status: x.e.status
       };
     });
 
@@ -522,6 +533,11 @@ export default function LiveTimingPage() {
                                 <div className="mt-1 text-xs font-semibold text-white/75 md:hidden">
                                   {r.team}
                                 </div>
+                                {r.status ? (
+                                  <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80 md:hidden">
+                                    {r.status}
+                                  </div>
+                                ) : null}
                                 <div className="mt-2 flex flex-wrap items-center gap-2 xl:hidden">
                                   <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                     CUR {r.currentLap}
@@ -532,6 +548,11 @@ export default function LiveTimingPage() {
                                   <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                     {r.gap}
                                   </div>
+                                  {r.status ? (
+                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                      {r.status}
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -626,6 +647,11 @@ export default function LiveTimingPage() {
                                 <div className="mt-1 text-xs font-semibold text-white/75 lg:hidden">
                                   {r.team}
                                 </div>
+                                {r.status ? (
+                                  <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80 lg:hidden">
+                                    {r.status}
+                                  </div>
+                                ) : null}
                                 <div className="mt-2 flex flex-wrap items-center gap-2 2xl:hidden">
                                   <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                     LAP {r.lap}
@@ -641,6 +667,11 @@ export default function LiveTimingPage() {
                                   {r.drs ? (
                                     <div className="inline-flex items-center justify-center rounded-full border border-emerald-400/60 bg-emerald-500/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-emerald-100">
                                       DRS
+                                    </div>
+                                  ) : null}
+                                  {r.status ? (
+                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                      {r.status}
                                     </div>
                                   ) : null}
                                 </div>

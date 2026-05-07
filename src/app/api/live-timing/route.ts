@@ -23,8 +23,18 @@ const trackMapSchema = z
   .nullable()
   .optional();
 
+const participantSchema = z.object({
+  participantIndex: z.number(),
+  driver: z.string(),
+  team: z.string().optional(),
+  accent: z.string().nullable().optional()
+});
+
+const statusSchema = z.enum(["IN GARAGE", "OUT LAP", "FLYING LAP", "PIT", "RETIRED"]);
+
 const entrySchema = z.object({
   position: z.number(),
+  participantIndex: z.number().optional(),
   driver: z.string(),
   team: z.string(),
   lap: z.number(),
@@ -46,6 +56,7 @@ const entrySchema = z.object({
   z: z.number().nullable().optional(),
   angle: z.number().nullable().optional(),
   accent: z.string().nullable().optional(),
+  status: statusSchema.optional(),
   penalties: z.string().optional(),
   stops: z.number().optional()
 });
@@ -63,11 +74,13 @@ const schema = z.object({
   raceStatus: z.string().nullable().optional(),
   trackMap: trackMapSchema,
   alerts: z.array(alertsSchema).optional(),
+  participants: z.array(participantSchema).optional(),
   entries: z.array(entrySchema)
 });
 
 type LiveTimingPostEntry = z.infer<typeof schema>["entries"][number];
 type LiveTimingAlert = z.infer<typeof alertsSchema>;
+type LiveTimingParticipant = z.infer<typeof participantSchema>;
 
 type LiveTimingEntry = LiveTimingPostEntry & {
   portraitUrl: string | null;
@@ -130,6 +143,28 @@ function levenshtein(a: string, b: string) {
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
+function matchEntryIndexByDriverName(wantedDriver: string, entries: LiveTimingPostEntry[], used: Set<number>) {
+  const w = normalize(wantedDriver);
+  if (!w) return null;
+  let best: { idx: number; dist: number; len: number } | null = null;
+  for (let i = 0; i < entries.length; i++) {
+    if (used.has(i)) continue;
+    const cand = entries[i];
+    const c = normalize(cand.driver);
+    if (!c) continue;
+    if (c === w) return i;
+    if (c.includes(w) || w.includes(c)) return i;
+    const d = levenshtein(w, c);
+    const len = Math.max(w.length, c.length);
+    if (!best || d < best.dist) best = { idx: i, dist: d, len };
+  }
+  if (!best) return null;
+  const ratio = best.len ? best.dist / best.len : 1;
+  const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
+  if (best.dist <= maxDist && ratio <= 0.25) return best.idx;
+  return null;
 }
 
 async function resolvePortraitUrlsByDriverName(names: string[]) {
@@ -275,10 +310,70 @@ export async function POST(req: Request) {
   state.trackMap = data.trackMap ?? null;
   state.alerts = Array.isArray(data.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
   state.updatedAtMs = Date.now();
-  const portraitByName = await resolvePortraitUrlsByDriverName(data.entries.map((e) => e.driver));
-  state.entries = data.entries
+  const incomingEntries = data.entries.slice();
+  const participants = Array.isArray(data.participants) ? (data.participants as LiveTimingParticipant[]) : [];
+  const merged: LiveTimingPostEntry[] = [];
+
+  if (participants.length) {
+    const used = new Set<number>();
+    const ordered = participants.slice().sort((a, b) => a.participantIndex - b.participantIndex);
+    for (const p of ordered) {
+      const idx = matchEntryIndexByDriverName(p.driver, incomingEntries, used);
+      if (idx !== null) {
+        used.add(idx);
+        const e = incomingEntries[idx];
+        merged.push({
+          ...e,
+          participantIndex: typeof e.participantIndex === "number" ? e.participantIndex : p.participantIndex,
+          driver: e.driver?.trim() ? e.driver : p.driver,
+          team: e.team?.trim() ? e.team : p.team ?? "",
+          accent: typeof e.accent === "string" ? e.accent : p.accent ?? null
+        });
+      } else {
+        merged.push({
+          position: p.participantIndex + 1,
+          participantIndex: p.participantIndex,
+          driver: p.driver,
+          team: p.team ?? "",
+          lap: 0,
+          gap: "—",
+          lastLap: "—",
+          bestLap: "—",
+          currentLap: "—",
+          sector1: "—",
+          sector2: "—",
+          sector3: "—",
+          tyre: null,
+          drs: null,
+          ers: null,
+          x: null,
+          y: null,
+          z: null,
+          angle: null,
+          accent: p.accent ?? null,
+          status: "IN GARAGE"
+        });
+      }
+    }
+    for (let i = 0; i < incomingEntries.length; i++) {
+      if (used.has(i)) continue;
+      merged.push(incomingEntries[i]);
+    }
+  } else {
+    merged.push(...incomingEntries);
+  }
+
+  const portraitByName = await resolvePortraitUrlsByDriverName(merged.map((e) => e.driver));
+  state.entries = merged
     .slice()
-    .sort((a, b) => a.position - b.position)
+    .sort((a, b) => {
+      const ap = typeof a.position === "number" ? a.position : 0;
+      const bp = typeof b.position === "number" ? b.position : 0;
+      if (ap !== bp) return ap - bp;
+      const ai = typeof a.participantIndex === "number" ? a.participantIndex : Number.MAX_SAFE_INTEGER;
+      const bi = typeof b.participantIndex === "number" ? b.participantIndex : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    })
     .map((e) => ({
       ...e,
       accent: typeof e.accent === "string" && e.accent.trim() ? e.accent : "#E10600",
