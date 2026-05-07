@@ -118,7 +118,9 @@ export function LiveTimingMiniClient({
   className,
   columns = 1,
   splitAt = 11,
-  hideWhenNoLiveData = true
+  hideWhenNoLiveData = true,
+  equalHeights = false,
+  rowsPerColumn
 }: {
   startsAtMs: number;
   disabled?: boolean;
@@ -128,6 +130,8 @@ export function LiveTimingMiniClient({
   columns?: 1 | 2;
   splitAt?: number;
   hideWhenNoLiveData?: boolean;
+  equalHeights?: boolean;
+  rowsPerColumn?: number;
 }) {
   const [data, setData] = useState<State | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
@@ -185,11 +189,12 @@ export function LiveTimingMiniClient({
 
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
-  const isLive = Boolean(last && now - last <= 2000);
-  const rows = (data?.entries ?? []).slice().sort((a, b) => a.position - b.position).slice(0, Math.max(1, maxRows));
-  const hasLiveData = isLive && rows.length > 0;
+  const isFresh = Boolean(last && now - last <= 2000);
+  const sorted = (data?.entries ?? []).slice().sort((a, b) => a.position - b.position);
+  const rows = sorted.slice(0, Math.max(1, maxRows));
+  const hasAnyData = sorted.length > 0;
   if (!enabled) return null;
-  if (!hasLiveData && hideWhenNoLiveData) return null;
+  if (!hasAnyData && hideWhenNoLiveData) return null;
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
   const mode = sessionModeByName(sessionName);
@@ -198,6 +203,7 @@ export function LiveTimingMiniClient({
 
   const leftRows = columns === 2 ? rows.slice(0, splitAt) : rows;
   const rightRows = columns === 2 ? rows.slice(splitAt, splitAt * 2) : [];
+  const rowsCount = Math.max(1, rowsPerColumn ?? splitAt);
 
   const renderRow = (r: Entry) => {
     const tyre = tyreStyle(r.tyre);
@@ -207,7 +213,10 @@ export function LiveTimingMiniClient({
     return (
       <div
         key={`${r.position}-${r.driver}`}
-        className="relative overflow-hidden rounded-xl border border-white/10 px-3 py-3"
+        className={[
+          "relative overflow-hidden rounded-xl border border-white/10",
+          equalHeights ? "h-full px-2 py-2" : "px-3 py-3"
+        ].join(" ")}
         style={{ backgroundImage: teamBgSolid(accent) }}
       >
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ ...f1Dots(), clipPath: "polygon(0 0, 88% 0, 64% 100%, 0 100%)" }} />
@@ -295,7 +304,7 @@ export function LiveTimingMiniClient({
   return (
     <div
       className={[
-        "w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur",
+        "w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur flex flex-col",
         className ?? ""
       ].join(" ")}
     >
@@ -318,14 +327,19 @@ export function LiveTimingMiniClient({
           >
             Popup
           </button>
-          <div className="flex items-center gap-2 rounded-full border border-mrl-red/35 bg-mrl-red/15 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
-            LIVE
+          <div
+            className={[
+              "flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider",
+              isFresh ? "border-mrl-red/35 bg-mrl-red/15 text-white" : "border-white/10 bg-white/5 text-white/80"
+            ].join(" ")}
+          >
+            <span className={isFresh ? "h-2 w-2 animate-pulse rounded-full bg-mrl-red" : "h-2 w-2 rounded-full bg-white/30"} />
+            {isFresh ? "LIVE" : "OFFLINE"}
           </div>
         </div>
       </div>
 
-      {!hasLiveData ? (
+      {!hasAnyData ? (
         <div className="p-4 text-sm font-semibold text-white/70">
           Warte auf Live-Daten…
         </div>
@@ -376,14 +390,18 @@ export function LiveTimingMiniClient({
                   Close
                 </button>
               </div>
-              {!hasLiveData ? (
+              {!hasAnyData ? (
                 <div className="p-4 text-sm font-semibold text-white/70">
                   Warte auf Live-Daten…
                 </div>
               ) : columns === 2 ? (
                 <div className="grid grid-cols-2 gap-3 p-3">
-                  <div className="grid gap-3">{leftRows.map(renderRow)}</div>
-                  <div className="grid gap-3">{rightRows.map(renderRow)}</div>
+                  <div className="grid gap-3" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
+                    {leftRows.map(renderRow)}
+                  </div>
+                  <div className="grid gap-3" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
+                    {rightRows.map(renderRow)}
+                  </div>
                 </div>
               ) : (
                 <div className="grid gap-3 p-3">{leftRows.map(renderRow)}</div>
@@ -393,17 +411,17 @@ export function LiveTimingMiniClient({
         </div>
       ) : null}
 
-      {hasLiveData ? columns === 2 ? (
-        <div className="grid grid-cols-2 gap-3 p-3">
-          <div className="grid gap-3">
+      {hasAnyData ? columns === 2 ? (
+        <div className="grid grid-cols-2 gap-3 p-3 flex-1 min-h-0">
+          <div className="grid gap-3 min-h-0" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
             {leftRows.map(renderRow)}
           </div>
-          <div className="grid gap-3">
+          <div className="grid gap-3 min-h-0" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
             {rightRows.map(renderRow)}
           </div>
         </div>
       ) : (
-        <div className="grid gap-3 p-3">
+        <div className="grid gap-3 p-3 flex-1 min-h-0">
           {leftRows.map(renderRow)}
         </div>
       ) : null}

@@ -151,7 +151,11 @@ export default async function LeagueTvPage({
   });
 
   const teamIds = Array.from(
-    new Set(entries.map((e) => e.teamId).filter((v): v is string => Boolean(v)))
+    new Set(
+      entries
+        .map((e) => e.teamId ?? e.team?.id ?? null)
+        .filter((v): v is string => Boolean(v))
+    )
   );
   const teamSeasonColors = seasonRow?.id
     ? await prisma.teamSeason
@@ -167,7 +171,7 @@ export default async function LeagueTvPage({
     .map((e) => ({ e, d: e.driver }))
     .filter(({ d }) => Boolean(d.twitchChannel && d.twitchChannel.trim()))
     .map(({ e, d }) => {
-      const teamId = e.teamId;
+      const teamId = e.teamId ?? e.team?.id ?? null;
       const team = e.team;
       const accent = (teamId ? teamSeasonColors.get(teamId) : null) ?? team?.color ?? leagueAccent;
       return {
@@ -231,7 +235,9 @@ export default async function LeagueTvPage({
                 columns={2}
                 splitAt={11}
                 hideWhenNoLiveData={false}
-                className="max-w-none"
+                equalHeights
+                rowsPerColumn={11}
+                className="max-w-none h-[calc(100vh-140px)]"
               />
             </div>
 
@@ -258,7 +264,7 @@ export default async function LeagueTvPage({
 
                 <div className="mt-5">
                   {cams.length ? (
-                    <MrlTvDriverCamsClient cams={cams} startsAtMs={startsAtMs} />
+                    <MrlTvDriverCamsClient cams={cams} startsAtMs={startsAtMs} maxVisible={3} />
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
                       Im Starterfeld hat niemand Twitch hinterlegt.

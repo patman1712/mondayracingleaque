@@ -65,12 +65,15 @@ function buildPlayerSrc(channel: string) {
 
 export function MrlTvDriverCamsClient({
   cams,
-  startsAtMs
+  startsAtMs,
+  maxVisible
 }: {
   cams: Cam[];
   startsAtMs: number;
+  maxVisible?: number;
 }) {
-  const limited = useMemo(() => cams.slice(0, 18), [cams]);
+  const limit = typeof maxVisible === "number" && Number.isFinite(maxVisible) ? Math.max(1, Math.floor(maxVisible)) : 18;
+  const limited = useMemo(() => cams.slice(0, limit), [cams, limit]);
   const [liveByChannel, setLiveByChannel] = useState<Record<string, boolean>>({});
 
   const now = Date.now();
@@ -147,7 +150,7 @@ export function MrlTvDriverCamsClient({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {liveCams.map((c) => (
         <div key={c.driverId} className="overflow-hidden rounded-3xl border border-white/10 bg-black/35">
           <div
@@ -176,11 +179,11 @@ export function MrlTvDriverCamsClient({
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-base font-extrabold uppercase leading-snug tracking-wide text-white">
+                <div className="text-base font-extrabold uppercase leading-snug tracking-wide text-white line-clamp-2">
                   {c.name}
                 </div>
                 {c.teamName ? (
-                  <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/80">
+                  <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/80 line-clamp-2">
                     {c.teamName}
                   </div>
                 ) : null}
