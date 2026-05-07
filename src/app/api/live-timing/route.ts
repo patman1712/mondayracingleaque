@@ -4,25 +4,22 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const EntrySchema = z.object({
-  position: z.number().int().min(1).max(50),
-  driver: z.string().trim().min(1),
-  team: z.string().trim().min(1).nullable().optional(),
-  lap: z.number().int().min(0).max(999).nullable().optional(),
-  gap: z.string().trim().min(1).nullable().optional(),
-  lastLap: z.string().trim().min(1).nullable().optional(),
-  accent: z.string().trim().min(1).nullable().optional(),
-  portraitUrl: z.string().trim().min(1).nullable().optional(),
-  teamLogoUrl: z.string().trim().min(1).nullable().optional()
+const schema = z.object({
+  sessionId: z.string(),
+  entries: z.array(
+    z.object({
+      position: z.number(),
+      driver: z.string(),
+      team: z.string(),
+      lap: z.number(),
+      gap: z.string(),
+      lastLap: z.string(),
+      accent: z.string()
+    })
+  )
 });
 
-const PostSchema = z.object({
-  sessionId: z.string().trim().min(1).optional(),
-  updatedAtMs: z.number().int().optional(),
-  entries: z.array(EntrySchema).max(60)
-});
-
-type LiveTimingEntry = z.infer<typeof EntrySchema>;
+type LiveTimingEntry = z.infer<typeof schema>["entries"][number];
 
 type LiveTimingState = {
   sessionId: string;
@@ -78,7 +75,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const parsed = PostSchema.safeParse(body);
+  const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
@@ -86,21 +83,12 @@ export async function POST(req: Request) {
   const data = parsed.data;
   const state = getState();
 
-  state.sessionId = data.sessionId ?? state.sessionId ?? "default";
-  state.updatedAtMs = data.updatedAtMs ?? Date.now();
+  state.sessionId = data.sessionId;
+  state.updatedAtMs = Date.now();
   state.entries = data.entries
     .slice()
     .sort((a, b) => a.position - b.position)
-    .map((e) => ({
-      ...e,
-      team: e.team ?? null,
-      lap: typeof e.lap === "number" ? e.lap : null,
-      gap: e.gap ?? null,
-      lastLap: e.lastLap ?? null,
-      accent: e.accent ?? null,
-      portraitUrl: e.portraitUrl ?? null,
-      teamLogoUrl: e.teamLogoUrl ?? null
-    }));
+    .map((e) => ({ ...e }));
 
   return NextResponse.json(
     {
@@ -112,4 +100,3 @@ export async function POST(req: Request) {
     { headers: { "cache-control": "no-store" } }
   );
 }
-
