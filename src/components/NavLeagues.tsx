@@ -73,6 +73,12 @@ type LeagueDrivers = {
   drivers: DriverCard[];
 };
 
+type StandingsTop = {
+  season: { year: number; seasonNo: number; isTest: boolean } | null;
+  drivers: Array<{ id: string; name: string; points: number }>;
+  teams: Array<{ id: string; name: string; points: number }>;
+};
+
 function hexToRgba(hex: string, a: number) {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return `rgba(255,255,255,${a})`;
@@ -125,6 +131,9 @@ export function NavLeagues() {
   >({});
   const [driversByLeague, setDriversByLeague] = useState<
     Partial<Record<string, LeagueDrivers>>
+  >({});
+  const [standingsTopByLeague, setStandingsTopByLeague] = useState<
+    Partial<Record<string, StandingsTop>>
   >({});
   const [loadingLeague, setLoadingLeague] = useState<string | null>(null);
   const closeTimer = useRef<number | null>(null);
@@ -202,6 +211,25 @@ export function NavLeagues() {
       .finally(() => setLoadingLeague(null));
   }, [open, active, driversByLeague, loadingLeague]);
 
+  useEffect(() => {
+    const league = open;
+    if (!league) return;
+    if (active !== "standings") return;
+    if (standingsTopByLeague[league]) return;
+    if (loadingLeague === league) return;
+
+    setLoadingLeague(league);
+    fetch(`/api/league/standings-top?league=${encodeURIComponent(league)}`, {
+      cache: "no-store"
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((data: StandingsTop) => {
+        setStandingsTopByLeague((prev) => ({ ...prev, [league]: data }));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingLeague(null));
+  }, [open, active, standingsTopByLeague, loadingLeague]);
+
   function scheduleClose() {
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setOpen(null), 240);
@@ -221,6 +249,7 @@ export function NavLeagues() {
         const wide = isOpen;
         const teams = teamsByLeague[l.slug]?.teams ?? [];
         const drivers = driversByLeague[l.slug]?.drivers ?? [];
+        const standingsTop = standingsTopByLeague[l.slug];
 
         return (
           <div
@@ -566,6 +595,96 @@ export function NavLeagues() {
                               ))
                             )}
                           </div>
+                        </>
+                      ) : active === "standings" ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                              WM Stand
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Link
+                                href={`/${l.slug}/standings`}
+                                className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                              >
+                                Fahrer WM
+                              </Link>
+                              <Link
+                                href={`/${l.slug}/standings?tab=teams`}
+                                className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                              >
+                                Team WM
+                              </Link>
+                            </div>
+                          </div>
+
+                          {standingsTop?.drivers?.length || standingsTop?.teams?.length ? (
+                            <div className="mt-4 grid gap-4 md:grid-cols-2">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                                  Top 3 Fahrer
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  {standingsTop.drivers.map((d, idx) => (
+                                    <Link
+                                      key={d.id}
+                                      href={`/${l.slug}/drivers/${d.id}`}
+                                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10"
+                                    >
+                                      <div className="flex min-w-0 items-center gap-3">
+                                        <div
+                                          className="flex h-8 w-8 items-center justify-center rounded-xl border-2 bg-black/25 text-sm font-extrabold text-white"
+                                          style={{ borderColor: accent }}
+                                        >
+                                          {idx + 1}
+                                        </div>
+                                        <div className="min-w-0 truncate text-sm font-semibold text-white/90">
+                                          {d.name}
+                                        </div>
+                                      </div>
+                                      <div className="shrink-0 text-sm font-extrabold text-white">
+                                        {Math.round(d.points)}
+                                      </div>
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                                  Top 3 Teams
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  {standingsTop.teams.map((t, idx) => (
+                                    <Link
+                                      key={t.id}
+                                      href={`/${l.slug}/teams/${t.id}`}
+                                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10"
+                                    >
+                                      <div className="flex min-w-0 items-center gap-3">
+                                        <div
+                                          className="flex h-8 w-8 items-center justify-center rounded-xl border-2 bg-black/25 text-sm font-extrabold text-white"
+                                          style={{ borderColor: accent }}
+                                        >
+                                          {idx + 1}
+                                        </div>
+                                        <div className="min-w-0 truncate text-sm font-semibold text-white/90">
+                                          {t.name}
+                                        </div>
+                                      </div>
+                                      <div className="shrink-0 text-sm font-extrabold text-white">
+                                        {Math.round(t.points)}
+                                      </div>
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+                              {loadingLeague === l.slug ? "Lädt..." : "Noch keine Ergebnisse"}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="flex h-[220px] items-center justify-center text-sm text-white/60">
