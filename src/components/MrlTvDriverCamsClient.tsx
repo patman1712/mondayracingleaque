@@ -8,7 +8,37 @@ type Cam = {
   name: string;
   twitchChannel: string;
   portraitUrl: string | null;
+  teamName: string | null;
+  teamLogoUrl: string | null;
+  accent: string;
 };
+
+function hexToRgba(hex: string, a: number) {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return `rgba(255,255,255,${a})`;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function teamBgSolid(color: string | null | undefined) {
+  const c = color && /^#?[0-9a-f]{6}$/i.test(color) ? (color.startsWith("#") ? color : `#${color}`) : null;
+  const a = c ? hexToRgba(c, 0.62) : "rgba(255,255,255,0.14)";
+  const b = c ? hexToRgba(c, 0.16) : "rgba(255,255,255,0.06)";
+  const d = c ? hexToRgba(c, 0.42) : "rgba(255,255,255,0.12)";
+  return `radial-gradient(900px circle at 22% 18%, ${d}, transparent 62%), linear-gradient(145deg, ${a}, ${b})`;
+}
+
+function f1Dots() {
+  return {
+    backgroundImage:
+      "radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px), radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
+    backgroundSize: "8px 8px, 18px 18px",
+    backgroundPosition: "0 0, 2px 2px"
+  } as const;
+}
 
 function normalizeTwitchChannel(input: string) {
   const v = input.trim();
@@ -120,28 +150,58 @@ export function MrlTvDriverCamsClient({
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {liveCams.map((c) => (
         <div key={c.driverId} className="overflow-hidden rounded-3xl border border-white/10 bg-black/35">
-          <div className="border-b border-white/10 bg-black/55 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
-              {c.portraitUrl ? (
-                <Image
-                  src={c.portraitUrl}
-                  alt=""
-                  width={44}
-                  height={44}
-                  unoptimized
-                  className="h-9 w-9 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
-                />
-              ) : (
-                <div className="h-9 w-9" />
-              )}
+          <div
+            className="relative border-b border-white/10 px-5 py-4"
+            style={{ backgroundImage: teamBgSolid(c.accent) }}
+          >
+            <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/70" />
+            <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: c.accent }} />
+
+            <div className="relative flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
+                {c.portraitUrl ? (
+                  <Image
+                    src={c.portraitUrl}
+                    alt=""
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="h-14 w-14 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                  />
+                ) : (
+                  <div className="h-14 w-14" />
+                )}
+              </div>
+
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white">
+                <div className="text-base font-extrabold uppercase leading-snug tracking-wide text-white">
                   {c.name}
                 </div>
+                {c.teamName ? (
+                  <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/80">
+                    {c.teamName}
+                  </div>
+                ) : null}
               </div>
-              <div className="rounded-md bg-mrl-red/20 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-                Live
+
+              <div className="flex items-center gap-3">
+                {c.teamLogoUrl ? (
+                  <Image
+                    src={c.teamLogoUrl}
+                    alt=""
+                    width={56}
+                    height={56}
+                    unoptimized
+                    className="h-12 w-12 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                  />
+                ) : (
+                  <div className="h-12 w-12" />
+                )}
+                <div className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
+                  Live
+                </div>
               </div>
             </div>
           </div>
@@ -160,4 +220,3 @@ export function MrlTvDriverCamsClient({
     </div>
   );
 }
-

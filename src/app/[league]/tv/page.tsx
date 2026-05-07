@@ -62,6 +62,8 @@ export default async function LeagueTvPage({
     id: true,
     name: true,
     round: true,
+    season: true,
+    seasonNo: true,
     startsAt: true,
     twitchChannel: true,
     seasonIsTest: true
@@ -117,10 +119,24 @@ export default async function LeagueTvPage({
 
   const startsAtMs = new Date(race.startsAt).getTime();
 
+  const seasonRow = await prisma.season
+    .findFirst({
+      where: {
+        league: leagueEnum,
+        year: race.season,
+        seasonNo: race.seasonNo,
+        isTest: race.seasonIsTest
+      },
+      select: { id: true }
+    })
+    .catch((): { id: string } | null => null);
+
   const entries = await prisma.raceEntry.findMany({
     where: { raceId: race.id, participates: true },
     orderBy: { createdAt: "asc" },
     select: {
+      teamId: true,
+      team: { select: { id: true, name: true, color: true, logoPath: true } },
       driver: {
         select: {
           id: true,
@@ -133,15 +149,36 @@ export default async function LeagueTvPage({
     }
   });
 
+  const teamIds = Array.from(
+    new Set(entries.map((e) => e.teamId).filter((v): v is string => Boolean(v)))
+  );
+  const teamSeasonColors = seasonRow?.id
+    ? await prisma.teamSeason
+        .findMany({
+          where: { seasonId: seasonRow.id, teamId: { in: teamIds } },
+          select: { teamId: true, color: true }
+        })
+        .then((rows) => new Map(rows.map((r) => [r.teamId, r.color ?? null] as const)))
+        .catch(() => new Map<string, string | null>())
+    : new Map<string, string | null>();
+
   const cams = entries
-    .map((e) => e.driver)
-    .filter((d) => Boolean(d.twitchChannel && d.twitchChannel.trim()))
-    .map((d) => ({
-      driverId: d.id,
-      name: d.gamertag ?? d.name,
-      twitchChannel: d.twitchChannel!,
-      portraitUrl: imageUrl(d.portraitPath)
-    }));
+    .map((e) => ({ e, d: e.driver }))
+    .filter(({ d }) => Boolean(d.twitchChannel && d.twitchChannel.trim()))
+    .map(({ e, d }) => {
+      const teamId = e.teamId;
+      const team = e.team;
+      const accent = (teamId ? teamSeasonColors.get(teamId) : null) ?? team?.color ?? leagueAccent;
+      return {
+        driverId: d.id,
+        name: d.gamertag ?? d.name,
+        twitchChannel: d.twitchChannel!,
+        portraitUrl: imageUrl(d.portraitPath),
+        teamName: team?.name ?? null,
+        teamLogoUrl: imageUrl(team?.logoPath),
+        accent
+      };
+    });
 
   return (
     <>
@@ -182,8 +219,8 @@ export default async function LeagueTvPage({
         </div>
       </Container>
 
-      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-6 w-screen px-4 md:px-8">
-        <div className="mx-auto max-w-[1500px]">
+      <Container>
+        <div className="mt-6 mx-auto max-w-[1200px]">
           {race.twitchChannel ? (
             <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} />
           ) : (
@@ -192,7 +229,7 @@ export default async function LeagueTvPage({
             </div>
           )}
         </div>
-      </div>
+      </Container>
 
       <Container>
         <div className="mt-10">
