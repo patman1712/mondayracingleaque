@@ -56,10 +56,16 @@ export async function GET(req: Request) {
   const teamsSeason = await prisma.teamSeason
     .findMany({
       where: { seasonId: currentSeason.id },
-      select: { team: { select: { id: true, name: true } } },
+      select: { color: true, team: { select: { id: true, name: true, color: true } } },
       take: 5000
     })
     .catch(() => []);
+
+  const teamAccentById = new Map<string, string | null>();
+  for (const r of teamsSeason) {
+    const accent = r.color ?? r.team.color ?? null;
+    teamAccentById.set(r.team.id, accent);
+  }
 
   const teamsSeasonFiltered = teamsSeason.filter((t) => {
     const n = (t.team.name ?? "").trim().toLowerCase();
@@ -119,12 +125,21 @@ export async function GET(req: Request) {
   }
 
   const drivers = Array.from(driverInfo.entries())
-    .map(([id, d]) => ({ id, name: d.name, points: driverPoints.get(id) ?? 0 }))
+    .map(([id, d]) => {
+      const accent =
+        d.role === "MAIN" && d.teamId ? teamAccentById.get(d.teamId) ?? null : null;
+      return { id, name: d.name, points: driverPoints.get(id) ?? 0, accent };
+    })
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);
 
   const teams = teamsSeasonFiltered
-    .map((t) => ({ id: t.team.id, name: t.team.name, points: teamPoints.get(t.team.id) ?? 0 }))
+    .map((t) => ({
+      id: t.team.id,
+      name: t.team.name,
+      points: teamPoints.get(t.team.id) ?? 0,
+      accent: teamAccentById.get(t.team.id) ?? null
+    }))
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);
 
@@ -138,4 +153,3 @@ export async function GET(req: Request) {
     { headers: { "cache-control": "no-store" } }
   );
 }
-

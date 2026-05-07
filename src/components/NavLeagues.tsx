@@ -75,8 +75,8 @@ type LeagueDrivers = {
 
 type StandingsTop = {
   season: { year: number; seasonNo: number; isTest: boolean } | null;
-  drivers: Array<{ id: string; name: string; points: number }>;
-  teams: Array<{ id: string; name: string; points: number }>;
+  drivers: Array<{ id: string; name: string; points: number; accent: string | null }>;
+  teams: Array<{ id: string; name: string; points: number; accent: string | null }>;
 };
 
 function hexToRgba(hex: string, a: number) {
@@ -629,25 +629,27 @@ export function NavLeagues() {
                                     <Link
                                       key={d.id}
                                       href={`/${l.slug}/drivers/${d.id}`}
-                                      className="group grid grid-cols-[56px_1fr_88px] items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
+                                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
+                                      style={{ backgroundImage: teamBg(d.accent ?? accent) }}
                                     >
-                                      <div
-                                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
-                                        style={{ borderColor: accent }}
-                                      >
-                                        <div className="text-xl font-extrabold text-white">{idx + 1}</div>
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/95 group-hover:text-white">
-                                          {d.name}
+                                      <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-black/25 to-black/85" />
+                                      <div className="pointer-events-none absolute left-0 top-0 h-[4px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
+
+                                      <div className="relative grid grid-cols-[44px_1fr_54px] items-center gap-3">
+                                        <div
+                                          className="flex h-10 items-center justify-center rounded-full border-2 bg-black/30 text-sm font-extrabold text-white"
+                                          style={{ borderColor: d.accent ?? accent }}
+                                        >
+                                          {idx + 1}
                                         </div>
-                                      </div>
-                                      <div
-                                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
-                                        style={{ borderColor: accent }}
-                                      >
-                                        <div>
-                                          <div className="text-lg font-extrabold text-white">{Math.round(d.points)}</div>
+                                        <div className="min-w-0">
+                                          <div className="whitespace-normal break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white/95 group-hover:text-white">
+                                            {d.name}
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-base font-extrabold text-white">{Math.round(d.points)}</div>
                                           <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
                                         </div>
                                       </div>
@@ -665,25 +667,27 @@ export function NavLeagues() {
                                     <Link
                                       key={t.id}
                                       href={`/${l.slug}/teams/${t.id}`}
-                                      className="group grid grid-cols-[56px_1fr_88px] items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
+                                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-3 hover:bg-white/5"
+                                      style={{ backgroundImage: teamBg(t.accent ?? accent) }}
                                     >
-                                      <div
-                                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
-                                        style={{ borderColor: accent }}
-                                      >
-                                        <div className="text-xl font-extrabold text-white">{idx + 1}</div>
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="truncate text-sm font-extrabold uppercase tracking-wide text-white/95 group-hover:text-white">
-                                          {t.name}
+                                      <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
+                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-black/25 to-black/85" />
+                                      <div className="pointer-events-none absolute left-0 top-0 h-[4px] w-full" style={{ backgroundColor: t.accent ?? accent }} />
+
+                                      <div className="relative grid grid-cols-[44px_1fr_54px] items-center gap-3">
+                                        <div
+                                          className="flex h-10 items-center justify-center rounded-full border-2 bg-black/30 text-sm font-extrabold text-white"
+                                          style={{ borderColor: t.accent ?? accent }}
+                                        >
+                                          {idx + 1}
                                         </div>
-                                      </div>
-                                      <div
-                                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
-                                        style={{ borderColor: accent }}
-                                      >
-                                        <div>
-                                          <div className="text-lg font-extrabold text-white">{Math.round(t.points)}</div>
+                                        <div className="min-w-0">
+                                          <div className="whitespace-normal break-words text-sm font-extrabold uppercase leading-tight tracking-wide text-white/95 group-hover:text-white">
+                                            {t.name}
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-base font-extrabold text-white">{Math.round(t.points)}</div>
                                           <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">PTS</div>
                                         </div>
                                       </div>
