@@ -284,13 +284,8 @@ export function NavLeagues() {
               onMouseLeave={() => scheduleClose()}
             >
               <div
-                className="relative h-[70vh] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/60 p-3 shadow-2xl"
-                style={{ backgroundImage: teamBg(accent) }}
+                className="h-[70vh] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0B0D10] p-3 shadow-2xl"
               >
-                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 92% 0, 70% 100%, 0 100%)" }} />
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/80" />
-                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
-
                 <div className="flex items-center justify-between px-2 py-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                     {l.label}
@@ -341,7 +336,7 @@ export function NavLeagues() {
                   </div>
 
                   {wide ? (
-                    <div className="relative h-full overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="h-full overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-4">
                       {active === "calendar" ? (
                         <>
                           <div className="flex items-center justify-between">
@@ -625,11 +620,7 @@ export function NavLeagues() {
 
                           {standingsTop?.drivers?.length || standingsTop?.teams?.length ? (
                             <div className="mt-4 grid gap-4 md:grid-cols-2">
-                              <div className="relative overflow-hidden rounded-2xl border border-white/10" style={{ backgroundImage: teamBg(accent) }}>
-                                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
-                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/80" />
-                                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
-                                <div className="relative p-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Fahrer
                                 </div>
@@ -664,13 +655,8 @@ export function NavLeagues() {
                                   ))}
                                 </div>
                               </div>
-                              </div>
 
-                              <div className="relative overflow-hidden rounded-2xl border border-white/10" style={{ backgroundImage: teamBg(accent) }}>
-                                <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
-                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/80" />
-                                <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: accent }} />
-                                <div className="relative p-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="text-xs font-semibold uppercase tracking-wider text-white/60">
                                   Top 3 Teams
                                 </div>
@@ -704,7 +690,6 @@ export function NavLeagues() {
                                     </Link>
                                   ))}
                                 </div>
-                              </div>
                               </div>
                             </div>
                           ) : (
