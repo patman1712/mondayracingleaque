@@ -474,7 +474,15 @@ export default async function DriverDetailPage({
                 const leagueName = publicNameByLeague.get(r.race.league) ?? r.race.league;
                 const seasonLabel = `Saison ${r.race.season} · Season ${r.race.seasonNo}${r.race.seasonIsTest ? " · TEST" : ""}`;
                 const raceLabel = `R${r.race.round} · ${r.race.name}`;
-                const posLabel = r.status ? r.status : r.position ? `P${r.position}` : "—";
+                const statusUp = (r.status ?? "").trim().toUpperCase();
+                const statusIsFinished =
+                  statusUp === "FINISHED" || statusUp === "FINISH" || statusUp === "F";
+                const posLabel =
+                  !statusUp || statusIsFinished
+                    ? r.position
+                      ? `P${r.position}`
+                      : "—"
+                    : r.status!;
                 return (
                   <Link
                     key={r.race.id}
