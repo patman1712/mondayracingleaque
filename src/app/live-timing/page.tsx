@@ -527,7 +527,7 @@ export default function LiveTimingPage() {
                                 <div className="h-11 w-11 rounded-xl bg-black/25" />
                               )}
                               <div className="min-w-0">
-                                <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                <div className="text-base font-extrabold uppercase leading-tight tracking-wide text-white line-clamp-2">
                                   {r.driver}
                                 </div>
                                 <div className="mt-1 text-xs font-semibold text-white/75 md:hidden">
@@ -539,7 +539,7 @@ export default function LiveTimingPage() {
                                   </div>
                                 ) : null}
                                 <div className="mt-2 flex flex-wrap items-center gap-2 xl:hidden">
-                                  <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                                  <div className="hidden sm:inline-flex rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                     CUR {r.currentLap}
                                   </div>
                                   <div className={["inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
@@ -559,12 +559,12 @@ export default function LiveTimingPage() {
                           </div>
 
                           <div className="min-w-0 hidden text-sm font-semibold text-white/90 xl:block">
-                            <div className="truncate">{r.team}</div>
+                            <div className="leading-tight line-clamp-2">{r.team}</div>
                           </div>
 
-                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">{r.currentLap}</div>
-                          <div className="text-right text-sm font-extrabold text-white md:text-base">{r.bestLap}</div>
-                          <div className="text-right text-sm font-semibold text-white/90 md:text-base">{r.gap}</div>
+                          <div className="hidden sm:block text-right text-sm font-semibold text-white/90 md:text-base">{r.currentLap}</div>
+                          <div className="hidden sm:block text-right text-sm font-extrabold text-white md:text-base">{r.bestLap}</div>
+                          <div className="hidden sm:block text-right text-sm font-semibold text-white/90 md:text-base">{r.gap}</div>
 
                           <div className="hidden justify-end xl:flex">
                             <div className={["inline-flex min-w-[64px] justify-end rounded-lg border px-2 py-1 text-xs font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
@@ -641,7 +641,7 @@ export default function LiveTimingPage() {
                                 <div className="h-11 w-11 rounded-xl bg-black/25" />
                               )}
                               <div className="min-w-0">
-                                <div className="truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                <div className="text-base font-extrabold uppercase leading-tight tracking-wide text-white line-clamp-2">
                                   {r.driver}
                                 </div>
                                 <div className="mt-1 text-xs font-semibold text-white/75 lg:hidden">
@@ -680,12 +680,12 @@ export default function LiveTimingPage() {
                           </div>
 
                           <div className="min-w-0 hidden text-sm font-semibold text-white/90 2xl:block">
-                            <div className="truncate">{r.team}</div>
+                            <div className="leading-tight line-clamp-2">{r.team}</div>
                           </div>
 
                           <div className="text-right text-sm font-extrabold text-white lg:text-base">{r.lap}</div>
                           <div className="text-right text-sm font-semibold text-white/90 lg:text-base">{r.gap}</div>
-                          <div className="text-right text-sm font-semibold text-white/85 lg:text-base 2xl:hidden">{r.lastLap}</div>
+                          <div className="hidden sm:block text-right text-sm font-semibold text-white/85 lg:text-base 2xl:hidden">{r.lastLap}</div>
 
                           <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.lastLap}</div>
                           <div className="hidden justify-end 2xl:flex">
