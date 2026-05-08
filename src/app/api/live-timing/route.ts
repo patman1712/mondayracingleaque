@@ -7,11 +7,12 @@ export const runtime = "nodejs";
 
 const alertsSchema = z.object({
   id: z.string(),
-  type: z.enum(["fastest_lap", "fastest_sector", "safety_car", "vsc", "red_flag", "green_flag"]),
+  type: z.string(),
   title: z.string(),
   message: z.string(),
   driver: z.string().optional(),
-  sector: z.number().optional(),
+  sector: z.number().nullable().optional(),
+  time: z.string().optional(),
   createdAt: z.number()
 });
 
@@ -29,20 +30,6 @@ const participantSchema = z.object({
   team: z.string().optional(),
   accent: z.string().nullable().optional()
 });
-
-const statusSchema = z.enum([
-  "IN GARAGE",
-  "OUT LAP",
-  "FLYING LAP",
-  "IN LAP",
-  "ON TRACK",
-  "INVALID",
-  "DNF",
-  "DSQ",
-  "RETIRED",
-  "WAITING",
-  "PIT"
-]);
 
 const entrySchema = z.object({
   position: z.number(),
@@ -68,7 +55,7 @@ const entrySchema = z.object({
   z: z.number().nullable().optional(),
   angle: z.number().nullable().optional(),
   accent: z.string().nullable().optional(),
-  status: statusSchema.optional(),
+  status: z.string().optional(),
   penalties: z.string().optional(),
   warnings: z.number().optional(),
   stops: z.number().optional()
