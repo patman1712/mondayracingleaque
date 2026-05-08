@@ -252,6 +252,11 @@ export function LiveTimingMiniClient({
     const accent = (r.accent ?? "").toString().trim() || "#E10600";
     const penalty = (r.penalties ?? "").trim();
     const isDrs = Boolean(r.drs);
+    const gap = (r.gap ?? "").toString().trim() || "—";
+    const bestLap = (r.bestLap ?? "").toString().trim() || "—";
+    const lastLap = (r.lastLap ?? "").toString().trim() || "—";
+    const currentLap = (r.currentLap ?? "").toString().trim() || "—";
+    const status = r.status ?? "WAITING";
     return (
       <div
         key={`${r.position}-${r.driver}`}
@@ -290,28 +295,26 @@ export function LiveTimingMiniClient({
                 </div>
               </div>
               <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
-              {r.status ? (
-                <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
-                  {r.status}
-                </div>
-              ) : null}
+              <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
+                {status}
+              </div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">
               <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
                 {tyre.label}
               </div>
-              <div className="text-xs font-extrabold text-white/90">{r.gap}</div>
+              <div className="text-xs font-extrabold text-white/90">{gap}</div>
             </div>
           </div>
 
           {mode === "practice" ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                CUR {(r.currentLap ?? r.lastLap ?? "—").toString().trim() || "—"}
+                CUR {currentLap}
               </div>
               <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                BEST {(r.bestLap ?? "—").toString().trim() || "—"}
+                BEST {bestLap}
               </div>
               <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
                 {r.sector1?.trim() ? r.sector1 : "—"}
@@ -329,7 +332,7 @@ export function LiveTimingMiniClient({
                 LAP {r.lap}
               </div>
               <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                LAST {(r.lastLap ?? "—").toString().trim() || "—"}
+                LAST {lastLap}
               </div>
               {penalty ? (
                 <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">

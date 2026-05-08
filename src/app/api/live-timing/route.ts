@@ -109,6 +109,8 @@ declare global {
   var __mrlLiveTimingState: LiveTimingState | undefined;
 }
 
+const LIVE_TIMING_APP_CONFIG_KEY = "liveTimingState";
+
 function normalize(s: string) {
   return s
     .toLowerCase()
@@ -246,6 +248,54 @@ function getState(): LiveTimingState {
   return globalThis.__mrlLiveTimingState;
 }
 
+async function loadStateFromDb(): Promise<LiveTimingState | null> {
+  const row = await prisma.appConfig
+    .findUnique({ where: { key: LIVE_TIMING_APP_CONFIG_KEY } })
+    .catch(() => null);
+  if (!row?.value) return null;
+  try {
+    const parsed = JSON.parse(row.value) as unknown;
+    const safe = z
+      .object({
+        sessionId: z.string(),
+        sessionName: z.string().nullable(),
+        sessionType: z.number().nullable(),
+        sessionTimeLeft: z.string().nullable(),
+        sessionDuration: z.string().nullable(),
+        totalLaps: z.number().nullable(),
+        currentLap: z.number().nullable(),
+        lapsRemaining: z.number().nullable(),
+        trackStatus: z.string().nullable(),
+        raceStatus: z.string().nullable(),
+        trackMap: z.object({ circuit: z.string().optional(), length: z.number().optional() }).nullable(),
+        alerts: z.array(alertsSchema),
+        updatedAtMs: z.number(),
+        entries: z.array(
+          entrySchema.extend({
+            portraitUrl: z.string().nullable().optional(),
+            accent: z.string().optional()
+          })
+        )
+      })
+      .safeParse(parsed);
+    if (!safe.success) return null;
+    const s = safe.data;
+    const entries = s.entries.map((e) => {
+      const maybe = e as unknown as { accent?: unknown; portraitUrl?: unknown };
+      const accent = typeof maybe.accent === "string" && maybe.accent.trim() ? maybe.accent : "#E10600";
+      const portraitUrl = typeof maybe.portraitUrl === "string" ? maybe.portraitUrl : null;
+      return {
+        ...(e as unknown as LiveTimingEntry),
+        accent,
+        portraitUrl
+      };
+    });
+    return { ...s, entries } as LiveTimingState;
+  } catch {
+    return null;
+  }
+}
+
 function isAuthorized(req: Request) {
   const required = process.env.LIVE_TIMING_TOKEN?.trim() ?? "";
   if (!required) return true;
@@ -255,23 +305,30 @@ function isAuthorized(req: Request) {
 
 export async function GET() {
   const state = getState();
+  if (!state.updatedAtMs || state.entries.length === 0) {
+    const dbState = await loadStateFromDb();
+    if (dbState && dbState.updatedAtMs > state.updatedAtMs) {
+      globalThis.__mrlLiveTimingState = dbState;
+    }
+  }
+  const out = getState();
   return NextResponse.json(
     {
       ok: true,
-      sessionId: state.sessionId,
-      sessionName: state.sessionName,
-      sessionType: state.sessionType,
-      sessionTimeLeft: state.sessionTimeLeft,
-      sessionDuration: state.sessionDuration,
-      totalLaps: state.totalLaps,
-      currentLap: state.currentLap,
-      lapsRemaining: state.lapsRemaining,
-      trackStatus: state.trackStatus,
-      raceStatus: state.raceStatus,
-      trackMap: state.trackMap,
-      alerts: state.alerts,
-      updatedAtMs: state.updatedAtMs,
-      entries: state.entries
+      sessionId: out.sessionId,
+      sessionName: out.sessionName,
+      sessionType: out.sessionType,
+      sessionTimeLeft: out.sessionTimeLeft,
+      sessionDuration: out.sessionDuration,
+      totalLaps: out.totalLaps,
+      currentLap: out.currentLap,
+      lapsRemaining: out.lapsRemaining,
+      trackStatus: out.trackStatus,
+      raceStatus: out.raceStatus,
+      trackMap: out.trackMap,
+      alerts: out.alerts,
+      updatedAtMs: out.updatedAtMs,
+      entries: out.entries
     },
     { headers: { "cache-control": "no-store" } }
   );
@@ -379,6 +436,14 @@ export async function POST(req: Request) {
       accent: typeof e.accent === "string" && e.accent.trim() ? e.accent : "#E10600",
       portraitUrl: portraitByName.get(e.driver) ?? null
     }));
+
+  await prisma.appConfig
+    .upsert({
+      where: { key: LIVE_TIMING_APP_CONFIG_KEY },
+      create: { key: LIVE_TIMING_APP_CONFIG_KEY, value: JSON.stringify(state) },
+      update: { value: JSON.stringify(state) }
+    })
+    .catch(() => null);
 
   return NextResponse.json(
     {
