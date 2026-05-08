@@ -133,11 +133,6 @@ function statusStyle(status: Entry["status"]) {
   return { label: s, cls: "border-white/10 bg-black/25 text-white/80" };
 }
 
-function alertStyle(type: LiveTimingAlert["type"]) {
-  if (type === "fastest_lap") return { bar: "bg-violet-400", wrap: "border-violet-400/40 bg-violet-500/15" };
-  return { bar: "bg-emerald-400", wrap: "border-emerald-400/40 bg-emerald-500/15" };
-}
-
 function sessionModeByName(sessionName: string) {
   const n = sessionName.trim().toLowerCase();
   const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
@@ -180,8 +175,6 @@ export function LiveTimingMiniClient({
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupSize, setPopupSize] = useState<{ w: number; h: number } | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
-  const [toasts, setToasts] = useState<LiveTimingAlert[]>([]);
-  const seenAlertIds = useRef<Set<string>>(new Set());
 
   const enabled = useMemo(() => {
     if (disabled) return false;
@@ -231,29 +224,6 @@ export function LiveTimingMiniClient({
       if (w && h) setPopupSize({ w, h });
     } catch {}
   }, []);
-
-  useEffect(() => {
-    const alerts = Array.isArray(data?.alerts) ? (data?.alerts as LiveTimingAlert[]) : [];
-    if (alerts.length === 0) return;
-    const next = alerts
-      .slice()
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .filter((a) => a?.id && !seenAlertIds.current.has(a.id))
-      .filter((a) => a.type === "fastest_lap" || a.type === "fastest_sector");
-    if (next.length === 0) return;
-
-    for (const a of next) seenAlertIds.current.add(a.id);
-    setToasts((prev) => {
-      const merged = [...next, ...prev];
-      return merged.slice(0, 4);
-    });
-
-    for (const a of next) {
-      window.setTimeout(() => {
-        setToasts((prev) => prev.filter((x) => x.id !== a.id));
-      }, 4500);
-    }
-  }, [data?.alerts]);
 
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
@@ -424,49 +394,6 @@ export function LiveTimingMiniClient({
     );
   };
 
-  function ToastItem({ a }: { a: LiveTimingAlert }) {
-    const [shown, setShown] = useState(false);
-    useEffect(() => {
-      const t = window.setTimeout(() => setShown(true), 0);
-      return () => window.clearTimeout(t);
-    }, []);
-    const st = alertStyle(a.type);
-    const meta = [
-      a.driver ? a.driver : null,
-      typeof a.sector === "number" ? `S${a.sector}` : null
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    return (
-      <div
-        className={[
-          "pointer-events-none w-[min(360px,92vw)] overflow-hidden rounded-xl border backdrop-blur transition-all duration-300",
-          st.wrap,
-          shown ? "translate-x-0 opacity-100" : "translate-x-6 opacity-0"
-        ].join(" ")}
-      >
-        <div className={"h-1 " + st.bar} />
-        <div className="px-3 py-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="truncate text-[11px] font-extrabold uppercase tracking-wider text-white/90">
-                {a.title}
-              </div>
-              {meta ? (
-                <div className="mt-0.5 truncate text-[11px] font-semibold text-white/70">
-                  {meta}
-                </div>
-              ) : null}
-              <div className="mt-1 text-sm font-extrabold leading-snug text-white">
-                {a.message}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className={[
@@ -474,14 +401,6 @@ export function LiveTimingMiniClient({
         className ?? ""
       ].join(" ")}
     >
-      {toasts.length ? (
-        <div className="absolute right-3 top-14 z-20 grid gap-2">
-          {toasts.map((a) => (
-            <ToastItem key={a.id} a={a} />
-          ))}
-        </div>
-      ) : null}
-
       <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-xs font-extrabold uppercase tracking-wider text-white/85">

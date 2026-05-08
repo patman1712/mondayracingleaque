@@ -258,7 +258,7 @@ export default async function LeagueTvPage({
 
             <div className="min-w-0">
               {race.twitchChannel ? (
-                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact />
+                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact withLiveTimingAlerts />
               ) : (
                 <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
                   Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
