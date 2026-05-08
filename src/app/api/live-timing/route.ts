@@ -30,7 +30,19 @@ const participantSchema = z.object({
   accent: z.string().nullable().optional()
 });
 
-const statusSchema = z.enum(["IN GARAGE", "OUT LAP", "FLYING LAP", "PIT", "RETIRED"]);
+const statusSchema = z.enum([
+  "IN GARAGE",
+  "OUT LAP",
+  "FLYING LAP",
+  "IN LAP",
+  "ON TRACK",
+  "INVALID",
+  "DNF",
+  "DSQ",
+  "RETIRED",
+  "WAITING",
+  "PIT"
+]);
 
 const entrySchema = z.object({
   position: z.number(),
@@ -58,6 +70,7 @@ const entrySchema = z.object({
   accent: z.string().nullable().optional(),
   status: statusSchema.optional(),
   penalties: z.string().optional(),
+  warnings: z.number().optional(),
   stops: z.number().optional()
 });
 

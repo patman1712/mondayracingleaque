@@ -243,7 +243,7 @@ export default async function LeagueTvPage({
 
       <div className="relative left-1/2 right-1/2 -mx-[50vw] mt-6 w-screen">
         <div className="mx-auto w-full px-4 pb-14 md:px-8">
-          <div className="grid gap-6 xl:grid-cols-[640px_minmax(0,1fr)] xl:items-start">
+          <div className="grid gap-6 xl:grid-cols-[720px_minmax(0,1fr)] xl:items-start">
             <div className="xl:sticky xl:top-24">
               <LiveTimingMiniClient
                 startsAtMs={startsAtMs}
@@ -252,8 +252,6 @@ export default async function LeagueTvPage({
                 columns={2}
                 splitAt={11}
                 hideWhenNoLiveData={false}
-                equalHeights
-                rowsPerColumn={11}
                 className="max-w-none h-[calc(100vh-140px)]"
               />
             </div>

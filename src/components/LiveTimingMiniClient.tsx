@@ -21,8 +21,21 @@ type Entry = {
   sector3Color?: string | null;
   drs?: boolean | null;
   tyre?: string | null;
-  status?: "IN GARAGE" | "OUT LAP" | "FLYING LAP" | "PIT" | "RETIRED";
+  status?:
+    | "IN GARAGE"
+    | "OUT LAP"
+    | "FLYING LAP"
+    | "IN LAP"
+    | "ON TRACK"
+    | "INVALID"
+    | "DNF"
+    | "DSQ"
+    | "RETIRED"
+    | "WAITING"
+    | "PIT";
   penalties?: string;
+  warnings?: number;
+  stops?: number;
   accent?: string | null;
   portraitUrl?: string | null;
 };
@@ -109,6 +122,22 @@ function sectorClass(color: string | null | undefined) {
   return "border-white/10 bg-black/25 text-white/85";
 }
 
+function statusStyle(status: Entry["status"]) {
+  const s = (status ?? "WAITING").toString().toUpperCase();
+  if (s === "FLYING LAP") return { label: s, cls: "border-violet-400/60 bg-violet-500/15 text-violet-100" };
+  if (s === "OUT LAP" || s === "ON TRACK") return { label: s, cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
+  if (s === "IN LAP" || s === "PIT") return { label: s, cls: "border-amber-400/60 bg-amber-500/15 text-amber-100" };
+  if (s === "INVALID") return { label: s, cls: "border-orange-300/60 bg-orange-500/15 text-orange-100" };
+  if (s === "DNF" || s === "DSQ" || s === "RETIRED") return { label: s, cls: "border-red-400/60 bg-red-500/15 text-red-100" };
+  if (s === "IN GARAGE") return { label: s, cls: "border-white/10 bg-black/25 text-white/80" };
+  return { label: s, cls: "border-white/10 bg-black/25 text-white/80" };
+}
+
+function alertStyle(type: LiveTimingAlert["type"]) {
+  if (type === "fastest_lap") return { bar: "bg-violet-400", wrap: "border-violet-400/40 bg-violet-500/15" };
+  return { bar: "bg-emerald-400", wrap: "border-emerald-400/40 bg-emerald-500/15" };
+}
+
 function sessionModeByName(sessionName: string) {
   const n = sessionName.trim().toLowerCase();
   const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
@@ -151,6 +180,8 @@ export function LiveTimingMiniClient({
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupSize, setPopupSize] = useState<{ w: number; h: number } | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  const [toasts, setToasts] = useState<LiveTimingAlert[]>([]);
+  const seenAlertIds = useRef<Set<string>>(new Set());
 
   const enabled = useMemo(() => {
     if (disabled) return false;
@@ -201,6 +232,29 @@ export function LiveTimingMiniClient({
     } catch {}
   }, []);
 
+  useEffect(() => {
+    const alerts = Array.isArray(data?.alerts) ? (data?.alerts as LiveTimingAlert[]) : [];
+    if (alerts.length === 0) return;
+    const next = alerts
+      .slice()
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .filter((a) => a?.id && !seenAlertIds.current.has(a.id))
+      .filter((a) => a.type === "fastest_lap" || a.type === "fastest_sector");
+    if (next.length === 0) return;
+
+    for (const a of next) seenAlertIds.current.add(a.id);
+    setToasts((prev) => {
+      const merged = [...next, ...prev];
+      return merged.slice(0, 4);
+    });
+
+    for (const a of next) {
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((x) => x.id !== a.id));
+      }, 4500);
+    }
+  }, [data?.alerts]);
+
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const isFresh = Boolean(last && now - last <= 2000);
@@ -241,6 +295,12 @@ export function LiveTimingMiniClient({
 
   const left = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
   const track = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
+  const lapInfo =
+    typeof data?.currentLap === "number" && typeof data?.totalLaps === "number" && data.totalLaps
+      ? `LAP ${data.currentLap}/${data.totalLaps}`
+      : typeof data?.currentLap === "number"
+        ? `LAP ${data.currentLap}`
+        : "";
 
   const rowsCount = Math.max(1, rowsPerColumn ?? splitAt);
   const limited = columns === 2 ? rows.slice(0, rowsCount * 2) : rows;
@@ -252,17 +312,23 @@ export function LiveTimingMiniClient({
     const accent = (r.accent ?? "").toString().trim() || "#E10600";
     const penalty = (r.penalties ?? "").trim();
     const isDrs = Boolean(r.drs);
-    const gap = (r.gap ?? "").toString().trim() || "—";
     const bestLap = (r.bestLap ?? "").toString().trim() || "—";
     const lastLap = (r.lastLap ?? "").toString().trim() || "—";
     const currentLap = (r.currentLap ?? "").toString().trim() || "—";
-    const status = r.status ?? "WAITING";
+    const sector1 = r.sector1?.trim() ? r.sector1 : "—";
+    const sector2 = r.sector2?.trim() ? r.sector2 : "—";
+    const sector3 = r.sector3?.trim() ? r.sector3 : "—";
+    const status = statusStyle(r.status);
+    const noTime = mode === "practice" && parseLapTimeMs(bestLap) === null;
+    const gap = noTime ? "No time" : (r.gap ?? "").toString().trim() || "—";
+    const warnings = typeof r.warnings === "number" && Number.isFinite(r.warnings) && r.warnings > 0 ? r.warnings : null;
+    const stops = typeof r.stops === "number" && Number.isFinite(r.stops) && r.stops > 0 ? r.stops : null;
     return (
       <div
         key={`${r.position}-${r.driver}`}
         className={[
           "relative overflow-hidden rounded-xl border border-white/10",
-          equalHeights ? "h-full px-3 py-2" : "px-3 py-3"
+          equalHeights ? "h-full px-3 py-2" : "min-h-[112px] px-3 py-3"
         ].join(" ")}
         style={{ backgroundImage: teamBgSolid(accent) }}
       >
@@ -271,7 +337,7 @@ export function LiveTimingMiniClient({
         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: accent }} />
 
         <div className="relative">
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/35 text-sm font-extrabold text-white">
               {r.position}
             </div>
@@ -289,83 +355,141 @@ export function LiveTimingMiniClient({
             )}
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">
-                  {r.driver}
-                </div>
+              <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">
+                {r.driver}
               </div>
-              <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">{r.team}</div>
-              <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
-                {status}
+              <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">
+                {r.team}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", status.cls].join(" ")}>
+                  {status.label}
+                </div>
+                {penalty ? (
+                  <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
+                    PEN {penalty}
+                  </div>
+                ) : null}
+                {warnings !== null ? (
+                  <div className="rounded-full border border-orange-300/50 bg-orange-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-orange-100">
+                    WARN {warnings}
+                  </div>
+                ) : null}
+                {stops !== null ? (
+                  <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
+                    PIT {stops}
+                  </div>
+                ) : null}
+                {isDrs ? (
+                  <div className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
+                    DRS
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex shrink-0 flex-col items-end gap-2">
               <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
-                {tyre.label}
+                {tyre.label || "—"}
               </div>
               <div className="text-xs font-extrabold text-white/90">{gap}</div>
             </div>
           </div>
 
-          {mode === "practice" ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                CUR {currentLap}
-              </div>
-              <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                BEST {bestLap}
-              </div>
-              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
-                {r.sector1?.trim() ? r.sector1 : "—"}
-              </div>
-              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
-                {r.sector2?.trim() ? r.sector2 : "—"}
-              </div>
-              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
-                {r.sector3?.trim() ? r.sector3 : "—"}
-              </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+              BEST {bestLap}
             </div>
-          ) : (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                LAP {r.lap}
-              </div>
-              <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                LAST {lastLap}
-              </div>
-              {penalty ? (
-                <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                  PEN {penalty}
-                </div>
-              ) : null}
-              {isDrs ? (
-                <div className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
-                  DRS
-                </div>
-              ) : null}
+            <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+              LAST {lastLap}
             </div>
-          )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
+              CUR {currentLap}
+            </div>
+            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
+              {sector1}
+            </div>
+            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
+              {sector2}
+            </div>
+            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
+              {sector3}
+            </div>
+          </div>
         </div>
       </div>
     );
   };
 
+  function ToastItem({ a }: { a: LiveTimingAlert }) {
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+      const t = window.setTimeout(() => setShown(true), 0);
+      return () => window.clearTimeout(t);
+    }, []);
+    const st = alertStyle(a.type);
+    const meta = [
+      a.driver ? a.driver : null,
+      typeof a.sector === "number" ? `S${a.sector}` : null
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <div
+        className={[
+          "pointer-events-none w-[min(360px,92vw)] overflow-hidden rounded-xl border backdrop-blur transition-all duration-300",
+          st.wrap,
+          shown ? "translate-x-0 opacity-100" : "translate-x-6 opacity-0"
+        ].join(" ")}
+      >
+        <div className={"h-1 " + st.bar} />
+        <div className="px-3 py-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-[11px] font-extrabold uppercase tracking-wider text-white/90">
+                {a.title}
+              </div>
+              {meta ? (
+                <div className="mt-0.5 truncate text-[11px] font-semibold text-white/70">
+                  {meta}
+                </div>
+              ) : null}
+              <div className="mt-1 text-sm font-extrabold leading-snug text-white">
+                {a.message}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={[
-        "w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur flex flex-col",
+        "relative w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur flex flex-col",
         className ?? ""
       ].join(" ")}
     >
+      {toasts.length ? (
+        <div className="absolute right-3 top-14 z-20 grid gap-2">
+          {toasts.map((a) => (
+            <ToastItem key={a.id} a={a} />
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-xs font-extrabold uppercase tracking-wider text-white/85">
-            {title}
-            {sessionName ? ` · ${sessionName}` : ""}
+            {sessionName ? sessionName : title}
+            {left ? ` • LEFT ${left}` : ""}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-white/60">
-            {left ? <span>LEFT {left}</span> : null}
+            {lapInfo ? <span>{lapInfo}</span> : null}
             {track ? <span>TRACK {track}</span> : null}
           </div>
         </div>
@@ -461,24 +585,28 @@ export function LiveTimingMiniClient({
         </div>
       ) : null}
 
-      {hasAnyData ? columns === 2 ? (
-        <div className="grid grid-cols-2 gap-3 p-3 flex-1 min-h-0">
-          <div className="grid gap-3 min-h-0" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
-            {leftRows.map(renderRow)}
-          </div>
-          <div className="grid gap-3 min-h-0" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
-            {rightRows.map(renderRow)}
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-3 p-3 flex-1 min-h-0">
-          {leftRows.map(renderRow)}
-        </div>
-      ) : null}
-
-      {data?.alerts?.length ? (
-        <div className="border-t border-white/10 px-4 py-2 text-[11px] font-semibold text-white/60">
-          Alerts: {data.alerts.length}
+      {hasAnyData ? (
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3">
+          {columns === 2 ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className="grid gap-3 min-h-0"
+                style={equalHeights ? { gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` } : undefined}
+              >
+                {leftRows.map(renderRow)}
+              </div>
+              <div
+                className="grid gap-3 min-h-0"
+                style={equalHeights ? { gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` } : undefined}
+              >
+                {rightRows.map(renderRow)}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 min-h-0">
+              {leftRows.map(renderRow)}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
