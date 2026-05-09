@@ -395,9 +395,14 @@ export function TvHeroLiveCenterClient() {
           {isLive && alerts.length ? (
             alerts.slice(0, 1).map(({ a, visible }) => {
               const theme = alertTheme(a);
-              const meta = [a.driver ? a.driver : null, typeof a.sector === "number" ? `S${a.sector}` : null]
-                .filter(Boolean)
-                .join(" · ");
+              const meta = (() => {
+                const t = normalizeType(a.type);
+                const d = a.driver ? a.driver : null;
+                if (!d) return "";
+                if (t === "fastest_lap" || t === "fastest_sector") return d;
+                const s = typeof a.sector === "number" ? `S${a.sector}` : null;
+                return [d, s].filter(Boolean).join(" · ");
+              })();
               const main = (a.time ?? "").trim() ? (a.time as string) : a.message;
               const ts = a.createdAt ? formatAlertTimeBerlin(a.createdAt) : "";
               return (
