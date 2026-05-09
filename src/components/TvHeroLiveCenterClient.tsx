@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type LiveTimingAlert = {
   id: string;
@@ -60,9 +60,34 @@ function weatherLabel(raw: string) {
   return raw.toUpperCase();
 }
 
+function isSprintQualifyingBySessionName(sessionName: string) {
+  const n = sessionName.trim().toLowerCase();
+  if (!n) return false;
+  if (n.includes("sprint qualifying")) return true;
+  if (n.includes("sprint shootout")) return true;
+  if (n.includes("sq1") || n.includes("sq2") || n.includes("sq3")) return true;
+  return false;
+}
+
+function sessionLabelForHero(sessionName: string) {
+  const n = sessionName.trim();
+  const low = n.toLowerCase();
+  if (!n) return "";
+  if (low.includes("sq1")) return "SQ1";
+  if (low.includes("sq2")) return "SQ2";
+  if (low.includes("sq3")) return "SQ3";
+  if (low.includes("sprint shootout")) return "SPRINT SHOOTOUT";
+  if (low.includes("sprint qualifying")) return "SPRINT QUALIFYING";
+  return n.toUpperCase();
+}
+
 function isRaceBySessionName(sessionName: string) {
   const n = sessionName.trim().toLowerCase();
-  return n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+  if (!n) return false;
+  if (isSprintQualifyingBySessionName(n)) return false;
+  if (n.includes(" race") || n.startsWith("race") || n.includes("grand prix")) return true;
+  if (n.includes("sprint")) return true;
+  return false;
 }
 
 function WeatherIcon({ weather }: { weather: string }) {
@@ -130,6 +155,8 @@ function alertTheme(a: LiveTimingAlert) {
       : { bar: "bg-emerald-400", wrap: "border-emerald-400/50 bg-emerald-500/12 shadow-[0_0_18px_rgba(52,211,153,0.18)]" };
   }
   if (t === "yellow_flag") return { bar: "bg-amber-300", wrap: "border-amber-300/50 bg-amber-500/12" };
+  if (t === "track_limits") return { bar: "bg-orange-300", wrap: "border-orange-300/55 bg-orange-500/12" };
+  if (t === "penalty") return { bar: "bg-red-400", wrap: "border-red-400/55 bg-orange-500/10" };
   if (t === "safety_car") return { bar: "bg-amber-300", wrap: "border-amber-300/60 bg-amber-500/14 shadow-[0_0_18px_rgba(251,191,36,0.18)]" };
   if (t === "virtual_safety_car" || t === "vsc") return { bar: "bg-orange-300", wrap: "border-orange-300/55 bg-orange-500/12" };
   if (t === "red_flag") return { bar: "bg-red-400", wrap: "border-red-400/55 bg-red-500/12" };
@@ -181,11 +208,42 @@ function AlertIcon({ type }: { type: string }) {
   );
 }
 
+function parsePenaltySeconds(raw: string | null | undefined) {
+  const s = (raw ?? "").trim();
+  if (!s) return 0;
+  const m = /([+-]?\d+)\s*s/i.exec(s);
+  if (!m) return 0;
+  const v = Number(m[1]);
+  return Number.isFinite(v) ? Math.max(0, v) : 0;
+}
+
+function isTruthyNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
 export function TvHeroLiveCenterClient() {
   const [data, setData] = useState<LiveTimingState | null>(null);
   const [requestFailed, setRequestFailed] = useState(false);
   const [alerts, setAlerts] = useState<Array<{ a: LiveTimingAlert; visible: boolean }>>([]);
   const seenAlertIds = useRef<Set<string>>(new Set());
+  const alertTimers = useRef<number[]>([]);
+  const lastByDriver = useRef<Map<string, { warnings: number; penaltySeconds: number }>>(new Map());
+
+  const clearAlertTimers = useCallback(() => {
+    for (const id of alertTimers.current) window.clearTimeout(id);
+    alertTimers.current = [];
+  }, []);
+
+  const pushAlert = useCallback(
+    (a: LiveTimingAlert) => {
+    clearAlertTimers();
+    setAlerts([{ a, visible: false }]);
+    alertTimers.current.push(window.setTimeout(() => setAlerts((prev) => prev.map((x) => ({ ...x, visible: true }))), 0));
+    alertTimers.current.push(window.setTimeout(() => setAlerts((prev) => prev.map((x) => ({ ...x, visible: false }))), 4700));
+    alertTimers.current.push(window.setTimeout(() => setAlerts([]), 5200));
+    },
+    [clearAlertTimers]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -226,10 +284,12 @@ export function TvHeroLiveCenterClient() {
   useEffect(() => {
     if (!isLive) {
       setAlerts([]);
+      clearAlertTimers();
+      seenAlertIds.current = new Set();
+      lastByDriver.current = new Map();
       return;
     }
     const nextAlerts = Array.isArray(data?.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
-    if (nextAlerts.length === 0) return;
     const accepted = new Set([
       "fastest_lap",
       "fastest_sector",
@@ -239,36 +299,88 @@ export function TvHeroLiveCenterClient() {
       "red_flag",
       "drs_enabled",
       "drs_disabled",
-      "vsc"
+      "vsc",
+      "track_limits",
+      "penalty"
     ]);
-    const fresh = nextAlerts
+    const freshApi = nextAlerts
       .slice()
       .sort((a, b) => b.createdAt - a.createdAt)
       .filter((a) => a?.id && !seenAlertIds.current.has(a.id))
       .filter((a) => accepted.has(normalizeType(a.type)));
-    if (fresh.length === 0) return;
-
-    for (const a of fresh) seenAlertIds.current.add(a.id);
-    setAlerts((prev) => {
-      const merged = [...fresh.map((a) => ({ a, visible: false })), ...prev];
-      return merged.slice(0, 1);
-    });
-    window.setTimeout(() => {
-      setAlerts((prev) => prev.map((x) => ({ ...x, visible: true })));
-    }, 0);
-
-    for (const a of fresh) {
-      window.setTimeout(() => {
-        setAlerts((prev) => prev.map((x) => (x.a.id === a.id ? { ...x, visible: false } : x)));
-      }, 4700);
-      window.setTimeout(() => {
-        setAlerts((prev) => prev.filter((x) => x.a.id !== a.id));
-      }, 5200);
+    if (freshApi.length) {
+      const a = freshApi[0];
+      seenAlertIds.current.add(a.id);
+      pushAlert(a);
+      return;
     }
-  }, [data?.alerts, isLive]);
 
-  const sessionName = (data?.sessionName ?? "").toString().trim();
-  const showLap = isRaceBySessionName(sessionName);
+    const rawEntries = Array.isArray(data?.entries) ? (data!.entries as unknown[]) : [];
+
+    if (lastByDriver.current.size === 0) {
+      for (const raw of rawEntries) {
+        if (!raw || typeof raw !== "object") continue;
+        const e = raw as Record<string, unknown>;
+        const driver = typeof e.driver === "string" ? e.driver.trim() : "";
+        if (!driver) continue;
+        const warnings = isTruthyNumber(e.warnings) ? e.warnings : 0;
+        const penaltySeconds =
+          typeof e.penalties === "number"
+            ? Math.max(0, e.penalties)
+            : parsePenaltySeconds(typeof e.penalties === "string" ? e.penalties : "");
+        lastByDriver.current.set(driver, { warnings, penaltySeconds });
+      }
+      return;
+    }
+
+    for (const raw of rawEntries) {
+      if (!raw || typeof raw !== "object") continue;
+      const e = raw as Record<string, unknown>;
+      const driver = typeof e.driver === "string" ? e.driver.trim() : "";
+      if (!driver) continue;
+      const warnings = isTruthyNumber(e.warnings) ? e.warnings : 0;
+      const penaltySeconds =
+        typeof e.penalties === "number"
+          ? Math.max(0, e.penalties)
+          : parsePenaltySeconds(typeof e.penalties === "string" ? e.penalties : "");
+      const prev = lastByDriver.current.get(driver) ?? { warnings: 0, penaltySeconds: 0 };
+      if (warnings > prev.warnings) {
+        lastByDriver.current.set(driver, { warnings, penaltySeconds });
+        pushAlert({
+          id: `local-track-limits-${driver}-${warnings}-${Date.now()}`,
+          type: "track_limits",
+          title: "TRACK LIMITS",
+          message: `Warning ${warnings}`,
+          driver,
+          createdAt: Date.now()
+        });
+        return;
+      }
+      if (penaltySeconds > prev.penaltySeconds) {
+        lastByDriver.current.set(driver, { warnings, penaltySeconds });
+        pushAlert({
+          id: `local-penalty-${driver}-${penaltySeconds}-${Date.now()}`,
+          type: "penalty",
+          title: "PENALTY",
+          message: `+${penaltySeconds}s`,
+          driver,
+          createdAt: Date.now()
+        });
+        return;
+      }
+      lastByDriver.current.set(driver, { warnings, penaltySeconds });
+    }
+  }, [clearAlertTimers, data, isLive, pushAlert]);
+
+  useEffect(() => {
+    return () => {
+      clearAlertTimers();
+    };
+  }, [clearAlertTimers]);
+
+  const sessionNameRaw = (data?.sessionName ?? "").toString().trim();
+  const sessionLabel = sessionLabelForHero(sessionNameRaw);
+  const showLap = isRaceBySessionName(sessionNameRaw);
   const left = (data?.sessionTimeLeft ?? "").toString().trim();
   const trackStatus = (data?.trackStatus ?? "").toString().trim();
   const raceStatus = (data?.raceStatus ?? "").toString().trim();
@@ -293,7 +405,7 @@ export function TvHeroLiveCenterClient() {
           Session Control
         </div>
         <div className="mt-2 text-2xl font-extrabold text-white">
-          {isLive ? (sessionName || "LIVE SESSION") : "OFF AIR"}
+          {isLive ? (sessionLabel || "LIVE SESSION") : "OFF AIR"}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <div className={["rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", flag.cls].join(" ")}>

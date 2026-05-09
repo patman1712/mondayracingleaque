@@ -124,15 +124,24 @@ function statusStyle(status: Entry["status"]) {
 
 function sessionModeByName(sessionName: string) {
   const n = sessionName.trim().toLowerCase();
-  const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
-  if (isRaceByName) return "race" as const;
+  const isSprintQuali =
+    n.includes("sprint qualifying") ||
+    n.includes("sprint shootout") ||
+    n.includes("sq1") ||
+    n.includes("sq2") ||
+    n.includes("sq3");
+  if (!isSprintQuali) {
+    const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+    if (isRaceByName) return "race" as const;
+  }
   const isPracticeOrQualiByName =
     n.includes("practice") ||
     n.includes("qualifying") ||
     n.includes("q1") ||
     n.includes("q2") ||
     n.includes("q3") ||
-    n.includes("time trial");
+    n.includes("time trial") ||
+    isSprintQuali;
   if (isPracticeOrQualiByName) return "practice" as const;
   return "race" as const;
 }
