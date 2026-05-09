@@ -101,6 +101,14 @@ type LiveTimingEntry = LiveTimingPostEntry & {
   accent: string;
 };
 
+type LiveTimingAlertMeta = {
+  bestLapMs: number | null;
+  bestSectorMs: { s1: number | null; s2: number | null; s3: number | null };
+  lastEmitMsByKey: Record<string, number>;
+  lastValueByKey: Record<string, string>;
+  driverStatsByName: Record<string, { warnings: number; penaltySeconds: number; penaltyRaw: string }>;
+};
+
 type LiveTimingState = {
   sessionId: string;
   sessionName: string | null;
@@ -122,6 +130,7 @@ type LiveTimingState = {
   alerts: LiveTimingAlert[];
   updatedAtMs: number;
   entries: LiveTimingEntry[];
+  _alertMeta?: LiveTimingAlertMeta;
 };
 
 declare global {
@@ -137,6 +146,142 @@ function normalize(s: string) {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeAlertType(input: string) {
+  return (input ?? "").trim().toLowerCase().replace(/\s+/g, "_").replace(/-+/g, "_");
+}
+
+function parseLapTimeMs(raw: string | null | undefined) {
+  const s = (raw ?? "").trim();
+  if (!s || s === "—") return null;
+  const m = /^(\d+):(\d{1,2})\.(\d{1,3})$/.exec(s);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3].padEnd(3, "0"));
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return min * 60000 + sec * 1000 + ms;
+}
+
+function parseSectorTimeMs(raw: string | null | undefined) {
+  const s = (raw ?? "").trim();
+  if (!s || s === "—") return null;
+  const m = /^(\d{1,3})\.(\d{1,3})$/.exec(s);
+  if (!m) return null;
+  const sec = Number(m[1]);
+  const ms = Number(m[2].padEnd(3, "0"));
+  if (!Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return sec * 1000 + ms;
+}
+
+function parsePenaltySeconds(raw: string | null | undefined) {
+  const s = (raw ?? "").trim();
+  if (!s) return 0;
+  const m = /([+-]?\d+)\s*s/i.exec(s);
+  if (!m) return 0;
+  const v = Number(m[1]);
+  return Number.isFinite(v) ? Math.max(0, v) : 0;
+}
+
+function sessionModeByName(sessionName: string) {
+  const n = (sessionName ?? "").trim().toLowerCase();
+  const isSprintQuali =
+    n.includes("sprint qualifying") || n.includes("sprint shootout") || n.includes("sq1") || n.includes("sq2") || n.includes("sq3");
+  if (!isSprintQuali) {
+    const isRace = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+    if (isRace) return "race" as const;
+  }
+  const isQuali =
+    n.includes("practice") ||
+    n.includes("qualifying") ||
+    n.includes("q1") ||
+    n.includes("q2") ||
+    n.includes("q3") ||
+    n.includes("time trial") ||
+    isSprintQuali;
+  if (isQuali) return "qualifying" as const;
+  return "unknown" as const;
+}
+
+function ensureAlertMeta(state: LiveTimingState): LiveTimingAlertMeta {
+  if (!state._alertMeta) {
+    state._alertMeta = {
+      bestLapMs: null,
+      bestSectorMs: { s1: null, s2: null, s3: null },
+      lastEmitMsByKey: {},
+      lastValueByKey: {},
+      driverStatsByName: {}
+    };
+  }
+  if (!state._alertMeta.bestSectorMs) state._alertMeta.bestSectorMs = { s1: null, s2: null, s3: null };
+  if (!state._alertMeta.lastEmitMsByKey) state._alertMeta.lastEmitMsByKey = {};
+  if (!state._alertMeta.lastValueByKey) state._alertMeta.lastValueByKey = {};
+  if (!state._alertMeta.driverStatsByName) state._alertMeta.driverStatsByName = {};
+  return state._alertMeta;
+}
+
+function resetAlertMeta(state: LiveTimingState) {
+  state._alertMeta = {
+    bestLapMs: null,
+    bestSectorMs: { s1: null, s2: null, s3: null },
+    lastEmitMsByKey: {},
+    lastValueByKey: {},
+    driverStatsByName: {}
+  };
+}
+
+function shouldEmit(meta: LiveTimingAlertMeta, key: string, value: string, cooldownMs: number, now: number) {
+  if (meta.lastValueByKey[key] === value) return false;
+  const last = meta.lastEmitMsByKey[key] ?? 0;
+  if (cooldownMs > 0 && now - last < cooldownMs) return false;
+  meta.lastValueByKey[key] = value;
+  meta.lastEmitMsByKey[key] = now;
+  return true;
+}
+
+function alertPriority(type: string) {
+  const t = normalizeAlertType(type);
+  if (t === "red_flag") return 1;
+  if (t === "safety_car") return 2;
+  if (t === "virtual_safety_car" || t === "vsc") return 3;
+  if (t === "penalty") return 4;
+  if (t === "track_limits") return 5;
+  if (t === "fastest_lap") return 6;
+  if (t === "fastest_sector") return 7;
+  if (t === "yellow_flag") return 8;
+  if (t === "drs_enabled") return 9;
+  if (t === "drs_disabled") return 10;
+  return 99;
+}
+
+function alertFingerprint(a: LiveTimingAlert) {
+  const t = normalizeAlertType(a.type);
+  const d = (a.driver ?? "").trim();
+  const s = typeof a.sector === "number" ? String(a.sector) : "";
+  const time = (a.time ?? "").trim();
+  const msg = (a.message ?? "").trim();
+  const title = (a.title ?? "").trim();
+  return `${t}|${title}|${d}|${s}|${time}|${msg}`;
+}
+
+function makeAlert(input: {
+  type: string;
+  title: string;
+  message: string;
+  driver?: string;
+  sector?: number | null;
+  time?: string;
+  createdAt: number;
+}): LiveTimingAlert {
+  const t = normalizeAlertType(input.type);
+  const driver = input.driver?.trim() ? input.driver.trim() : undefined;
+  const sector = typeof input.sector === "number" ? input.sector : input.sector === null ? null : undefined;
+  const time = input.time?.trim() ? input.time.trim() : undefined;
+  const msg = input.message ?? "";
+  const title = input.title ?? "";
+  const id = `${t}|${title}|${driver ?? ""}|${sector ?? ""}|${time ?? ""}|${msg}`.trim();
+  return { id, type: t, title, message: msg, driver, sector, time, createdAt: input.createdAt };
 }
 
 function levenshtein(a: string, b: string) {
@@ -268,9 +413,17 @@ function getState(): LiveTimingState {
       trackMap: null,
       alerts: [],
       updatedAtMs: 0,
-      entries: []
+      entries: [],
+      _alertMeta: {
+        bestLapMs: null,
+        bestSectorMs: { s1: null, s2: null, s3: null },
+        lastEmitMsByKey: {},
+        lastValueByKey: {},
+        driverStatsByName: {}
+      }
     };
   }
+  ensureAlertMeta(globalThis.__mrlLiveTimingState);
   return globalThis.__mrlLiveTimingState;
 }
 
@@ -392,6 +545,7 @@ export async function POST(req: Request) {
 
   const data = parsed.data;
   const state = getState();
+  const prevSessionId = state.sessionId;
 
   state.sessionId = data.sessionId;
   state.sessionName = typeof data.sessionName === "string" ? data.sessionName : null;
@@ -410,7 +564,6 @@ export async function POST(req: Request) {
   state.rainIntensity = typeof data.rainIntensity === "number" ? data.rainIntensity : null;
   state.trackGrip = typeof data.trackGrip === "number" ? data.trackGrip : null;
   state.trackMap = data.trackMap ?? null;
-  state.alerts = Array.isArray(data.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
   state.updatedAtMs = Date.now();
   const incomingEntries = data.entries.slice();
   const participants = Array.isArray(data.participants) ? (data.participants as LiveTimingParticipant[]) : [];
@@ -528,6 +681,193 @@ export async function POST(req: Request) {
       accent: typeof e.accent === "string" && e.accent.trim() ? e.accent : "#E10600",
       portraitUrl: portraitByName.get(e.driver) ?? null
     }));
+
+  if (state.sessionId !== prevSessionId) {
+    state.alerts = [];
+    resetAlertMeta(state);
+  }
+
+  const meta = ensureAlertMeta(state);
+  const now = state.updatedAtMs;
+  const mode = sessionModeByName(state.sessionName ?? "");
+  const acceptedIncoming = new Set([
+    "red_flag",
+    "safety_car",
+    "virtual_safety_car",
+    "vsc",
+    "yellow_flag",
+    "drs_enabled",
+    "drs_disabled"
+  ]);
+
+  const incomingAlerts = Array.isArray(data.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
+  const candidates: LiveTimingAlert[] = [];
+
+  for (const raw of incomingAlerts) {
+    if (!raw || typeof raw !== "object") continue;
+    const t = normalizeAlertType((raw as LiveTimingAlert).type);
+    if (!acceptedIncoming.has(t)) continue;
+    const createdAt = typeof (raw as LiveTimingAlert).createdAt === "number" ? (raw as LiveTimingAlert).createdAt : now;
+    const a = makeAlert({
+      type: t,
+      title: (raw as LiveTimingAlert).title,
+      message: (raw as LiveTimingAlert).message,
+      driver: (raw as LiveTimingAlert).driver,
+      sector: (raw as LiveTimingAlert).sector ?? undefined,
+      time: (raw as LiveTimingAlert).time,
+      createdAt
+    });
+    const fp = alertFingerprint(a);
+    const key = `incoming:${t}`;
+    if (!shouldEmit(meta, key, fp, 0, now)) continue;
+    candidates.push(a);
+  }
+
+  const entriesByPosition = state.entries.slice().sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+  for (const e of entriesByPosition) {
+    const driver = e.driver?.trim();
+    if (!driver) continue;
+    const warnings = typeof e.warnings === "number" && Number.isFinite(e.warnings) ? e.warnings : 0;
+    const penaltyRaw = typeof e.penalties === "string" ? e.penalties.trim() : "";
+    const penaltySeconds = penaltyRaw ? parsePenaltySeconds(penaltyRaw) : 0;
+    const prev = meta.driverStatsByName[driver] ?? { warnings: 0, penaltySeconds: 0, penaltyRaw: "" };
+
+    if (warnings > prev.warnings) {
+      meta.driverStatsByName[driver] = { warnings, penaltySeconds, penaltyRaw };
+      const key = `track_limits:${driver}`;
+      const value = String(warnings);
+      if (shouldEmit(meta, key, value, 0, now)) {
+        candidates.push(
+          makeAlert({
+            type: "track_limits",
+            title: "TRACK LIMITS",
+            message: `Warning ${warnings}`,
+            driver,
+            createdAt: now
+          })
+        );
+      }
+      continue;
+    }
+
+    if (penaltySeconds !== prev.penaltySeconds || penaltyRaw !== prev.penaltyRaw) {
+      meta.driverStatsByName[driver] = { warnings, penaltySeconds, penaltyRaw };
+      if (penaltySeconds > 0) {
+        const key = `penalty:${driver}`;
+        const value = String(penaltySeconds);
+        if (shouldEmit(meta, key, value, 0, now)) {
+          candidates.push(
+            makeAlert({
+              type: "penalty",
+              title: "PENALTY",
+              message: `+${penaltySeconds}s`,
+              driver,
+              createdAt: now
+            })
+          );
+        }
+      }
+      continue;
+    }
+
+    meta.driverStatsByName[driver] = { warnings, penaltySeconds, penaltyRaw };
+  }
+
+  const bestLap = (() => {
+    let best: { ms: number; driver: string; text: string } | null = null;
+    for (const e of state.entries) {
+      const ms = parseLapTimeMs(e.bestLap ?? null);
+      if (ms === null) continue;
+      const d = e.driver?.trim();
+      if (!d) continue;
+      if (!best || ms < best.ms) best = { ms, driver: d, text: (e.bestLap ?? "").toString().trim() };
+    }
+    return best;
+  })();
+
+  if (bestLap) {
+    const improved = meta.bestLapMs === null || bestLap.ms < meta.bestLapMs;
+    meta.bestLapMs = bestLap.ms;
+    if (improved) {
+      const key = "fastest_lap";
+      const value = String(bestLap.ms);
+      if (shouldEmit(meta, key, value, 8000, now)) {
+        candidates.push(
+          makeAlert({
+            type: "fastest_lap",
+            title: "FASTEST LAP",
+            message: bestLap.text,
+            driver: bestLap.driver,
+            time: bestLap.text,
+            createdAt: now
+          })
+        );
+      }
+    }
+  }
+
+  if (mode !== "race") {
+    const sectorBest: Array<{ sector: 1 | 2 | 3; ms: number; driver: string; text: string }> = [];
+    for (const e of state.entries) {
+      const d = e.driver?.trim();
+      if (!d) continue;
+      const s1 = parseSectorTimeMs(e.sector1 ?? null);
+      const s2 = parseSectorTimeMs(e.sector2 ?? null);
+      const s3 = parseSectorTimeMs(e.sector3 ?? null);
+      if (s1 !== null) sectorBest.push({ sector: 1, ms: s1, driver: d, text: (e.sector1 ?? "").toString().trim() });
+      if (s2 !== null) sectorBest.push({ sector: 2, ms: s2, driver: d, text: (e.sector2 ?? "").toString().trim() });
+      if (s3 !== null) sectorBest.push({ sector: 3, ms: s3, driver: d, text: (e.sector3 ?? "").toString().trim() });
+    }
+    const bestBySector = new Map<number, { ms: number; driver: string; text: string }>();
+    for (const x of sectorBest) {
+      const prev = bestBySector.get(x.sector);
+      if (!prev || x.ms < prev.ms) bestBySector.set(x.sector, { ms: x.ms, driver: x.driver, text: x.text });
+    }
+    for (const [sector, best] of bestBySector) {
+      const keyMs = sector === 1 ? "s1" : sector === 2 ? "s2" : "s3";
+      const prevMs = meta.bestSectorMs[keyMs];
+      const improved = prevMs === null || best.ms < prevMs;
+      meta.bestSectorMs[keyMs] = best.ms;
+      if (!improved) continue;
+      const key = `fastest_sector:s${sector}`;
+      const value = String(best.ms);
+      if (!shouldEmit(meta, key, value, 5000, now)) continue;
+      candidates.push(
+        makeAlert({
+          type: "fastest_sector",
+          title: `FASTEST S${sector}`,
+          message: best.text,
+          driver: best.driver,
+          sector,
+          time: best.text,
+          createdAt: now
+        })
+      );
+    }
+  }
+
+  const picked = candidates
+    .slice()
+    .sort((a, b) => {
+      const pa = alertPriority(a.type);
+      const pb = alertPriority(b.type);
+      if (pa !== pb) return pa - pb;
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    })[0];
+
+  if (picked) {
+    const cutoff = now - 10 * 60 * 1000;
+    const kept = (state.alerts ?? []).filter((a) => typeof a?.createdAt === "number" && a.createdAt >= cutoff);
+    kept.push(picked);
+    const dedup = new Map<string, LiveTimingAlert>();
+    for (const a of kept) dedup.set(a.id, a);
+    state.alerts = Array.from(dedup.values())
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+      .slice(-50);
+  } else {
+    const cutoff = now - 10 * 60 * 1000;
+    state.alerts = (state.alerts ?? []).filter((a) => typeof a?.createdAt === "number" && a.createdAt >= cutoff).slice(-50);
+  }
 
   await prisma.appConfig
     .upsert({

@@ -148,11 +148,7 @@ function alertTheme(a: LiveTimingAlert) {
   const t = normalizeType(a.type);
   if (t === "fastest_lap") return { bar: "bg-violet-400", wrap: "border-violet-400/55 bg-violet-500/14 shadow-[0_0_24px_rgba(139,92,246,0.25)]" };
   if (t === "fastest_sector") {
-    const msg = `${a.title} ${a.message}`.toLowerCase();
-    const purple = msg.includes("purple") || msg.includes("session");
-    return purple
-      ? { bar: "bg-violet-400", wrap: "border-violet-400/50 bg-violet-500/12 shadow-[0_0_20px_rgba(139,92,246,0.20)]" }
-      : { bar: "bg-emerald-400", wrap: "border-emerald-400/50 bg-emerald-500/12 shadow-[0_0_18px_rgba(52,211,153,0.18)]" };
+    return { bar: "bg-violet-400", wrap: "border-violet-400/50 bg-violet-500/12 shadow-[0_0_20px_rgba(139,92,246,0.20)]" };
   }
   if (t === "yellow_flag") return { bar: "bg-amber-300", wrap: "border-amber-300/50 bg-amber-500/12" };
   if (t === "track_limits") return { bar: "bg-orange-300", wrap: "border-orange-300/55 bg-orange-500/12" };
@@ -208,17 +204,16 @@ function AlertIcon({ type }: { type: string }) {
   );
 }
 
-function parsePenaltySeconds(raw: string | null | undefined) {
-  const s = (raw ?? "").trim();
-  if (!s) return 0;
-  const m = /([+-]?\d+)\s*s/i.exec(s);
-  if (!m) return 0;
-  const v = Number(m[1]);
-  return Number.isFinite(v) ? Math.max(0, v) : 0;
-}
-
-function isTruthyNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
+function alertPriority(type: string) {
+  const t = normalizeType(type);
+  if (t === "red_flag") return 1;
+  if (t === "safety_car") return 2;
+  if (t === "virtual_safety_car" || t === "vsc") return 3;
+  if (t === "penalty") return 4;
+  if (t === "track_limits") return 5;
+  if (t === "fastest_lap") return 6;
+  if (t === "fastest_sector") return 7;
+  return 99;
 }
 
 export function TvHeroLiveCenterClient() {
@@ -227,7 +222,6 @@ export function TvHeroLiveCenterClient() {
   const [alerts, setAlerts] = useState<Array<{ a: LiveTimingAlert; visible: boolean }>>([]);
   const seenAlertIds = useRef<Set<string>>(new Set());
   const alertTimers = useRef<number[]>([]);
-  const lastByDriver = useRef<Map<string, { warnings: number; penaltySeconds: number }>>(new Map());
 
   const clearAlertTimers = useCallback(() => {
     for (const id of alertTimers.current) window.clearTimeout(id);
@@ -286,9 +280,10 @@ export function TvHeroLiveCenterClient() {
       setAlerts([]);
       clearAlertTimers();
       seenAlertIds.current = new Set();
-      lastByDriver.current = new Map();
       return;
     }
+    const sessionNameRaw = (data?.sessionName ?? "").toString().trim();
+    const isRace = isRaceBySessionName(sessionNameRaw);
     const nextAlerts = Array.isArray(data?.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
     const accepted = new Set([
       "fastest_lap",
@@ -305,70 +300,20 @@ export function TvHeroLiveCenterClient() {
     ]);
     const freshApi = nextAlerts
       .slice()
-      .sort((a, b) => b.createdAt - a.createdAt)
       .filter((a) => a?.id && !seenAlertIds.current.has(a.id))
-      .filter((a) => accepted.has(normalizeType(a.type)));
+      .filter((a) => accepted.has(normalizeType(a.type)))
+      .filter((a) => (isRace ? normalizeType(a.type) !== "fastest_sector" : true))
+      .sort((a, b) => {
+        const pa = alertPriority(a.type);
+        const pb = alertPriority(b.type);
+        if (pa !== pb) return pa - pb;
+        return b.createdAt - a.createdAt;
+      });
     if (freshApi.length) {
       const a = freshApi[0];
       seenAlertIds.current.add(a.id);
       pushAlert(a);
       return;
-    }
-
-    const rawEntries = Array.isArray(data?.entries) ? (data!.entries as unknown[]) : [];
-
-    if (lastByDriver.current.size === 0) {
-      for (const raw of rawEntries) {
-        if (!raw || typeof raw !== "object") continue;
-        const e = raw as Record<string, unknown>;
-        const driver = typeof e.driver === "string" ? e.driver.trim() : "";
-        if (!driver) continue;
-        const warnings = isTruthyNumber(e.warnings) ? e.warnings : 0;
-        const penaltySeconds =
-          typeof e.penalties === "number"
-            ? Math.max(0, e.penalties)
-            : parsePenaltySeconds(typeof e.penalties === "string" ? e.penalties : "");
-        lastByDriver.current.set(driver, { warnings, penaltySeconds });
-      }
-      return;
-    }
-
-    for (const raw of rawEntries) {
-      if (!raw || typeof raw !== "object") continue;
-      const e = raw as Record<string, unknown>;
-      const driver = typeof e.driver === "string" ? e.driver.trim() : "";
-      if (!driver) continue;
-      const warnings = isTruthyNumber(e.warnings) ? e.warnings : 0;
-      const penaltySeconds =
-        typeof e.penalties === "number"
-          ? Math.max(0, e.penalties)
-          : parsePenaltySeconds(typeof e.penalties === "string" ? e.penalties : "");
-      const prev = lastByDriver.current.get(driver) ?? { warnings: 0, penaltySeconds: 0 };
-      if (warnings > prev.warnings) {
-        lastByDriver.current.set(driver, { warnings, penaltySeconds });
-        pushAlert({
-          id: `local-track-limits-${driver}-${warnings}-${Date.now()}`,
-          type: "track_limits",
-          title: "TRACK LIMITS",
-          message: `Warning ${warnings}`,
-          driver,
-          createdAt: Date.now()
-        });
-        return;
-      }
-      if (penaltySeconds > prev.penaltySeconds) {
-        lastByDriver.current.set(driver, { warnings, penaltySeconds });
-        pushAlert({
-          id: `local-penalty-${driver}-${penaltySeconds}-${Date.now()}`,
-          type: "penalty",
-          title: "PENALTY",
-          message: `+${penaltySeconds}s`,
-          driver,
-          createdAt: Date.now()
-        });
-        return;
-      }
-      lastByDriver.current.set(driver, { warnings, penaltySeconds });
     }
   }, [clearAlertTimers, data, isLive, pushAlert]);
 
