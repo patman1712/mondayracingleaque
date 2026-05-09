@@ -41,14 +41,21 @@ export function Header() {
         setTv({ hasOnAir: false, items: [] });
       } finally {
         if (cancelled) return;
-        timer = window.setTimeout(poll, 60_000);
+        timer = window.setTimeout(poll, 20_000);
       }
     }
 
     poll();
+    function onVisibility() {
+      if (document.visibilityState === "visible") poll();
+    }
+    window.addEventListener("focus", poll);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
+      window.removeEventListener("focus", poll);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 

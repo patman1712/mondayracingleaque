@@ -175,6 +175,7 @@ export function LiveTimingMiniClient({
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupSize, setPopupSize] = useState<{ w: number; h: number } | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  const [requestFailed, setRequestFailed] = useState(false);
 
   const enabled = useMemo(() => {
     if (disabled) return false;
@@ -200,7 +201,11 @@ export function LiveTimingMiniClient({
         if (nextUpdatedAt && nextUpdatedAt === lastSeenUpdatedAt) return;
         lastSeenUpdatedAt = nextUpdatedAt;
         setData(j);
+        setRequestFailed(false);
       } catch {
+        if (cancelled) return;
+        setRequestFailed(true);
+        setData(null);
       } finally {
         if (cancelled) return;
         t = window.setTimeout(poll, 1000);
@@ -227,8 +232,42 @@ export function LiveTimingMiniClient({
 
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
-  const isFresh = Boolean(last && now - last <= 2000);
+  const entriesLen = Array.isArray(data?.entries) ? data!.entries.length : 0;
+  const isLive = Boolean(!requestFailed && last && now - last < 10_000 && entriesLen > 0);
+  useEffect(() => {
+    if (!data?.updatedAtMs) return;
+    if (Date.now() - data.updatedAtMs < 10_000) return;
+    setData(null);
+    setPopupOpen(false);
+  }, [data?.updatedAtMs]);
+
   if (!enabled) return null;
+
+  if (!isLive) {
+    return (
+      <div
+        className={[
+          "relative w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur",
+          className ?? ""
+        ].join(" ")}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <div className="min-w-0">
+            <div className="truncate text-xs font-extrabold uppercase tracking-wider text-white/85">
+              {title}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80">
+            <span className="h-2 w-2 rounded-full bg-white/30" />
+            OFFLINE
+          </div>
+        </div>
+        <div className="p-4 text-sm font-semibold text-white/70">
+          No live timing currently available.
+        </div>
+      </div>
+    );
+  }
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
   const mode = sessionModeByName(sessionName);
@@ -423,20 +462,14 @@ export function LiveTimingMiniClient({
           <div
             className={[
               "flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider",
-              isFresh ? "border-mrl-red/35 bg-mrl-red/15 text-white" : "border-white/10 bg-white/5 text-white/80"
+              "border-mrl-red/35 bg-mrl-red/15 text-white"
             ].join(" ")}
           >
-            <span className={isFresh ? "h-2 w-2 animate-pulse rounded-full bg-mrl-red" : "h-2 w-2 rounded-full bg-white/30"} />
-            {isFresh ? "LIVE" : "OFFLINE"}
+            <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
+            LIVE
           </div>
         </div>
       </div>
-
-      {!hasAnyData ? (
-        <div className="p-4 text-sm font-semibold text-white/70">
-          Warte auf Live-Daten…
-        </div>
-      ) : null}
 
       {popupOpen ? (
         <div className="fixed inset-0 z-50">
@@ -483,11 +516,7 @@ export function LiveTimingMiniClient({
                   Close
                 </button>
               </div>
-              {!hasAnyData ? (
-                <div className="p-4 text-sm font-semibold text-white/70">
-                  Warte auf Live-Daten…
-                </div>
-              ) : columns === 2 ? (
+              {columns === 2 ? (
                 <div className="grid grid-cols-2 gap-3 p-3">
                   <div className="grid gap-3" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
                     {leftRows.map(renderRow)}

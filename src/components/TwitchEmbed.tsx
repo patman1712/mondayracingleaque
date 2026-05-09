@@ -22,6 +22,7 @@ type LiveTimingState = {
   trackStatus?: string | null;
   updatedAtMs: number;
   alerts?: LiveTimingAlert[];
+  entries?: unknown[];
 };
 
 function formatAlertTimeBerlin(ms: number) {
@@ -238,6 +239,13 @@ export function TwitchEmbed({
         const updated = typeof j?.updatedAtMs === "number" ? j.updatedAtMs : 0;
         if (updated && updated === lastSeenUpdatedAt) return;
         lastSeenUpdatedAt = updated;
+        const entriesLen = Array.isArray(j?.entries) ? j.entries.length : 0;
+        const isLiveTiming = Boolean(updated && Date.now() - updated < 10_000 && entriesLen > 0);
+        if (!isLiveTiming) {
+          setLiveTiming(null);
+          setAlerts([]);
+          return;
+        }
         setLiveTiming(j);
 
         const nextAlerts = Array.isArray(j?.alerts) ? (j.alerts as LiveTimingAlert[]) : [];
@@ -278,6 +286,9 @@ export function TwitchEmbed({
           }
         }
       } catch {
+        if (cancelled) return;
+        setLiveTiming(null);
+        setAlerts([]);
       } finally {
         if (cancelled) return;
         t = window.setTimeout(poll, 1000);
