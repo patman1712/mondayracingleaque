@@ -60,6 +60,11 @@ function weatherLabel(raw: string) {
   return raw.toUpperCase();
 }
 
+function isRaceBySessionName(sessionName: string) {
+  const n = sessionName.trim().toLowerCase();
+  return n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+}
+
 function WeatherIcon({ weather }: { weather: string }) {
   const w = weather.trim().toLowerCase();
   if (w.includes("rain")) {
@@ -246,7 +251,7 @@ export function TvHeroLiveCenterClient() {
     for (const a of fresh) seenAlertIds.current.add(a.id);
     setAlerts((prev) => {
       const merged = [...fresh.map((a) => ({ a, visible: false })), ...prev];
-      return merged.slice(0, 2);
+      return merged.slice(0, 1);
     });
     window.setTimeout(() => {
       setAlerts((prev) => prev.map((x) => ({ ...x, visible: true })));
@@ -263,24 +268,23 @@ export function TvHeroLiveCenterClient() {
   }, [data?.alerts, isLive]);
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
-  const sessionType = typeof data?.sessionType === "number" ? data.sessionType : null;
+  const showLap = isRaceBySessionName(sessionName);
   const left = (data?.sessionTimeLeft ?? "").toString().trim();
   const trackStatus = (data?.trackStatus ?? "").toString().trim();
   const raceStatus = (data?.raceStatus ?? "").toString().trim();
   const racePhase = (data?.racePhase ?? "").toString().trim();
   const flag = useMemo(() => flagFromText([trackStatus, raceStatus, racePhase]), [trackStatus, raceStatus, racePhase]);
   const lapInfo =
-    typeof data?.currentLap === "number" && typeof data?.totalLaps === "number" && data.totalLaps
+    showLap && typeof data?.currentLap === "number" && typeof data?.totalLaps === "number" && data.totalLaps
       ? `LAP ${data.currentLap} / ${data.totalLaps}`
-      : typeof data?.currentLap === "number"
-        ? `LAP ${data.currentLap}`
-        : "";
+      : "";
 
   const weather = weatherLabel((data?.weather ?? "").toString());
   const airTemp = typeof data?.airTemp === "number" ? Math.round(data.airTemp) : null;
   const trackTemp = typeof data?.trackTemp === "number" ? Math.round(data.trackTemp) : null;
   const rain = typeof data?.rainIntensity === "number" ? Math.round(data.rainIntensity) : null;
   const grip = typeof data?.trackGrip === "number" ? Math.round(data.trackGrip) : null;
+  const hasWeather = Boolean((data?.weather ?? "").toString().trim() || airTemp !== null || trackTemp !== null);
 
   return (
     <div className="relative mt-6 grid gap-6 lg:grid-cols-3 lg:items-start">
@@ -320,26 +324,19 @@ export function TvHeroLiveCenterClient() {
               {raceStatus}
             </div>
           ) : null}
-          {sessionType !== null ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              TYPE {sessionType}
-            </div>
-          ) : null}
         </div>
-        {!isLive ? (
-          <div className="mt-3 text-sm font-semibold text-white/70">
-            No live timing currently available.
-          </div>
-        ) : null}
+        <div className="mt-3 text-sm font-semibold text-white/70">
+          {!isLive ? "Livefenster: 30 Min vor Start bis 3 Std nach Start" : null}
+        </div>
       </div>
 
       <div className="relative">
         <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-          Live Alerts
+          Live Meldungen
         </div>
-        <div className="mt-3 grid gap-2">
+        <div className="mt-3 h-[118px] overflow-hidden rounded-2xl border border-white/10 bg-black/10 px-3 py-3">
           {isLive && alerts.length ? (
-            alerts.map(({ a, visible }) => {
+            alerts.slice(0, 1).map(({ a, visible }) => {
               const theme = alertTheme(a);
               const meta = [a.driver ? a.driver : null, typeof a.sector === "number" ? `S${a.sector}` : null]
                 .filter(Boolean)
@@ -350,13 +347,13 @@ export function TvHeroLiveCenterClient() {
                 <div
                   key={a.id}
                   className={[
-                    "overflow-hidden rounded-2xl border backdrop-blur transition-all duration-300",
+                    "h-full overflow-hidden rounded-xl border backdrop-blur transition-all duration-300",
                     theme.wrap,
                     visible ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
                   ].join(" ")}
                 >
                   <div className={"h-1 " + theme.bar} />
-                  <div className="flex items-start gap-3 px-4 py-3">
+                  <div className="flex h-[calc(100%-4px)] items-start gap-3 px-4 py-3">
                     <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl bg-black/25">
                       <AlertIcon type={a.type} />
                     </div>
@@ -378,7 +375,7 @@ export function TvHeroLiveCenterClient() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1 text-base font-extrabold leading-snug text-white">
+                      <div className="mt-1 line-clamp-2 text-base font-extrabold leading-snug text-white">
                         {main}
                       </div>
                     </div>
@@ -386,11 +383,7 @@ export function TvHeroLiveCenterClient() {
                 </div>
               );
             })
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-sm font-semibold text-white/70">
-              {isLive ? "Keine Alerts" : "Alerts werden nur bei Live Timing angezeigt."}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -405,14 +398,22 @@ export function TvHeroLiveCenterClient() {
                 <WeatherIcon weather={(data?.weather ?? "").toString()} />
               </div>
               <div>
-                <div className="text-xs font-extrabold uppercase tracking-wider text-white/70">
-                  {weather}
-                </div>
-                <div className="mt-1 text-sm font-semibold text-white/85">
-                  {airTemp !== null ? `AIR ${airTemp}°C` : "AIR —"}
-                  {" · "}
-                  {trackTemp !== null ? `TRACK ${trackTemp}°C` : "TRACK —"}
-                </div>
+                {hasWeather ? (
+                  <>
+                    <div className="text-xs font-extrabold uppercase tracking-wider text-white/70">
+                      {weather}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-white/85">
+                      {airTemp !== null ? `AIR ${airTemp}°C` : "AIR —"}
+                      {" · "}
+                      {trackTemp !== null ? `TRACK ${trackTemp}°C` : "TRACK —"}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm font-semibold text-white/70">
+                    Wetterdaten werden geladen
+                  </div>
+                )}
               </div>
             </div>
             <div className="text-right text-xs font-semibold text-white/60">

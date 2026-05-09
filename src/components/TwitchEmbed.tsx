@@ -352,10 +352,12 @@ export function TwitchEmbed({
             {ltName ? ltName.toUpperCase() : null}
             {ltLeft ? ` • LEFT ${ltLeft}` : ltLap ? ` • ${ltLap}` : null}
             {ltTrack ? ` • TRACK ${ltTrack}` : null}
-            {ltName || ltLeft || ltLap || ltTrack ? " · " : ""}
-            {timing
-              ? `On Air Fenster: ${formatTimeBerlin(timing.openMs)}–${formatTimeBerlin(timing.closeMs)} (Start ${formatTimeBerlin(timing.startMs)})`
-              : "On Air Fenster: 30 Min vor Rennstart bis 3 Std nach Start"}
+            {!isOnAir ? (ltName || ltLeft || ltLap || ltTrack ? " · " : "") : null}
+            {!isOnAir ? (
+              timing
+                ? `On Air Fenster: ${formatTimeBerlin(timing.openMs)}–${formatTimeBerlin(timing.closeMs)} (Start ${formatTimeBerlin(timing.startMs)})`
+                : "On Air Fenster: 30 Min vor Rennstart bis 3 Std nach Start"
+            ) : null}
             {checkedAt ? ` · Status: ${liveLabel} · Check ${formatDateTimeBerlin(checkedAt)}` : ` · Status: ${liveLabel}`}
           </div>
 

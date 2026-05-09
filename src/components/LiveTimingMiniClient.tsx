@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Entry = {
   position: number;
@@ -63,17 +63,6 @@ type State = {
   alerts?: LiveTimingAlert[];
   entries: Entry[];
 };
-
-function tyreStyle(tyre: string | null | undefined) {
-  const t = (tyre ?? "").trim().toLowerCase();
-  if (t === "soft") return { label: "S", cls: "border-red-400/60 bg-red-500/15 text-red-100" };
-  if (t === "medium") return { label: "M", cls: "border-amber-300/60 bg-amber-500/15 text-amber-100" };
-  if (t === "hard") return { label: "H", cls: "border-white/25 bg-white/5 text-white/90" };
-  if (t === "inter" || t === "intermediate") return { label: "I", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
-  if (t === "wet") return { label: "W", cls: "border-sky-400/60 bg-sky-500/15 text-sky-100" };
-  const raw = (tyre ?? "").trim();
-  return { label: raw ? raw.slice(0, 3).toUpperCase() : "—", cls: "border-white/10 bg-black/25 text-white/80" };
-}
 
 function parseLapTimeMs(raw: string | undefined | null) {
   const s = (raw ?? "").trim();
@@ -172,9 +161,6 @@ export function LiveTimingMiniClient({
   rowsPerColumn?: number;
 }) {
   const [data, setData] = useState<State | null>(null);
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [popupSize, setPopupSize] = useState<{ w: number; h: number } | null>(null);
-  const popupRef = useRef<HTMLDivElement | null>(null);
   const [requestFailed, setRequestFailed] = useState(false);
 
   const enabled = useMemo(() => {
@@ -219,17 +205,6 @@ export function LiveTimingMiniClient({
     };
   }, [enabled]);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("mrl_live_timing_popup_size");
-      if (!raw) return;
-      const v = JSON.parse(raw) as { w?: unknown; h?: unknown };
-      const w = typeof v?.w === "number" ? v.w : null;
-      const h = typeof v?.h === "number" ? v.h : null;
-      if (w && h) setPopupSize({ w, h });
-    } catch {}
-  }, []);
-
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const entriesLen = Array.isArray(data?.entries) ? data!.entries.length : 0;
@@ -238,7 +213,6 @@ export function LiveTimingMiniClient({
     if (!data?.updatedAtMs) return;
     if (Date.now() - data.updatedAtMs < 10_000) return;
     setData(null);
-    setPopupOpen(false);
   }, [data?.updatedAtMs]);
 
   if (!enabled) return null;
@@ -302,36 +276,21 @@ export function LiveTimingMiniClient({
   const hasAnyData = sorted.length > 0;
   if (!hasAnyData && hideWhenNoLiveData) return null;
 
-  const left = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
-  const track = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
-  const lapInfo =
-    typeof data?.currentLap === "number" && typeof data?.totalLaps === "number" && data.totalLaps
-      ? `LAP ${data.currentLap}/${data.totalLaps}`
-      : typeof data?.currentLap === "number"
-        ? `LAP ${data.currentLap}`
-        : "";
-
   const rowsCount = Math.max(1, rowsPerColumn ?? splitAt);
   const limited = columns === 2 ? rows.slice(0, rowsCount * 2) : rows;
   const leftRows = columns === 2 ? limited.filter((_, idx) => idx % 2 === 0) : limited;
   const rightRows = columns === 2 ? limited.filter((_, idx) => idx % 2 === 1) : [];
 
   const renderRow = (r: Entry) => {
-    const tyre = tyreStyle(r.tyre);
     const accent = (r.accent ?? "").toString().trim() || "#E10600";
-    const penalty = (r.penalties ?? "").trim();
-    const isDrs = Boolean(r.drs);
     const bestLap = (r.bestLap ?? "").toString().trim() || "—";
     const lastLap = (r.lastLap ?? "").toString().trim() || "—";
-    const currentLap = (r.currentLap ?? "").toString().trim() || "—";
     const sector1 = r.sector1?.trim() ? r.sector1 : "—";
     const sector2 = r.sector2?.trim() ? r.sector2 : "—";
     const sector3 = r.sector3?.trim() ? r.sector3 : "—";
     const status = statusStyle(r.status);
     const noTime = mode === "practice" && parseLapTimeMs(bestLap) === null;
     const gap = noTime ? "No time" : (r.gap ?? "").toString().trim() || "—";
-    const warnings = typeof r.warnings === "number" && Number.isFinite(r.warnings) && r.warnings > 0 ? r.warnings : null;
-    const stops = typeof r.stops === "number" && Number.isFinite(r.stops) && r.stops > 0 ? r.stops : null;
     return (
       <div
         key={`${r.position}-${r.driver}`}
@@ -374,33 +333,10 @@ export function LiveTimingMiniClient({
                 <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", status.cls].join(" ")}>
                   {status.label}
                 </div>
-                {penalty ? (
-                  <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                    PEN {penalty}
-                  </div>
-                ) : null}
-                {warnings !== null ? (
-                  <div className="rounded-full border border-orange-300/50 bg-orange-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-orange-100">
-                    WARN {warnings}
-                  </div>
-                ) : null}
-                {stops !== null ? (
-                  <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-                    PIT {stops}
-                  </div>
-                ) : null}
-                {isDrs ? (
-                  <div className="rounded-full border border-emerald-400/60 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
-                    DRS
-                  </div>
-                ) : null}
               </div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-2">
-              <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", tyre.cls].join(" ")}>
-                {tyre.label || "—"}
-              </div>
               <div className="text-xs font-extrabold text-white/90">{gap}</div>
             </div>
           </div>
@@ -415,9 +351,6 @@ export function LiveTimingMiniClient({
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/85">
-              CUR {currentLap}
-            </div>
             <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
               {sector1}
             </div>
@@ -443,95 +376,14 @@ export function LiveTimingMiniClient({
       <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-xs font-extrabold uppercase tracking-wider text-white/85">
-            {sessionName ? sessionName : title}
-            {left ? ` • LEFT ${left}` : ""}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-white/60">
-            {lapInfo ? <span>{lapInfo}</span> : null}
-            {track ? <span>TRACK {track}</span> : null}
+            {title}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPopupOpen(true)}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 hover:bg-white/10"
-          >
-            Popup
-          </button>
-          <div
-            className={[
-              "flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider",
-              "border-mrl-red/35 bg-mrl-red/15 text-white"
-            ].join(" ")}
-          >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
-            LIVE
-          </div>
+        <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-mrl-red" />
+          LIVE
         </div>
       </div>
-
-      {popupOpen ? (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setPopupOpen(false)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div
-              ref={popupRef}
-              className="w-[min(92vw,720px)] h-[min(82vh,760px)] overflow-auto rounded-2xl border border-white/10 bg-black/60 backdrop-blur"
-              style={{
-                resize: "both",
-                ...(popupSize ? { width: popupSize.w, height: popupSize.h } : null)
-              }}
-              onMouseUp={() => {
-                const el = popupRef.current;
-                if (!el) return;
-                const r = el.getBoundingClientRect();
-                const next = { w: Math.round(r.width), h: Math.round(r.height) };
-                setPopupSize(next);
-                try {
-                  localStorage.setItem("mrl_live_timing_popup_size", JSON.stringify(next));
-                } catch {}
-              }}
-              onTouchEnd={() => {
-                const el = popupRef.current;
-                if (!el) return;
-                const r = el.getBoundingClientRect();
-                const next = { w: Math.round(r.width), h: Math.round(r.height) };
-                setPopupSize(next);
-                try {
-                  localStorage.setItem("mrl_live_timing_popup_size", JSON.stringify(next));
-                } catch {}
-              }}
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                <div className="min-w-0 truncate text-xs font-extrabold uppercase tracking-wider text-white/85">
-                  {title}
-                  {sessionName ? ` · ${sessionName}` : ""}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPopupOpen(false)}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 hover:bg-white/10"
-                >
-                  Close
-                </button>
-              </div>
-              {columns === 2 ? (
-                <div className="grid grid-cols-2 gap-3 p-3">
-                  <div className="grid gap-3" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
-                    {leftRows.map(renderRow)}
-                  </div>
-                  <div className="grid gap-3" style={{ gridTemplateRows: `repeat(${rowsCount}, minmax(0, 1fr))` }}>
-                    {rightRows.map(renderRow)}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-3 p-3">{leftRows.map(renderRow)}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {hasAnyData ? (
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3">
