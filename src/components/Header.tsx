@@ -41,7 +41,7 @@ export function Header() {
         setTv({ hasOnAir: false, items: [] });
       } finally {
         if (cancelled) return;
-        timer = window.setTimeout(poll, 20_000);
+        timer = window.setTimeout(poll, 15_000);
       }
     }
 
@@ -100,19 +100,21 @@ export function Header() {
               </Link>
             </nav>
 
-            {tv?.hasOnAir ? (
-              <Link
-                href="/tv"
-                className="group relative inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-extrabold uppercase tracking-wider text-white hover:bg-white/10"
-              >
-                <span className="text-white">MRL TV</span>
+            <Link
+              href="/tv"
+              className="group relative inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-extrabold uppercase tracking-wider text-white hover:bg-white/10"
+            >
+              <span className="text-white">MRL TV</span>
+              {tv?.hasOnAir ? (
                 <span className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-                  On Air
+                  Live · On Air
                 </span>
-              </Link>
-            ) : (
-              <div className="w-[130px]" />
-            )}
+              ) : (
+                <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  Off Air
+                </span>
+              )}
+            </Link>
 
             <div className="shrink-0">
               <NavLeagues />
@@ -157,16 +159,22 @@ export function Header() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              {tv?.hasOnAir ? (
+              {tv ? (
                 <Link
                   href="/tv"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-extrabold uppercase tracking-wider text-white hover:bg-white/10"
                 >
                   <span>MRL TV</span>
-                  <span className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-                    On Air
-                  </span>
+                  {tv.hasOnAir ? (
+                    <span className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
+                      Live · On Air
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                      Off Air
+                    </span>
+                  )}
                 </Link>
               ) : null}
               <Link

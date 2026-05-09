@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const alertsSchema = z.object({
+const alertsSchema = z
+  .object({
   id: z.string(),
   type: z.string(),
   title: z.string(),
@@ -14,7 +15,8 @@ const alertsSchema = z.object({
   sector: z.number().nullable().optional(),
   time: z.string().optional(),
   createdAt: z.number()
-});
+})
+  .passthrough();
 
 const trackMapSchema = z
   .object({
@@ -24,21 +26,24 @@ const trackMapSchema = z
   .nullable()
   .optional();
 
-const participantSchema = z.object({
+const participantSchema = z
+  .object({
   participantIndex: z.number(),
   driver: z.string(),
   team: z.string().optional(),
   accent: z.string().nullable().optional()
-});
+})
+  .passthrough();
 
-const entrySchema = z.object({
+const entrySchema = z
+  .object({
   position: z.number(),
   participantIndex: z.number().optional(),
   driver: z.string(),
-  team: z.string(),
-  lap: z.number(),
-  gap: z.string(),
-  lastLap: z.string(),
+  team: z.string().nullable().optional(),
+  lap: z.number().nullable().optional(),
+  gap: z.string().nullable().optional(),
+  lastLap: z.string().nullable().optional(),
   bestLap: z.string().nullable().optional(),
   currentLap: z.string().nullable().optional(),
   sector1: z.string().nullable().optional(),
@@ -59,9 +64,11 @@ const entrySchema = z.object({
   penalties: z.string().optional(),
   warnings: z.number().optional(),
   stops: z.number().optional()
-});
+})
+  .passthrough();
 
-const schema = z.object({
+const schema = z
+  .object({
   sessionId: z.string(),
   sessionName: z.string().nullable().optional(),
   sessionType: z.number().nullable().optional(),
@@ -72,11 +79,18 @@ const schema = z.object({
   lapsRemaining: z.number().nullable().optional(),
   trackStatus: z.string().nullable().optional(),
   raceStatus: z.string().nullable().optional(),
+  racePhase: z.string().nullable().optional(),
+  weather: z.string().nullable().optional(),
+  airTemp: z.number().nullable().optional(),
+  trackTemp: z.number().nullable().optional(),
+  rainIntensity: z.number().nullable().optional(),
+  trackGrip: z.number().nullable().optional(),
   trackMap: trackMapSchema,
   alerts: z.array(alertsSchema).optional(),
   participants: z.array(participantSchema).optional(),
   entries: z.array(entrySchema)
-});
+})
+  .passthrough();
 
 type LiveTimingPostEntry = z.infer<typeof schema>["entries"][number];
 type LiveTimingAlert = z.infer<typeof alertsSchema>;
@@ -98,6 +112,12 @@ type LiveTimingState = {
   lapsRemaining: number | null;
   trackStatus: string | null;
   raceStatus: string | null;
+  racePhase: string | null;
+  weather: string | null;
+  airTemp: number | null;
+  trackTemp: number | null;
+  rainIntensity: number | null;
+  trackGrip: number | null;
   trackMap: { circuit?: string; length?: number } | null;
   alerts: LiveTimingAlert[];
   updatedAtMs: number;
@@ -239,6 +259,12 @@ function getState(): LiveTimingState {
       lapsRemaining: null,
       trackStatus: null,
       raceStatus: null,
+      racePhase: null,
+      weather: null,
+      airTemp: null,
+      trackTemp: null,
+      rainIntensity: null,
+      trackGrip: null,
       trackMap: null,
       alerts: [],
       updatedAtMs: 0,
@@ -267,6 +293,12 @@ async function loadStateFromDb(): Promise<LiveTimingState | null> {
         lapsRemaining: z.number().nullable(),
         trackStatus: z.string().nullable(),
         raceStatus: z.string().nullable(),
+        racePhase: z.string().nullable(),
+        weather: z.string().nullable(),
+        airTemp: z.number().nullable(),
+        trackTemp: z.number().nullable(),
+        rainIntensity: z.number().nullable(),
+        trackGrip: z.number().nullable(),
         trackMap: z.object({ circuit: z.string().optional(), length: z.number().optional() }).nullable(),
         alerts: z.array(alertsSchema),
         updatedAtMs: z.number(),
@@ -277,6 +309,7 @@ async function loadStateFromDb(): Promise<LiveTimingState | null> {
           })
         )
       })
+      .passthrough()
       .safeParse(parsed);
     if (!safe.success) return null;
     const s = safe.data;
@@ -325,6 +358,12 @@ export async function GET() {
       lapsRemaining: out.lapsRemaining,
       trackStatus: out.trackStatus,
       raceStatus: out.raceStatus,
+      racePhase: out.racePhase,
+      weather: out.weather,
+      airTemp: out.airTemp,
+      trackTemp: out.trackTemp,
+      rainIntensity: out.rainIntensity,
+      trackGrip: out.trackGrip,
       trackMap: out.trackMap,
       alerts: out.alerts,
       updatedAtMs: out.updatedAtMs,
@@ -364,12 +403,25 @@ export async function POST(req: Request) {
   state.lapsRemaining = typeof data.lapsRemaining === "number" ? data.lapsRemaining : null;
   state.trackStatus = typeof data.trackStatus === "string" ? data.trackStatus : null;
   state.raceStatus = typeof data.raceStatus === "string" ? data.raceStatus : null;
+  state.racePhase = typeof data.racePhase === "string" ? data.racePhase : null;
+  state.weather = typeof data.weather === "string" ? data.weather : null;
+  state.airTemp = typeof data.airTemp === "number" ? data.airTemp : null;
+  state.trackTemp = typeof data.trackTemp === "number" ? data.trackTemp : null;
+  state.rainIntensity = typeof data.rainIntensity === "number" ? data.rainIntensity : null;
+  state.trackGrip = typeof data.trackGrip === "number" ? data.trackGrip : null;
   state.trackMap = data.trackMap ?? null;
   state.alerts = Array.isArray(data.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
   state.updatedAtMs = Date.now();
   const incomingEntries = data.entries.slice();
   const participants = Array.isArray(data.participants) ? (data.participants as LiveTimingParticipant[]) : [];
   const merged: LiveTimingPostEntry[] = [];
+
+  function str(v: unknown, fallback: string) {
+    return typeof v === "string" && v.trim() ? v : fallback;
+  }
+  function num(v: unknown, fallback: number) {
+    return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  }
 
   if (participants.length) {
     const used = new Set<number>();
@@ -382,8 +434,8 @@ export async function POST(req: Request) {
         merged.push({
           ...e,
           participantIndex: typeof e.participantIndex === "number" ? e.participantIndex : p.participantIndex,
-          driver: e.driver?.trim() ? e.driver : p.driver,
-          team: e.team?.trim() ? e.team : p.team ?? "",
+          driver: str(e.driver, p.driver),
+          team: str(e.team, str(p.team, "")),
           accent: typeof e.accent === "string" ? e.accent : p.accent ?? null
         });
       } else {
@@ -391,7 +443,7 @@ export async function POST(req: Request) {
           position: p.participantIndex + 1,
           participantIndex: p.participantIndex,
           driver: p.driver,
-          team: p.team ?? "",
+          team: str(p.team, ""),
           lap: 0,
           gap: "—",
           lastLap: "—",
@@ -408,7 +460,7 @@ export async function POST(req: Request) {
           z: null,
           angle: null,
           accent: p.accent ?? null,
-          status: "IN GARAGE"
+          status: "WAITING"
         });
       }
     }
@@ -420,8 +472,48 @@ export async function POST(req: Request) {
     merged.push(...incomingEntries);
   }
 
-  const portraitByName = await resolvePortraitUrlsByDriverName(merged.map((e) => e.driver));
-  state.entries = merged
+  const normalized = merged.map((e) => {
+    const position = num(e.position, 0);
+    const driver = str(e.driver, "—");
+    const team = str(e.team, "");
+    const lap = num(e.lap, 0);
+    const gap = str(e.gap, "—");
+    const lastLap = str(e.lastLap, "—");
+    const bestLap = str(e.bestLap, "—");
+    const currentLap = str(e.currentLap, "—");
+    return {
+      ...e,
+      position,
+      driver,
+      team,
+      lap,
+      gap,
+      lastLap,
+      bestLap,
+      currentLap,
+      sector1: str(e.sector1, "—"),
+      sector2: str(e.sector2, "—"),
+      sector3: str(e.sector3, "—"),
+      sector1Color: typeof e.sector1Color === "string" ? e.sector1Color : null,
+      sector2Color: typeof e.sector2Color === "string" ? e.sector2Color : null,
+      sector3Color: typeof e.sector3Color === "string" ? e.sector3Color : null,
+      drs: typeof e.drs === "boolean" ? e.drs : null,
+      ers: typeof e.ers === "number" ? e.ers : null,
+      tyre: typeof e.tyre === "string" ? e.tyre : null,
+      x: typeof e.x === "number" ? e.x : null,
+      y: typeof e.y === "number" ? e.y : null,
+      z: typeof e.z === "number" ? e.z : null,
+      angle: typeof e.angle === "number" ? e.angle : null,
+      status: typeof e.status === "string" && e.status.trim() ? e.status : undefined,
+      penalties: typeof e.penalties === "string" ? e.penalties : undefined,
+      warnings: typeof e.warnings === "number" ? e.warnings : undefined,
+      stops: typeof e.stops === "number" ? e.stops : undefined,
+      participantIndex: typeof e.participantIndex === "number" ? e.participantIndex : undefined
+    } as LiveTimingPostEntry;
+  });
+
+  const portraitByName = await resolvePortraitUrlsByDriverName(normalized.map((e) => e.driver));
+  state.entries = normalized
     .slice()
     .sort((a, b) => {
       const ap = typeof a.position === "number" ? a.position : 0;
@@ -458,6 +550,12 @@ export async function POST(req: Request) {
       lapsRemaining: state.lapsRemaining,
       trackStatus: state.trackStatus,
       raceStatus: state.raceStatus,
+      racePhase: state.racePhase,
+      weather: state.weather,
+      airTemp: state.airTemp,
+      trackTemp: state.trackTemp,
+      rainIntensity: state.rainIntensity,
+      trackGrip: state.trackGrip,
       trackMap: state.trackMap,
       alerts: state.alerts,
       updatedAtMs: state.updatedAtMs,

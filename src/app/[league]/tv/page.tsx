@@ -6,6 +6,7 @@ import { resolveLeagueByPublicSlug } from "@/lib/league";
 import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { LiveTimingMiniClient } from "@/components/LiveTimingMiniClient";
 import { MrlTvDriverCamsClient } from "@/components/MrlTvDriverCamsClient";
+import { TvHeroLiveCenterClient } from "@/components/TvHeroLiveCenterClient";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -238,6 +239,10 @@ export default async function LeagueTvPage({
               </Link>
             </div>
           </div>
+
+          <div className="relative">
+            <TvHeroLiveCenterClient />
+          </div>
         </div>
       </Container>
 
@@ -258,7 +263,7 @@ export default async function LeagueTvPage({
 
             <div className="min-w-0">
               {race.twitchChannel ? (
-                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact withLiveTimingAlerts />
+                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact />
               ) : (
                 <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
                   Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
