@@ -3,6 +3,7 @@ import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { flagBackgroundUrl, flagCodeForRaceLike } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,10 @@ export default async function LeagueCalendarPage({
               const title = cleanTileText(
                 r.seasonIsTest ? r.name.replace(/^TEST\s*·\s*/i, "") : r.name
               );
+              const flagUrl = flagBackgroundUrl(
+                flagCodeForRaceLike({ name: r.name, location: r.location, circuit: r.circuit })
+              );
+              const imgUrl = imageUrl(r.imagePath);
 
               return (
             <Link
@@ -134,13 +139,20 @@ export default async function LeagueCalendarPage({
               href={`/${league}/races/${r.id}`}
               className="relative block min-h-[190px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[210px]"
             >
-              {imageUrl(r.imagePath) ? (
+              {flagUrl ? (
                 <img
-                  src={imageUrl(r.imagePath) ?? ""}
+                  src={flagUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover object-center opacity-55"
+                />
+              ) : imgUrl ? (
+                <img
+                  src={imgUrl ?? ""}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover object-center opacity-75"
                 />
               ) : null}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/35 to-black/70" />
 
               <div className="relative p-5">
                 <div className="flex justify-end">

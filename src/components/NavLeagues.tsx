@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { flagBackgroundUrl, flagCodeForRaceLike } from "@/lib/flags";
 
 type League = {
   slug: string;
@@ -393,7 +394,8 @@ export function NavLeagues() {
                                 accent,
                                 Boolean(card.live)
                               );
-                              const src = card.imageUrl || img;
+                              const flagUrl = flagBackgroundUrl(flagCodeForRaceLike({ name: card.title }));
+                              const src = flagUrl || card.imageUrl || img;
                               const href = card.hasResults ? `/${l.slug}/races/${card.id}` : `/${l.slug}/calendar`;
 
                               return (
