@@ -205,12 +205,29 @@ function alertPriority(type: string) {
   return 99;
 }
 
-export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?: string; leagueLabel?: string }) {
-  const [data, setData] = useState<LiveTimingState | null>(null);
-  const [requestFailed, setRequestFailed] = useState(false);
+export function TvHeroLiveCenterClient({
+  leagueKey,
+  leagueLabel,
+  contextLabel = "Session Control",
+  externalData,
+  requestFailed: requestFailedOverride,
+  offlineHint = "Livefenster: 30 Min vor Start bis 3 Std nach Start"
+}: {
+  leagueKey?: string;
+  leagueLabel?: string;
+  contextLabel?: string;
+  externalData?: LiveTimingState | null;
+  requestFailed?: boolean;
+  offlineHint?: string;
+}) {
+  const [internalData, setInternalData] = useState<LiveTimingState | null>(null);
+  const [internalRequestFailed, setInternalRequestFailed] = useState(false);
   const [alerts, setAlerts] = useState<Array<{ a: LiveTimingAlert; visible: boolean }>>([]);
   const seenAlertIds = useRef<Set<string>>(new Set());
   const alertTimers = useRef<number[]>([]);
+
+  const data = externalData !== undefined ? externalData : internalData;
+  const requestFailed = typeof requestFailedOverride === "boolean" ? requestFailedOverride : internalRequestFailed;
 
   const clearAlertTimers = useCallback(() => {
     for (const id of alertTimers.current) window.clearTimeout(id);
@@ -222,13 +239,14 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
     clearAlertTimers();
     setAlerts([{ a, visible: false }]);
     alertTimers.current.push(window.setTimeout(() => setAlerts((prev) => prev.map((x) => ({ ...x, visible: true }))), 0));
-    alertTimers.current.push(window.setTimeout(() => setAlerts((prev) => prev.map((x) => ({ ...x, visible: false }))), 4700));
-    alertTimers.current.push(window.setTimeout(() => setAlerts([]), 5200));
+    alertTimers.current.push(window.setTimeout(() => setAlerts((prev) => prev.map((x) => ({ ...x, visible: false }))), 3700));
+    alertTimers.current.push(window.setTimeout(() => setAlerts([]), 4000));
     },
     [clearAlertTimers]
   );
 
   useEffect(() => {
+    if (externalData !== undefined) return;
     let cancelled = false;
     let t: number | null = null;
     let lastSeenUpdatedAt = 0;
@@ -241,12 +259,12 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
         const updated = typeof j?.updatedAtMs === "number" ? (j.updatedAtMs as number) : 0;
         if (updated && updated === lastSeenUpdatedAt) return;
         lastSeenUpdatedAt = updated;
-        setData(j);
-        setRequestFailed(false);
+        setInternalData(j);
+        setInternalRequestFailed(false);
       } catch {
         if (cancelled) return;
-        setRequestFailed(true);
-        setData(null);
+        setInternalRequestFailed(true);
+        setInternalData(null);
         setAlerts([]);
       } finally {
         if (cancelled) return;
@@ -258,7 +276,7 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
       cancelled = true;
       if (t) window.clearTimeout(t);
     };
-  }, [leagueKey]);
+  }, [externalData, leagueKey]);
 
   const now = Date.now();
   const updatedAt = typeof data?.updatedAtMs === "number" ? (data!.updatedAtMs as number) : 0;
@@ -322,6 +340,9 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
     totalLaps: liveData?.totalLaps ?? null,
     sessionMode: isRaceBySessionName(sessionNameRaw) ? "race" : "practice"
   });
+  const sessionParts = (sessionDisplay ?? "").split(" • ");
+  const sessionTitle = sessionParts[0]?.trim() ? sessionParts[0].trim() : sessionDisplay;
+  const sessionDetail = sessionParts.slice(1).join(" • ").trim();
   const trackStatus = (liveData?.trackStatus ?? "").toString().trim();
   const raceStatus = (liveData?.raceStatus ?? "").toString().trim();
   const racePhase = (liveData?.racePhase ?? "").toString().trim();
@@ -338,14 +359,19 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
     <div className="relative mt-6 grid gap-6 lg:grid-cols-3 lg:items-start">
       <div className="relative">
         <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-          {leagueLabel ? `${leagueLabel} • Session Control` : "Session Control"}
+          {leagueLabel ? `${leagueLabel} • ${contextLabel}` : contextLabel}
         </div>
         <div className="mt-2 text-2xl font-extrabold text-white">
-          {isLive ? sessionDisplay || "LIVE SESSION" : "OFF AIR"}
+          {isLive ? sessionTitle || "LIVE SESSION" : "OFF AIR"}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {isLive ? (
             <>
+              {sessionDetail ? (
+                <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  {sessionDetail}
+                </div>
+              ) : null}
               <div className={["rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", flag.cls].join(" ")}>
                 {flag.label}
               </div>
@@ -368,7 +394,7 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
           ) : null}
         </div>
         <div className="mt-3 text-sm font-semibold text-white/70">
-          {!isLive ? "Livefenster: 30 Min vor Start bis 3 Std nach Start" : null}
+          {!isLive ? offlineHint : null}
         </div>
       </div>
 
@@ -436,7 +462,7 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
 
       <div className="relative">
         <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-          Weather
+          Wetter
         </div>
         <div className="mt-3 rounded-2xl border border-white/10 bg-black/15 px-4 py-4">
           <div className="flex items-start justify-between gap-4">
