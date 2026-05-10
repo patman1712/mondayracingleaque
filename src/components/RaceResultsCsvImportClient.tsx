@@ -140,6 +140,26 @@ function bestMatchId(name: string, drivers: DriverRef[]) {
   return { id: "", label: "" };
 }
 
+function bestSuggestions(name: string, drivers: DriverRef[]) {
+  const n = normalize(name);
+  if (!n) return [] as Array<{ id: string; label: string; dist: number }>;
+  const scored: Array<{ id: string; label: string; dist: number }> = [];
+  for (const d of drivers) {
+    scored.push({ id: d.id, label: d.name, dist: levenshtein(n, normalize(d.name)) });
+    if (d.gamertag) scored.push({ id: d.id, label: d.gamertag, dist: levenshtein(n, normalize(d.gamertag)) });
+  }
+  const limit = Math.max(3, Math.floor(n.length * 0.35));
+  const uniq = new Map<string, { id: string; label: string; dist: number }>();
+  for (const s of scored.sort((a, b) => a.dist - b.dist).slice(0, 20)) {
+    if (s.dist > limit) continue;
+    const prev = uniq.get(s.id);
+    if (!prev || s.dist < prev.dist) uniq.set(s.id, s);
+  }
+  return Array.from(uniq.values())
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 3);
+}
+
 function parseCsv(text: string) {
   const lines = text
     .replace(/\uFEFF/g, "")
@@ -249,6 +269,14 @@ export function RaceResultsCsvImportClient({
   const unmatchedCount = useMemo(() => rows.filter((r) => !r.driverId).length, [rows]);
 
   const driverIndex = useMemo(() => buildDriverIndex(drivers), [drivers]);
+  const suggestionsByPos = useMemo(() => {
+    const out = new Map<number, Array<{ id: string; label: string; dist: number }>>();
+    for (const r of rows) {
+      if (r.driverId) continue;
+      out.set(r.position, bestSuggestions(r.driverName, drivers));
+    }
+    return out;
+  }, [rows, drivers]);
 
   function updateRow(position: number, patch: Partial<CsvRow>) {
     setRows((prev) => prev.map((r) => (r.position === position ? { ...r, ...patch } : r)));
@@ -364,7 +392,6 @@ export function RaceResultsCsvImportClient({
               >
                 <div className="text-xs font-semibold text-white/70">P{r.position}</div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-white">{r.driverName}</div>
                   <div className="truncate text-xs text-white/60">
                     {r.matchLabel === "Nicht gefunden" ? (
                       <span className="text-red-200">Nicht gefunden</span>
@@ -372,20 +399,45 @@ export function RaceResultsCsvImportClient({
                       <span className="text-emerald-200">{r.matchLabel}</span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/70">
-                    {r.timeText ? (
-                      <span className="font-semibold text-white">Zeit {r.timeText}</span>
-                    ) : null}
-                    {r.status ? <span>Status {r.status}</span> : null}
-                    {r.bestTime ? (
-                      <span className={r.fastestLap ? "text-violet-300" : ""}>
-                        Best {r.bestTime}
-                      </span>
-                    ) : null}
-                    {r.grid ? <span>Grid {r.grid}</span> : null}
-                    {r.stops ? <span>Stops {r.stops}</span> : null}
-                    {r.points ? <span>PTS {r.points}</span> : null}
-                  </div>
+                  {(() => {
+                    const isMissing = r.matchLabel === "Nicht gefunden" || !r.driverId;
+                    const csvName = r.driverName?.trim() ? r.driverName.trim() : "leer / nicht erkannt";
+                    const timeOrGap = r.timeText?.trim() ? r.timeText.trim() : "—";
+                    const status = r.status?.trim() ? r.status.trim() : "—";
+                    const grid = r.grid?.trim() ? r.grid.trim() : "—";
+                    const stops = r.stops?.trim() ? r.stops.trim() : "—";
+                    const suggestions = suggestionsByPos.get(r.position) ?? [];
+                    return (
+                      <>
+                        <div className={["mt-1 text-sm font-extrabold", isMissing ? "text-red-50" : "text-white"].join(" ")}>
+                          CSV Name: {csvName}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/70">
+                          <span className={isMissing ? "font-semibold text-white" : ""}>Zeit {timeOrGap}</span>
+                          <span>Status {status}</span>
+                          <span>Grid {grid}</span>
+                          <span>Stops {stops}</span>
+                          {r.bestTime ? <span className={r.fastestLap ? "text-violet-300" : ""}>Best {r.bestTime}</span> : null}
+                          {r.points ? <span>PTS {r.points}</span> : null}
+                        </div>
+                        {isMissing && suggestions.length ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                            <span>Vorschläge:</span>
+                            {suggestions.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => updateRow(r.position, { driverId: s.id, matchLabel: "Manuell zugeordnet" })}
+                                className="rounded-md border border-white/10 bg-black/20 px-2 py-0.5 font-semibold text-white/85 hover:border-white/20"
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
                 <select
                   value={r.driverId}
