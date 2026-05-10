@@ -5,59 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Container } from "./Container";
 import { MobileNavLeagues, NavLeagues } from "./NavLeagues";
-
-type TvOnAir = {
-  hasOnAir: boolean;
-  items: Array<{
-    leagueSlug: string;
-    leagueLabel: string;
-    accent: string;
-    race: { id: string; title: string; round: number; startsAtMs: number };
-  }>;
-};
+import { MobileNavTv, NavTv } from "./NavTv";
 
 export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [tv, setTv] = useState<TvOnAir | null>(null);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: number | null = null;
-
-    async function poll() {
-      try {
-        const r = await fetch("/api/tv/onair", { cache: "no-store" });
-        const j = (await r.json()) as TvOnAir;
-        if (cancelled) return;
-        setTv(j);
-      } catch {
-        if (cancelled) return;
-        setTv({ hasOnAir: false, items: [] });
-      } finally {
-        if (cancelled) return;
-        timer = window.setTimeout(poll, 15_000);
-      }
-    }
-
-    poll();
-    function onVisibility() {
-      if (document.visibilityState === "visible") poll();
-    }
-    window.addEventListener("focus", poll);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      window.removeEventListener("focus", poll);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -98,23 +55,8 @@ export function Header() {
               <Link href="/calendar" className="text-white/80 hover:text-white">
                 Kalender
               </Link>
+              <NavTv />
             </nav>
-
-            <Link
-              href="/tv"
-              className="group relative inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-extrabold uppercase tracking-wider text-white hover:bg-white/10"
-            >
-              <span className="text-white">MRL TV</span>
-              {tv?.hasOnAir ? (
-                <span className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-                  Live · On Air
-                </span>
-              ) : (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                  Off Air
-                </span>
-              )}
-            </Link>
 
             <div className="shrink-0">
               <NavLeagues />
@@ -159,24 +101,7 @@ export function Header() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              {tv ? (
-                <Link
-                  href="/tv"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-extrabold uppercase tracking-wider text-white hover:bg-white/10"
-                >
-                  <span>MRL TV</span>
-                  {tv.hasOnAir ? (
-                    <span className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
-                      Live · On Air
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                      Off Air
-                    </span>
-                  )}
-                </Link>
-              ) : null}
+              <MobileNavTv onNavigate={() => setMobileOpen(false)} />
               <Link
                 href="/news"
                 onClick={() => setMobileOpen(false)}
