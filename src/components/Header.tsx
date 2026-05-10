@@ -29,8 +29,8 @@ export function Header() {
     <header
       className={
         isHome
-          ? "absolute inset-x-0 top-0 z-50 bg-black/35 backdrop-blur"
-          : "relative z-50 border-b border-white/10 bg-black/30 backdrop-blur"
+          ? "absolute inset-x-0 top-0 z-[200] bg-black/35 backdrop-blur"
+          : "relative z-[200] border-b border-white/10 bg-black/30 backdrop-blur"
       }
     >
       <Container>
@@ -82,7 +82,7 @@ export function Header() {
       </Container>
 
       {mobileOpen ? (
-        <div className="fixed inset-0 z-[100] md:hidden">
+        <div className="fixed inset-0 z-[1000] md:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
