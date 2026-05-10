@@ -26,63 +26,65 @@ export function Header() {
   }, [mobileOpen]);
 
   return (
-    <header
-      className={
-        isHome
-          ? "absolute inset-x-0 top-0 z-[200] bg-black/35 backdrop-blur"
-          : "relative z-[200] border-b border-white/10 bg-black/30 backdrop-blur"
-      }
-    >
-      <Container>
-        <div className="flex items-center justify-between gap-6 py-4">
-          <Link href="/" className="flex items-center gap-3">
-            <img
-              src="/logo.svg"
-              alt="MRL"
-              className="h-10 w-10 rounded-full ring-1 ring-white/10"
-            />
-            <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-wide">MRL</div>
-              <div className="text-xs text-white/70">Monday Racing League</div>
-            </div>
-          </Link>
-
-          <div className="hidden flex-1 items-center justify-between gap-6 md:flex">
-            <nav className="flex items-center gap-5 text-sm">
-              <Link href="/news" className="text-white/80 hover:text-white">
-                News
-              </Link>
-              <Link href="/calendar" className="text-white/80 hover:text-white">
-                Kalender
-              </Link>
-              <NavTv />
-            </nav>
-
-            <div className="shrink-0">
-              <NavLeagues />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 md:hidden"
-              onClick={() => setMobileOpen(true)}
-            >
-              Menü
-            </button>
-            <Link
-              href="/admin"
-              className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
-            >
-              Admin
+    <>
+      <header
+        className={
+          isHome
+            ? "absolute inset-x-0 top-0 z-[200] bg-black/35 backdrop-blur"
+            : "relative z-[200] border-b border-white/10 bg-black/30 backdrop-blur"
+        }
+      >
+        <Container>
+          <div className="flex items-center justify-between gap-6 py-4">
+            <Link href="/" className="flex items-center gap-3">
+              <img
+                src="/logo.svg"
+                alt="MRL"
+                className="h-10 w-10 rounded-full ring-1 ring-white/10"
+              />
+              <div className="leading-tight">
+                <div className="text-sm font-semibold tracking-wide">MRL</div>
+                <div className="text-xs text-white/70">Monday Racing League</div>
+              </div>
             </Link>
+
+            <div className="hidden flex-1 items-center justify-between gap-6 md:flex">
+              <nav className="flex items-center gap-5 text-sm">
+                <Link href="/news" className="text-white/80 hover:text-white">
+                  News
+                </Link>
+                <Link href="/calendar" className="text-white/80 hover:text-white">
+                  Kalender
+                </Link>
+                <NavTv />
+              </nav>
+
+              <div className="shrink-0">
+                <NavLeagues />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 md:hidden"
+                onClick={() => setMobileOpen(true)}
+              >
+                Menü
+              </button>
+              <Link
+                href="/admin"
+                className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
+              >
+                Admin
+              </Link>
+            </div>
           </div>
-        </div>
-      </Container>
+        </Container>
+      </header>
 
       {mobileOpen ? (
-        <div className="fixed inset-0 z-[1000] md:hidden">
+        <div className="fixed inset-0 z-[5000] md:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -124,6 +126,6 @@ export function Header() {
           </div>
         </div>
       ) : null}
-    </header>
+    </>
   );
 }
