@@ -12,6 +12,10 @@ function activeKey(league: League) {
   return `activeSeasonId:${league}`;
 }
 
+function liveTimingLeagueKeyKey(publicSlug: string) {
+  return `liveTimingLeagueKeyForPublicSlug:${publicSlug}`;
+}
+
 function isLeagueValue(input: string): input is League {
   return (Object.values(League) as string[]).includes(input);
 }
@@ -102,6 +106,34 @@ async function saveScoring(formData: FormData) {
   redirect(`/admin/${slugs.adminSlug}/settings?ok=1`);
 }
 
+async function setLiveTimingLeagueKey(formData: FormData) {
+  "use server";
+  const adminSlug = String(formData.get("adminSlug") ?? "").trim();
+  const publicSlug = String(formData.get("publicSlug") ?? "").trim();
+  const raw = String(formData.get("liveTimingLeagueKey") ?? "").trim().toLowerCase();
+  if (!adminSlug || !publicSlug) redirect("/admin?error=invalid");
+
+  const allowed = new Set(["liga-one", "liga-two", "rookie", "one-mini-wm", "two-mini-wm"]);
+  const value = allowed.has(raw) ? raw : "";
+  const key = liveTimingLeagueKeyKey(publicSlug);
+
+  if (!value) {
+    await prisma.appConfig.delete({ where: { key } }).catch(() => null);
+    revalidatePath(`/${publicSlug}/tv`);
+    redirect(`/admin/${adminSlug}/settings?ok=1`);
+  }
+
+  await prisma.appConfig
+    .upsert({
+      where: { key },
+      create: { key, value },
+      update: { value }
+    })
+    .catch(() => null);
+  revalidatePath(`/${publicSlug}/tv`);
+  redirect(`/admin/${adminSlug}/settings?ok=1`);
+}
+
 export default async function AdminLeagueSettingsPage({
   params,
   searchParams
@@ -131,6 +163,10 @@ export default async function AdminLeagueSettingsPage({
     .findUnique({ where: { key: activeKey(l) }, select: { value: true } })
     .catch(() => null);
   const activeId = active?.value ?? "";
+  const liveTimingKeyRow = await prisma.appConfig
+    .findUnique({ where: { key: liveTimingLeagueKeyKey(cfg.publicSlug) }, select: { value: true } })
+    .catch(() => null);
+  const liveTimingLeagueKey = (liveTimingKeyRow?.value ?? "").trim();
   const scoring = await getLeagueScoring(prisma, l).catch(() => ({
     fieldSize: 20,
     pointsByPosition: Array.from({ length: 20 }).map(() => 0)
@@ -232,6 +268,36 @@ export default async function AdminLeagueSettingsPage({
             </div>
 
             <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">Speichern</button>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold">Einstellungen · Live Timing</div>
+          <div className="mt-1 text-sm text-white/60">
+            Welche Live-Timing-Quelle auf der öffentlichen TV-Seite dieser Liga verwendet wird.
+          </div>
+
+          <form action={setLiveTimingLeagueKey} className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <input type="hidden" name="adminSlug" value={cfg.adminSlug} />
+            <input type="hidden" name="publicSlug" value={cfg.publicSlug} />
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-white/70">Live Timing Quelle</label>
+              <select
+                name="liveTimingLeagueKey"
+                defaultValue={liveTimingLeagueKey}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              >
+                <option value="">(Auto / Default)</option>
+                <option value="liga-one">Liga One</option>
+                <option value="liga-two">Liga Two</option>
+                <option value="rookie">Rookie</option>
+                <option value="one-mini-wm">MRL One Mini WM</option>
+                <option value="two-mini-wm">MRL Two Mini WM</option>
+              </select>
+            </div>
+            <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+              Speichern
+            </button>
           </form>
         </div>
       </div>

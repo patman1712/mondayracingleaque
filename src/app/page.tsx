@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Container } from "@/components/Container";
 import { LeagueCountdowns } from "@/components/LeagueCountdowns";
 import { prisma } from "@/lib/db";
+import { listPublicLeagues } from "@/lib/league";
+import { League } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +28,9 @@ export default async function HomePage() {
 
   let news: NewsItem[] = [];
   let races: RaceItem[] = [];
-  let nextByLeague: Record<
-    "ONE" | "TWO" | "ROOKIE",
+  const activeLeagues = await listPublicLeagues().catch(() => []);
+  const nextByLeague = new Map<
+    League,
     {
       name: string;
       startsAt: Date;
@@ -38,11 +41,7 @@ export default async function HomePage() {
       round: number;
       seasonIsTest: boolean;
     } | null
-  > = {
-    ONE: null,
-    TWO: null,
-    ROOKIE: null
-  };
+  >();
 
   try {
     news = await prisma.newsPost.findMany({
@@ -70,7 +69,7 @@ export default async function HomePage() {
   } catch {}
 
   try {
-    async function nextRace(league: "ONE" | "TWO" | "ROOKIE") {
+    async function nextRace(league: League) {
       const normal = await prisma.race
         .findFirst({
           where: { league, seasonIsTest: false, startsAt: { gte: now } },
@@ -106,17 +105,9 @@ export default async function HomePage() {
         .catch(() => null);
     }
 
-    const [one, two, rookie] = await Promise.all([
-      nextRace("ONE"),
-      nextRace("TWO"),
-      nextRace("ROOKIE")
-    ]);
-
-    nextByLeague = {
-      ONE: one,
-      TWO: two,
-      ROOKIE: rookie
-    };
+    const uniqueLeagues = Array.from(new Set(activeLeagues.map((l) => l.league)));
+    const nextRows = await Promise.all(uniqueLeagues.map((l) => nextRace(l)));
+    for (let i = 0; i < uniqueLeagues.length; i++) nextByLeague.set(uniqueLeagues[i], nextRows[i] ?? null);
   } catch {}
 
   return (
@@ -174,59 +165,26 @@ export default async function HomePage() {
 
               <div className="mt-6">
                 <LeagueCountdowns
-                  leagues={[
-                    {
-                      key: "ONE",
-                      label: "MRL One",
-                      href: "/mrl-one",
-                      nextRace: nextByLeague.ONE
+                  leagues={activeLeagues.map((l) => {
+                    const next = nextByLeague.get(l.league) ?? null;
+                    return {
+                      key: l.publicSlug,
+                      label: l.name,
+                      href: `/${l.publicSlug}`,
+                      nextRace: next
                         ? {
-                            name: nextByLeague.ONE.name,
-                            startsAt: nextByLeague.ONE.startsAt.toISOString(),
-                            circuit: nextByLeague.ONE.circuit,
-                            location: nextByLeague.ONE.location,
-                            season: nextByLeague.ONE.season,
-                            seasonNo: nextByLeague.ONE.seasonNo,
-                            round: nextByLeague.ONE.round,
-                            seasonIsTest: nextByLeague.ONE.seasonIsTest
+                            name: next.name,
+                            startsAt: next.startsAt.toISOString(),
+                            circuit: next.circuit,
+                            location: next.location,
+                            season: next.season,
+                            seasonNo: next.seasonNo,
+                            round: next.round,
+                            seasonIsTest: next.seasonIsTest
                           }
                         : null
-                    },
-                    {
-                      key: "TWO",
-                      label: "MRL Two",
-                      href: "/mrl-two",
-                      nextRace: nextByLeague.TWO
-                        ? {
-                            name: nextByLeague.TWO.name,
-                            startsAt: nextByLeague.TWO.startsAt.toISOString(),
-                            circuit: nextByLeague.TWO.circuit,
-                            location: nextByLeague.TWO.location,
-                            season: nextByLeague.TWO.season,
-                            seasonNo: nextByLeague.TWO.seasonNo,
-                            round: nextByLeague.TWO.round,
-                            seasonIsTest: nextByLeague.TWO.seasonIsTest
-                          }
-                        : null
-                    },
-                    {
-                      key: "ROOKIE",
-                      label: "MRL Rookie",
-                      href: "/mrl-rookie",
-                      nextRace: nextByLeague.ROOKIE
-                        ? {
-                            name: nextByLeague.ROOKIE.name,
-                            startsAt: nextByLeague.ROOKIE.startsAt.toISOString(),
-                            circuit: nextByLeague.ROOKIE.circuit,
-                            location: nextByLeague.ROOKIE.location,
-                            season: nextByLeague.ROOKIE.season,
-                            seasonNo: nextByLeague.ROOKIE.seasonNo,
-                            round: nextByLeague.ROOKIE.round,
-                            seasonIsTest: nextByLeague.ROOKIE.seasonIsTest
-                          }
-                        : null
-                    }
-                  ]}
+                    };
+                  })}
                 />
               </div>
 

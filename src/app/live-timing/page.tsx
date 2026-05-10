@@ -177,12 +177,34 @@ function alertStyle(type: LiveTimingAlert["type"]) {
   return { bar: "bg-emerald-400", wrap: "border-emerald-400/40 bg-emerald-500/15" };
 }
 
+const LEAGUES = [
+  { key: "liga-one", label: "Liga One" },
+  { key: "liga-two", label: "Liga Two" },
+  { key: "rookie", label: "Rookie" },
+  { key: "one-mini-wm", label: "MRL One Mini WM" },
+  { key: "two-mini-wm", label: "MRL Two Mini WM" }
+] as const;
+
 export default function LiveTimingPage() {
   const [data, setData] = useState<LiveTimingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<LiveTimingAlert[]>([]);
   const seenAlertIds = useRef<Set<string>>(new Set());
+  const [leagueKey, setLeagueKey] = useState<string>(() => {
+    if (typeof window === "undefined") return "liga-one";
+    try {
+      return localStorage.getItem("mrl.live.leagueKey") || "liga-one";
+    } catch {
+      return "liga-one";
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("mrl.live.leagueKey", leagueKey);
+    } catch {}
+  }, [leagueKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,7 +213,8 @@ export default function LiveTimingPage() {
 
     async function poll() {
       try {
-        const r = await fetch("/api/live-timing", { cache: "no-store" });
+        const qs = `?leagueKey=${encodeURIComponent(leagueKey)}`;
+        const r = await fetch(`/api/live-timing${qs}`, { cache: "no-store" });
         const j = (await r.json()) as LiveTimingState;
         if (cancelled) return;
         const nextUpdatedAt = typeof j?.updatedAtMs === "number" ? j.updatedAtMs : 0;
@@ -217,7 +240,7 @@ export default function LiveTimingPage() {
       cancelled = true;
       if (t) window.clearTimeout(t);
     };
-  }, []);
+  }, [leagueKey]);
 
   useEffect(() => {
     const alerts = Array.isArray(data?.alerts) ? (data?.alerts as LiveTimingAlert[]) : [];
@@ -397,8 +420,21 @@ export default function LiveTimingPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="relative">
+              <select
+                value={leagueKey}
+                onChange={(e) => setLeagueKey(e.target.value)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white/90"
+              >
+                {LEAGUES.map((l) => (
+                  <option key={l.key} value={l.key}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
-              {headerLabel.toUpperCase()}
+              {`${LEAGUES.find((x) => x.key === leagueKey)?.label ?? "Liga One"} • ${headerLabel.toUpperCase()}`}
             </div>
             {sessionTimeLeft ? (
               <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">

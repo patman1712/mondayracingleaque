@@ -69,6 +69,7 @@ const entrySchema = z
 
 const schema = z
   .object({
+  leagueKey: z.string().optional(),
   sessionId: z.string(),
   sessionName: z.string().nullable().optional(),
   sessionType: z.number().nullable().optional(),
@@ -135,7 +136,7 @@ type LiveTimingState = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __mrlLiveTimingState: LiveTimingState | undefined;
+  var __mrlLiveTimingStore: Record<string, LiveTimingState> | undefined;
 }
 
 const LIVE_TIMING_APP_CONFIG_KEY = "liveTimingState";
@@ -391,9 +392,8 @@ async function resolvePortraitUrlsByDriverName(names: string[]) {
   return out;
 }
 
-function getState(): LiveTimingState {
-  if (!globalThis.__mrlLiveTimingState) {
-    globalThis.__mrlLiveTimingState = {
+function defaultState(): LiveTimingState {
+  return {
       sessionId: "default",
       sessionName: null,
       sessionType: null,
@@ -422,14 +422,45 @@ function getState(): LiveTimingState {
         driverStatsByName: {}
       }
     };
-  }
-  ensureAlertMeta(globalThis.__mrlLiveTimingState);
-  return globalThis.__mrlLiveTimingState;
 }
 
-async function loadStateFromDb(): Promise<LiveTimingState | null> {
+function allowedLeagueKeys(): Array<{ key: string; label: string }> {
+  return [
+    { key: "liga-one", label: "Liga One" },
+    { key: "liga-two", label: "Liga Two" },
+    { key: "rookie", label: "Rookie" },
+    { key: "one-mini-wm", label: "MRL One Mini WM" },
+    { key: "two-mini-wm", label: "MRL Two Mini WM" }
+  ];
+}
+
+function normalizeLeagueKey(input: string | null | undefined): string {
+  const k = (input ?? "").trim().toLowerCase();
+  if (!k) return "liga-one";
+  const allowed = new Set(allowedLeagueKeys().map((x) => x.key));
+  return allowed.has(k) ? k : "liga-one";
+}
+
+function getStore() {
+  if (!globalThis.__mrlLiveTimingStore) {
+    globalThis.__mrlLiveTimingStore = Object.create(null);
+  }
+  return globalThis.__mrlLiveTimingStore!;
+}
+
+function getState(leagueKey: string): LiveTimingState {
+  const store = getStore();
+  if (!store[leagueKey]) {
+    store[leagueKey] = defaultState();
+  }
+  ensureAlertMeta(store[leagueKey]);
+  return store[leagueKey];
+}
+
+async function loadStateFromDb(leagueKey: string): Promise<LiveTimingState | null> {
+  const rowKey = `${LIVE_TIMING_APP_CONFIG_KEY}:${leagueKey}`;
   const row = await prisma.appConfig
-    .findUnique({ where: { key: LIVE_TIMING_APP_CONFIG_KEY } })
+    .findUnique({ where: { key: rowKey } })
     .catch(() => null);
   if (!row?.value) return null;
   try {
@@ -489,41 +520,82 @@ function isAuthorized(req: Request) {
   return Boolean(got && got === required);
 }
 
-export async function GET() {
-  const state = getState();
-  if (!state.updatedAtMs || state.entries.length === 0) {
-    const dbState = await loadStateFromDb();
-    if (dbState && dbState.updatedAtMs > state.updatedAtMs) {
-      globalThis.__mrlLiveTimingState = dbState;
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const all = url.searchParams.get("all");
+  const leagueKey = normalizeLeagueKey(url.searchParams.get("leagueKey"));
+  if (all) {
+    const out: Record<string, unknown> = {};
+    for (const { key } of allowedLeagueKeys()) {
+      const st = getState(key);
+      if (!st.updatedAtMs || st.entries.length === 0) {
+        const dbState = await loadStateFromDb(key);
+        if (dbState && dbState.updatedAtMs > st.updatedAtMs) {
+          getStore()[key] = dbState;
+        }
+      }
+      const o = getState(key);
+      out[key] = {
+        ok: true,
+        sessionId: o.sessionId,
+        sessionName: o.sessionName,
+        sessionType: o.sessionType,
+        sessionTimeLeft: o.sessionTimeLeft,
+        sessionDuration: o.sessionDuration,
+        totalLaps: o.totalLaps,
+        currentLap: o.currentLap,
+        lapsRemaining: o.lapsRemaining,
+        trackStatus: o.trackStatus,
+        raceStatus: o.raceStatus,
+        racePhase: o.racePhase,
+        weather: o.weather,
+        airTemp: o.airTemp,
+        trackTemp: o.trackTemp,
+        rainIntensity: o.rainIntensity,
+        trackGrip: o.trackGrip,
+        trackMap: o.trackMap,
+        alerts: o.alerts,
+        updatedAtMs: o.updatedAtMs,
+        entries: o.entries
+      };
     }
+    return NextResponse.json(out, { headers: { "cache-control": "no-store" } });
+  } else {
+    const st = getState(leagueKey);
+    if (!st.updatedAtMs || st.entries.length === 0) {
+      const dbState = await loadStateFromDb(leagueKey);
+      if (dbState && dbState.updatedAtMs > st.updatedAtMs) {
+        getStore()[leagueKey] = dbState;
+      }
+    }
+    const o = getState(leagueKey);
+    return NextResponse.json(
+      {
+        ok: true,
+        sessionId: o.sessionId,
+        sessionName: o.sessionName,
+        sessionType: o.sessionType,
+        sessionTimeLeft: o.sessionTimeLeft,
+        sessionDuration: o.sessionDuration,
+        totalLaps: o.totalLaps,
+        currentLap: o.currentLap,
+        lapsRemaining: o.lapsRemaining,
+        trackStatus: o.trackStatus,
+        raceStatus: o.raceStatus,
+        racePhase: o.racePhase,
+        weather: o.weather,
+        airTemp: o.airTemp,
+        trackTemp: o.trackTemp,
+        rainIntensity: o.rainIntensity,
+        trackGrip: o.trackGrip,
+        trackMap: o.trackMap,
+        alerts: o.alerts,
+        updatedAtMs: o.updatedAtMs,
+        entries: o.entries
+      },
+      { headers: { "cache-control": "no-store" } }
+    );
   }
-  const out = getState();
-  return NextResponse.json(
-    {
-      ok: true,
-      sessionId: out.sessionId,
-      sessionName: out.sessionName,
-      sessionType: out.sessionType,
-      sessionTimeLeft: out.sessionTimeLeft,
-      sessionDuration: out.sessionDuration,
-      totalLaps: out.totalLaps,
-      currentLap: out.currentLap,
-      lapsRemaining: out.lapsRemaining,
-      trackStatus: out.trackStatus,
-      raceStatus: out.raceStatus,
-      racePhase: out.racePhase,
-      weather: out.weather,
-      airTemp: out.airTemp,
-      trackTemp: out.trackTemp,
-      rainIntensity: out.rainIntensity,
-      trackGrip: out.trackGrip,
-      trackMap: out.trackMap,
-      alerts: out.alerts,
-      updatedAtMs: out.updatedAtMs,
-      entries: out.entries
-    },
-    { headers: { "cache-control": "no-store" } }
-  );
 }
 
 export async function POST(req: Request) {
@@ -544,7 +616,8 @@ export async function POST(req: Request) {
   }
 
   const data = parsed.data;
-  const state = getState();
+  const leagueKey = normalizeLeagueKey(data.leagueKey);
+  const state = getState(leagueKey);
   const prevSessionId = state.sessionId;
 
   state.sessionId = data.sessionId;
@@ -871,8 +944,8 @@ export async function POST(req: Request) {
 
   await prisma.appConfig
     .upsert({
-      where: { key: LIVE_TIMING_APP_CONFIG_KEY },
-      create: { key: LIVE_TIMING_APP_CONFIG_KEY, value: JSON.stringify(state) },
+      where: { key: `${LIVE_TIMING_APP_CONFIG_KEY}:${leagueKey}` },
+      create: { key: `${LIVE_TIMING_APP_CONFIG_KEY}:${leagueKey}`, value: JSON.stringify(state) },
       update: { value: JSON.stringify(state) }
     })
     .catch(() => null);

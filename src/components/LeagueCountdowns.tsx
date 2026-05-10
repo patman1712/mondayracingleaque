@@ -15,7 +15,7 @@ type CountdownRace = {
 };
 
 type CountdownLeague = {
-  key: "ONE" | "TWO" | "ROOKIE";
+  key: string;
   label: string;
   href: string;
   nextRace: CountdownRace | null;

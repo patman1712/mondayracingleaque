@@ -156,7 +156,8 @@ export function LiveTimingMiniClient({
   splitAt = 11,
   hideWhenNoLiveData = true,
   equalHeights = false,
-  rowsPerColumn
+  rowsPerColumn,
+  leagueKey
 }: {
   startsAtMs: number;
   disabled?: boolean;
@@ -168,6 +169,7 @@ export function LiveTimingMiniClient({
   hideWhenNoLiveData?: boolean;
   equalHeights?: boolean;
   rowsPerColumn?: number;
+  leagueKey?: string;
 }) {
   const [data, setData] = useState<State | null>(null);
   const [requestFailed, setRequestFailed] = useState(false);
@@ -189,7 +191,8 @@ export function LiveTimingMiniClient({
 
     async function poll() {
       try {
-        const r = await fetch("/api/live-timing", { cache: "no-store" });
+        const qs = leagueKey ? `?leagueKey=${encodeURIComponent(leagueKey)}` : "";
+        const r = await fetch(`/api/live-timing${qs}`, { cache: "no-store" });
         const j = (await r.json()) as State;
         if (cancelled) return;
         const nextUpdatedAt = typeof j?.updatedAtMs === "number" ? j.updatedAtMs : 0;
@@ -212,7 +215,7 @@ export function LiveTimingMiniClient({
       cancelled = true;
       if (t) window.clearTimeout(t);
     };
-  }, [enabled]);
+  }, [enabled, leagueKey]);
 
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;

@@ -113,6 +113,23 @@ export default async function RaceDetailPage({
   const hero = imageUrl(race.imagePath) ?? imageUrl(race.circuitRef?.imagePath ?? null);
   const subLine = [race.location, race.circuit].filter(Boolean).join(" · ");
 
+  const liveTimingSourceRow = await prisma.appConfig
+    .findUnique({ where: { key: `race:liveTimingLeagueKey:${race.id}` }, select: { value: true } })
+    .catch(() => null);
+  const liveTimingLeagueKey = (liveTimingSourceRow?.value ?? "").trim();
+  const liveTimingLabel =
+    liveTimingLeagueKey === "liga-one"
+      ? "Liga One"
+      : liveTimingLeagueKey === "liga-two"
+        ? "Liga Two"
+        : liveTimingLeagueKey === "rookie"
+          ? "Rookie"
+          : liveTimingLeagueKey === "one-mini-wm"
+            ? "MRL One Mini WM"
+            : liveTimingLeagueKey === "two-mini-wm"
+              ? "MRL Two Mini WM"
+              : "";
+
   const entries = await prisma.raceEntry
     .findMany({
       where: { raceId: race.id, participates: true },
@@ -268,14 +285,17 @@ export default async function RaceDetailPage({
       <Container>
         {!showResults ? (
           <>
-            <LiveTimingMiniClient
-              startsAtMs={startMs}
-              title="Live Timing"
-              maxRows={22}
-              columns={2}
-              splitAt={11}
-              className="mt-6 max-w-none"
-            />
+            {liveTimingLeagueKey ? (
+              <LiveTimingMiniClient
+                startsAtMs={startMs}
+                title={`${liveTimingLabel || "Live Timing"} • Live Timing`}
+                maxRows={22}
+                columns={2}
+                splitAt={11}
+                className="mt-6 max-w-none"
+                leagueKey={liveTimingLeagueKey}
+              />
+            ) : null}
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-5 py-4">
                 <div className="text-lg font-semibold">Fahrerfeld</div>

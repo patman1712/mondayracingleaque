@@ -95,6 +95,22 @@ export default async function LeagueTvPage({
   params: Promise<{ league: string }>;
 }) {
   const { league } = await params;
+  const configuredLiveTimingRow = await prisma.appConfig
+    .findUnique({ where: { key: `liveTimingLeagueKeyForPublicSlug:${league}` }, select: { value: true } })
+    .catch(() => null);
+  const configuredLiveTimingKeyRaw = (configuredLiveTimingRow?.value ?? "").trim().toLowerCase();
+  function leagueKeyFromPublicSlug(slug: string) {
+    const s = (slug ?? "").trim().toLowerCase();
+    if (s === "mrl-one" || s === "one" || s === "f1-one") return "liga-one";
+    if (s === "mrl-two" || s === "two" || s === "f1-two") return "liga-two";
+    if (s === "mrl-rookie" || s === "rookie") return "rookie";
+    if (s === "one-mini-wm") return "one-mini-wm";
+    if (s === "two-mini-wm") return "two-mini-wm";
+    return "liga-one";
+  }
+  const allowedKeys = new Set(["liga-one", "liga-two", "rookie", "one-mini-wm", "two-mini-wm"]);
+  const configuredLiveTimingKey = allowedKeys.has(configuredLiveTimingKeyRaw) ? configuredLiveTimingKeyRaw : "";
+  const leagueKey = configuredLiveTimingKey || leagueKeyFromPublicSlug(league);
   const cfg = await resolveLeagueByPublicSlug(league);
   if (!cfg) notFound();
   if (!cfg.isActive) notFound();
@@ -291,7 +307,7 @@ export default async function LeagueTvPage({
           </div>
 
           <div className="relative">
-            <TvHeroLiveCenterClient />
+            <TvHeroLiveCenterClient leagueKey={leagueKey} leagueLabel={leagueLabel.toUpperCase()} />
           </div>
         </div>
       </Container>
@@ -302,12 +318,13 @@ export default async function LeagueTvPage({
             <div className="xl:sticky xl:top-24">
               <LiveTimingMiniClient
                 startsAtMs={startsAtMs}
-                title="Live Timing"
+                title={`${leagueLabel} • Live Timing`}
                 maxRows={22}
                 columns={2}
                 splitAt={11}
                 hideWhenNoLiveData={false}
                 className="max-w-none h-[calc(100vh-140px)]"
+                leagueKey={leagueKey}
               />
             </div>
 

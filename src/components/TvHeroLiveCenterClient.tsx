@@ -216,7 +216,7 @@ function alertPriority(type: string) {
   return 99;
 }
 
-export function TvHeroLiveCenterClient() {
+export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?: string; leagueLabel?: string }) {
   const [data, setData] = useState<LiveTimingState | null>(null);
   const [requestFailed, setRequestFailed] = useState(false);
   const [alerts, setAlerts] = useState<Array<{ a: LiveTimingAlert; visible: boolean }>>([]);
@@ -245,7 +245,8 @@ export function TvHeroLiveCenterClient() {
     let lastSeenUpdatedAt = 0;
     async function poll() {
       try {
-        const r = await fetch("/api/live-timing", { cache: "no-store" });
+        const qs = leagueKey ? `?leagueKey=${encodeURIComponent(leagueKey)}` : "";
+        const r = await fetch(`/api/live-timing${qs}`, { cache: "no-store" });
         const j = (await r.json()) as LiveTimingState;
         if (cancelled) return;
         const updated = typeof j?.updatedAtMs === "number" ? (j.updatedAtMs as number) : 0;
@@ -268,7 +269,7 @@ export function TvHeroLiveCenterClient() {
       cancelled = true;
       if (t) window.clearTimeout(t);
     };
-  }, []);
+  }, [leagueKey]);
 
   const now = Date.now();
   const updatedAt = typeof data?.updatedAtMs === "number" ? (data!.updatedAtMs as number) : 0;
@@ -347,7 +348,7 @@ export function TvHeroLiveCenterClient() {
     <div className="relative mt-6 grid gap-6 lg:grid-cols-3 lg:items-start">
       <div className="relative">
         <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-          Session Control
+          {leagueLabel ? `${leagueLabel} • Session Control` : "Session Control"}
         </div>
         <div className="mt-2 text-2xl font-extrabold text-white">
           {isLive ? (sessionLabel || "LIVE SESSION") : "OFF AIR"}

@@ -118,6 +118,26 @@ async function setBroadcast(
   redirect(`/admin/${adminLeague}/races/${raceId}?ok=1`);
 }
 
+async function setLiveTimingSource(
+  adminLeague: string,
+  raceId: string,
+  formData: FormData
+) {
+  "use server";
+  await requireAdmin();
+  const val = String(formData.get("liveTimingLeagueKey") ?? "").trim().toLowerCase();
+  const key = `race:liveTimingLeagueKey:${raceId}`;
+  await prisma.appConfig
+    .upsert({
+      where: { key },
+      create: { key, value: val },
+      update: { value: val }
+    })
+    .catch(() => null);
+  revalidatePath(`/admin/${adminLeague}/races/${raceId}`);
+  redirect(`/admin/${adminLeague}/races/${raceId}?ok=1`);
+}
+
 async function updateRaceDetails(
   adminLeague: string,
   league: League,
@@ -306,6 +326,10 @@ export default async function AdminRaceDetailPage({
     })
     .catch(() => null);
   if (!season) notFound();
+  const liveTimingSourceRow = await prisma.appConfig
+    .findUnique({ where: { key: `race:liveTimingLeagueKey:${raceId}` } })
+    .catch(() => null);
+  const liveTimingLeagueKey = (liveTimingSourceRow?.value ?? "").trim();
 
   const driverRows: DriverRow[] = await prisma.driverSeason
     .findMany({
@@ -450,6 +474,30 @@ export default async function AdminRaceDetailPage({
               Speichern
             </button>
           </form>
+
+          <form action={setLiveTimingSource.bind(null, league, raceId)} className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-white/70">Live Timing Quelle</label>
+              <select
+                name="liveTimingLeagueKey"
+                defaultValue={liveTimingLeagueKey || ""}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              >
+                <option value="">deaktiviert</option>
+                <option value="liga-one">Liga One</option>
+                <option value="liga-two">Liga Two</option>
+                <option value="rookie">Rookie</option>
+                <option value="one-mini-wm">MRL One Mini WM</option>
+                <option value="two-mini-wm">MRL Two Mini WM</option>
+              </select>
+              <div className="mt-2 text-xs text-white/60">
+                Bestimmt, welches Live Timing auf der Rennseite angezeigt wird.
+              </div>
+            </div>
+            <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+              Speichern
+            </button>
+          </form>
         </div>
 
         <details id="driver-field" className="rounded-2xl border border-white/10 bg-white/5">
@@ -476,4 +524,3 @@ export default async function AdminRaceDetailPage({
     </AdminShell>
   );
 }
-
