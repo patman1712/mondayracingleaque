@@ -20,6 +20,12 @@ export async function GET(req: Request) {
   if (!cfg.isActive) return new Response("Inactive league", { status: 404 });
   const league = cfg.league;
 
+  const assigned = await prisma.teamLeague
+    .findMany({ where: { league }, select: { teamId: true }, take: 2000 })
+    .catch(() => []);
+  const assignedTeamIds = new Set(assigned.map((r) => r.teamId));
+  const assignedTeamIdList = Array.from(assignedTeamIds);
+
   const currentSeason = await getActiveSeason({
     league,
     select: { id: true, year: true, seasonNo: true, isTest: true }
@@ -38,13 +44,15 @@ export async function GET(req: Request) {
   let rows: Row[] = [];
   const seasonId: string | null = currentSeason?.id ?? null;
   if (currentSeason) {
-    rows = await prisma.teamSeason
-      .findMany({
-        where: { seasonId: currentSeason.id },
-        orderBy: [{ team: { name: "asc" } }],
-        select
-      })
-      .catch(() => []);
+    if (assignedTeamIdList.length) {
+      rows = await prisma.teamSeason
+        .findMany({
+          where: { seasonId: currentSeason.id, teamId: { in: assignedTeamIdList } },
+          orderBy: [{ team: { name: "asc" } }],
+          select
+        })
+        .catch(() => []);
+    }
   }
 
   if (!rows.length) {
@@ -82,11 +90,6 @@ export async function GET(req: Request) {
   }
 
   if (seasonId) {
-    const assigned = await prisma.teamLeague
-      .findMany({ where: { league }, select: { teamId: true }, take: 1000 })
-      .catch(() => []);
-    const assignedTeamIds = new Set(assigned.map((r) => r.teamId));
-
     const ds = await prisma.driverSeason
       .findMany({
         where: { seasonId, teamId: { not: null } },
