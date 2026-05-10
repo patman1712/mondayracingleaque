@@ -395,7 +395,7 @@ export function NavLeagues() {
                                 Boolean(card.live)
                               );
                               const flagUrl = flagBackgroundUrl(flagCodeForRaceLike({ name: card.title }));
-                              const src = flagUrl || card.imageUrl || img;
+                              const src = card.imageUrl || img;
                               const href = card.hasResults ? `/${l.slug}/races/${card.id}` : `/${l.slug}/calendar`;
 
                               return (
@@ -408,14 +408,22 @@ export function NavLeagues() {
                                     {slot.label}
                                   </div>
                                   <div className="relative mt-3 aspect-[16/10] overflow-hidden">
-                                    <Image
-                                      src={src}
-                                      alt=""
-                                      fill
-                                      sizes="(max-width: 640px) 92vw, (max-width: 1024px) 640px, 720px"
-                                      className="object-cover transition duration-300 group-hover:scale-[1.03]"
-                                      quality={80}
-                                    />
+                                    {flagUrl ? (
+                                      <img
+                                        src={flagUrl}
+                                        alt=""
+                                        className="absolute inset-0 h-full w-full object-cover object-center opacity-80 transition duration-300 group-hover:scale-[1.03]"
+                                      />
+                                    ) : (
+                                      <Image
+                                        src={src}
+                                        alt=""
+                                        fill
+                                        sizes="(max-width: 640px) 92vw, (max-width: 1024px) 640px, 720px"
+                                        className="object-cover transition duration-300 group-hover:scale-[1.03]"
+                                        quality={80}
+                                      />
+                                    )}
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
                                     {card.hasResults ? (
                                       <div className="absolute right-3 top-3 rounded-lg bg-white/10 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85 backdrop-blur">
