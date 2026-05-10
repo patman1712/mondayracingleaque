@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getSessionDisplay } from "@/lib/liveTimingDisplay";
 
 type LiveTimingAlert = {
   id: string;
@@ -67,18 +68,6 @@ function isSprintQualifyingBySessionName(sessionName: string) {
   if (n.includes("sprint shootout")) return true;
   if (n.includes("sq1") || n.includes("sq2") || n.includes("sq3")) return true;
   return false;
-}
-
-function sessionLabelForHero(sessionName: string) {
-  const n = sessionName.trim();
-  const low = n.toLowerCase();
-  if (!n) return "";
-  if (low.includes("sq1")) return "SQ1";
-  if (low.includes("sq2")) return "SQ2";
-  if (low.includes("sq3")) return "SQ3";
-  if (low.includes("sprint shootout")) return "SPRINT SHOOTOUT";
-  if (low.includes("sprint qualifying")) return "SPRINT QUALIFYING";
-  return n.toUpperCase();
 }
 
 function isRaceBySessionName(sessionName: string) {
@@ -275,6 +264,7 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
   const updatedAt = typeof data?.updatedAtMs === "number" ? (data!.updatedAtMs as number) : 0;
   const entriesLen = Array.isArray(data?.entries) ? (data!.entries as unknown[]).length : 0;
   const isLive = Boolean(!requestFailed && updatedAt && now - updatedAt < 10_000 && entriesLen > 0);
+  const liveData = isLive ? data : null;
 
   useEffect(() => {
     if (!isLive) {
@@ -324,25 +314,25 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
     };
   }, [clearAlertTimers]);
 
-  const sessionNameRaw = (data?.sessionName ?? "").toString().trim();
-  const sessionLabel = sessionLabelForHero(sessionNameRaw);
-  const showLap = isRaceBySessionName(sessionNameRaw);
-  const left = (data?.sessionTimeLeft ?? "").toString().trim();
-  const trackStatus = (data?.trackStatus ?? "").toString().trim();
-  const raceStatus = (data?.raceStatus ?? "").toString().trim();
-  const racePhase = (data?.racePhase ?? "").toString().trim();
+  const sessionNameRaw = (liveData?.sessionName ?? "").toString().trim();
+  const sessionDisplay = getSessionDisplay({
+    sessionName: liveData?.sessionName ?? null,
+    sessionTimeLeft: liveData?.sessionTimeLeft ?? null,
+    currentLap: liveData?.currentLap ?? null,
+    totalLaps: liveData?.totalLaps ?? null,
+    sessionMode: isRaceBySessionName(sessionNameRaw) ? "race" : "practice"
+  });
+  const trackStatus = (liveData?.trackStatus ?? "").toString().trim();
+  const raceStatus = (liveData?.raceStatus ?? "").toString().trim();
+  const racePhase = (liveData?.racePhase ?? "").toString().trim();
   const flag = useMemo(() => flagFromText([trackStatus, raceStatus, racePhase]), [trackStatus, raceStatus, racePhase]);
-  const lapInfo =
-    showLap && typeof data?.currentLap === "number" && typeof data?.totalLaps === "number" && data.totalLaps
-      ? `LAP ${data.currentLap} / ${data.totalLaps}`
-      : "";
 
-  const weather = weatherLabel((data?.weather ?? "").toString());
-  const airTemp = typeof data?.airTemp === "number" ? Math.round(data.airTemp) : null;
-  const trackTemp = typeof data?.trackTemp === "number" ? Math.round(data.trackTemp) : null;
-  const rain = typeof data?.rainIntensity === "number" ? Math.round(data.rainIntensity) : null;
-  const grip = typeof data?.trackGrip === "number" ? Math.round(data.trackGrip) : null;
-  const hasWeather = Boolean((data?.weather ?? "").toString().trim() || airTemp !== null || trackTemp !== null);
+  const weather = weatherLabel((liveData?.weather ?? "").toString());
+  const airTemp = typeof liveData?.airTemp === "number" ? Math.round(liveData.airTemp) : null;
+  const trackTemp = typeof liveData?.trackTemp === "number" ? Math.round(liveData.trackTemp) : null;
+  const rain = typeof liveData?.rainIntensity === "number" ? Math.round(liveData.rainIntensity) : null;
+  const grip = typeof liveData?.trackGrip === "number" ? Math.round(liveData.trackGrip) : null;
+  const hasWeather = Boolean((liveData?.weather ?? "").toString().trim() || airTemp !== null || trackTemp !== null);
 
   return (
     <div className="relative mt-6 grid gap-6 lg:grid-cols-3 lg:items-start">
@@ -351,36 +341,30 @@ export function TvHeroLiveCenterClient({ leagueKey, leagueLabel }: { leagueKey?:
           {leagueLabel ? `${leagueLabel} • Session Control` : "Session Control"}
         </div>
         <div className="mt-2 text-2xl font-extrabold text-white">
-          {isLive ? (sessionLabel || "LIVE SESSION") : "OFF AIR"}
+          {isLive ? sessionDisplay || "LIVE SESSION" : "OFF AIR"}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <div className={["rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", flag.cls].join(" ")}>
-            {flag.label}
-          </div>
-          {left ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              LEFT {left}
-            </div>
-          ) : null}
-          {lapInfo ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              {lapInfo}
-            </div>
-          ) : null}
-          {trackStatus ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              TRACK {trackStatus}
-            </div>
-          ) : null}
-          {racePhase ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              {racePhase}
-            </div>
-          ) : null}
-          {raceStatus ? (
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              {raceStatus}
-            </div>
+          {isLive ? (
+            <>
+              <div className={["rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider", flag.cls].join(" ")}>
+                {flag.label}
+              </div>
+              {trackStatus ? (
+                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  TRACK {trackStatus}
+                </div>
+              ) : null}
+              {racePhase ? (
+                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  {racePhase}
+                </div>
+              ) : null}
+              {raceStatus ? (
+                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                  {raceStatus}
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
         <div className="mt-3 text-sm font-semibold text-white/70">

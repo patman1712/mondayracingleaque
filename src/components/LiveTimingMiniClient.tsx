@@ -131,7 +131,8 @@ function sessionModeByName(sessionName: string) {
     n.includes("sq2") ||
     n.includes("sq3");
   if (!isSprintQuali) {
-    const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
+    const isRaceByName =
+      n.includes("sprint race") || n.includes(" race") || n.startsWith("race") || n.includes("grand prix");
     if (isRaceByName) return "race" as const;
   }
   const isPracticeOrQualiByName =
@@ -297,6 +298,9 @@ export function LiveTimingMiniClient({
     const accent = (r.accent ?? "").toString().trim() || "#E10600";
     const bestLap = (r.bestLap ?? "").toString().trim() || "—";
     const lastLap = (r.lastLap ?? "").toString().trim() || "—";
+    const currentLap = (r.currentLap ?? "").toString().trim() || "—";
+    const penalties = (r.penalties ?? "").toString().trim() || "—";
+    const stops = typeof r.stops === "number" ? r.stops : null;
     const sector1 = r.sector1?.trim() ? r.sector1 : "—";
     const sector2 = r.sector2?.trim() ? r.sector2 : "—";
     const sector3 = r.sector3?.trim() ? r.sector3 : "—";
@@ -353,26 +357,53 @@ export function LiveTimingMiniClient({
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              BEST {bestLap}
+          {mode === "practice" ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                BEST {bestLap}
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                CURRENT {currentLap}
+              </div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-              LAST {lastLap}
+          ) : (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                LAST {lastLap}
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
+                PEN {penalties}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
-              {sector1}
+          {mode === "race" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
+                STOPS {stops !== null ? stops : "—"}
+              </div>
+              <div className="ml-auto inline-flex min-w-[46px] justify-center rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
+                {r.tyre?.trim() ? r.tyre : "—"}
+              </div>
             </div>
-            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
-              {sector2}
+          ) : null}
+
+          {mode === "practice" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector1Color)].join(" ")}>
+                {sector1}
+              </div>
+              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector2Color)].join(" ")}>
+                {sector2}
+              </div>
+              <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
+                {sector3}
+              </div>
+              <div className="ml-auto inline-flex min-w-[46px] justify-center rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
+                {r.tyre?.trim() ? r.tyre : "—"}
+              </div>
             </div>
-            <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
-              {sector3}
-            </div>
-          </div>
+          ) : null}
         </div>
       </div>
     );

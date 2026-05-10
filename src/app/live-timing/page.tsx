@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getSessionDisplay } from "@/lib/liveTimingDisplay";
 
 type LiveTimingEntry = {
   position: number;
@@ -265,6 +266,7 @@ export default function LiveTimingPage() {
   const now = Date.now();
   const last = data?.updatedAtMs ?? 0;
   const isLive = Boolean(last && now - last <= 2000);
+  const liveData = isLive ? data : null;
   const sessionType = typeof data?.sessionType === "number" ? data.sessionType : null;
   const sessionNameRaw = (data?.sessionName ?? "").toString();
   const modeByName = sessionModeByName(sessionNameRaw);
@@ -274,27 +276,14 @@ export default function LiveTimingPage() {
   const isPracticeOrQuali = Boolean(
     modeByName ? modeByName === "practice" : sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType)
   );
-  const headerLabel = (sessionNameRaw.trim() || (isRace ? "Race" : "Live")).toString().trim();
-  const computedLap = useMemo(() => {
-    const entries = data?.entries ?? [];
-    let max = 0;
-    for (const e of entries) {
-      const l = typeof e.lap === "number" && Number.isFinite(e.lap) ? e.lap : 0;
-      if (l > max) max = l;
-    }
-    return max > 0 ? max : null;
-  }, [data?.entries]);
-  const currentLap = typeof data?.currentLap === "number" && Number.isFinite(data.currentLap) ? data.currentLap : computedLap;
-  const totalLaps = typeof data?.totalLaps === "number" && Number.isFinite(data.totalLaps) ? data.totalLaps : null;
-  const lapsRemaining =
-    typeof data?.lapsRemaining === "number" && Number.isFinite(data.lapsRemaining)
-      ? data.lapsRemaining
-      : totalLaps !== null && currentLap !== null
-        ? Math.max(0, totalLaps - currentLap)
-        : null;
-  const sessionTimeLeft = typeof data?.sessionTimeLeft === "string" ? data.sessionTimeLeft.trim() : "";
-  const sessionDuration = typeof data?.sessionDuration === "string" ? data.sessionDuration.trim() : "";
-  const trackStatus = typeof data?.trackStatus === "string" ? data.trackStatus.trim() : "";
+  const headerLabel = getSessionDisplay({
+    sessionName: liveData?.sessionName ?? null,
+    sessionTimeLeft: liveData?.sessionTimeLeft ?? null,
+    currentLap: liveData?.currentLap ?? null,
+    totalLaps: liveData?.totalLaps ?? null,
+    sessionMode: isRace ? "race" : "practice"
+  });
+  const trackStatus = typeof liveData?.trackStatus === "string" ? liveData.trackStatus.trim() : "";
 
   const view = useMemo(() => {
     const entries = data?.entries ?? [];
@@ -433,27 +422,9 @@ export default function LiveTimingPage() {
                 ))}
               </select>
             </div>
-            <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
-              {`${LEAGUES.find((x) => x.key === leagueKey)?.label ?? "Liga One"} • ${headerLabel.toUpperCase()}`}
-            </div>
-            {sessionTimeLeft ? (
-              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
-                LEFT {sessionTimeLeft}
-              </div>
-            ) : null}
-            {sessionDuration ? (
-              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
-                DUR {sessionDuration}
-              </div>
-            ) : null}
-            {currentLap !== null ? (
-              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
-                LAP {currentLap}
-              </div>
-            ) : null}
-            {lapsRemaining !== null ? (
-              <div className="hidden rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/85 sm:flex">
-                REM {lapsRemaining}
+            {headerLabel ? (
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:flex">
+                {`${LEAGUES.find((x) => x.key === leagueKey)?.label ?? "Liga One"} • ${headerLabel}`}
               </div>
             ) : null}
             {trackStatus ? (
@@ -475,25 +446,10 @@ export default function LiveTimingPage() {
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs font-extrabold uppercase tracking-wider text-white/90 sm:hidden">
           <div className="flex items-center justify-between gap-3">
-            <div className="truncate">{headerLabel.toUpperCase()}</div>
+            <div className="truncate">{headerLabel || "—"}</div>
             <div className="shrink-0">{isLive ? "LIVE" : loading ? "LÄDT…" : "OFFLINE"}</div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {sessionTimeLeft ? (
-              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                LEFT {sessionTimeLeft}
-              </div>
-            ) : null}
-            {currentLap !== null ? (
-              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                LAP {currentLap}
-              </div>
-            ) : null}
-            {lapsRemaining !== null ? (
-              <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
-                REM {lapsRemaining}
-              </div>
-            ) : null}
             {trackStatus ? (
               <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                 TRACK {trackStatus}
