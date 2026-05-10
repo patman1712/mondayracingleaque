@@ -258,12 +258,12 @@ export default async function RaceDetailPage({
       </Container>
 
       <div className="relative left-1/2 right-1/2 -mx-[50vw] mt-6 w-screen overflow-hidden bg-black/30">
-        <div className="relative h-[44vh] min-h-[320px] max-h-[720px] sm:h-[52vh]">
+        <div className="relative h-[44vh] min-h-[320px] max-h-[720px] bg-black/40 sm:h-[52vh]">
           {hero ? (
             <img
               src={hero}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover object-center"
+              className="absolute inset-0 h-full w-full object-contain object-center"
             />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/35" />
