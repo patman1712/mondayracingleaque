@@ -1,27 +1,41 @@
 export type LiveTimingSessionMode = "race" | "practice" | "unknown";
 
-function isSprintQualifying(name: string) {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  if (n.includes("sprint qualifying")) return true;
-  if (n.includes("sprint shootout")) return true;
-  if (n.includes("sq1") || n.includes("sq2") || n.includes("sq3")) return true;
-  return false;
+function normName(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function isSprintRace(name: string) {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  return n.includes("sprint race");
+export function sessionLabelFromName(sessionName: string) {
+  const n = normName(sessionName);
+  if (!n) return "";
+
+  if (n.includes("sprint qualifying") || n.includes("sprint shootout") || n.includes("sq1") || n.includes("sq2") || n.includes("sq3")) {
+    return "SPRINT QUALIFYING";
+  }
+  if (n.includes("sprint race")) return "SPRINT RACE";
+
+  if (n.includes("short practice")) return "PRACTICE";
+  if (n.includes("practice 1") || n === "p1" || n.includes(" p1")) return "PRACTICE 1";
+  if (n.includes("practice 2") || n === "p2" || n.includes(" p2")) return "PRACTICE 2";
+  if (n.includes("practice 3") || n === "p3" || n.includes(" p3")) return "PRACTICE 3";
+  if (n.includes("practice")) return "PRACTICE";
+
+  if (n.includes("short qualifying")) return "QUALIFYING";
+  if (n.includes("qualifying 1") || n === "q1" || n.includes(" q1")) return "QUALIFYING 1";
+  if (n.includes("qualifying 2") || n === "q2" || n.includes(" q2")) return "QUALIFYING 2";
+  if (n.includes("qualifying 3") || n === "q3" || n.includes(" q3")) return "QUALIFYING 3";
+  if (n.includes("qualifying")) return "QUALIFYING";
+
+  if (n.includes("grand prix")) return "RACE";
+  if (n === "race" || n.startsWith("race ") || n.includes(" race")) return "RACE";
+
+  return sessionName.trim().toUpperCase();
 }
 
-function isRaceByName(name: string) {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  if (isSprintQualifying(n)) return false;
-  if (isSprintRace(n)) return true;
-  if (n.includes(" race") || n.startsWith("race") || n.includes("grand prix")) return true;
-  return false;
+export function sessionModeFromName(sessionName: string | null | undefined): LiveTimingSessionMode {
+  const label = sessionLabelFromName((sessionName ?? "").toString());
+  if (!label) return "unknown";
+  if (label === "RACE" || label === "SPRINT RACE") return "race";
+  return "practice";
 }
 
 export function getSessionDisplay(data: {
@@ -32,8 +46,10 @@ export function getSessionDisplay(data: {
   sessionMode?: LiveTimingSessionMode | null;
 }) {
   const sessionName = (data.sessionName ?? "").toString().trim();
-  const isRace = data.sessionMode === "race" || isRaceByName(sessionName);
-  const sprintRace = isSprintRace(sessionName);
+  const label = sessionLabelFromName(sessionName);
+  const mode = data.sessionMode ?? sessionModeFromName(sessionName);
+  const isRace = mode === "race";
+  const sprintRace = label === "SPRINT RACE";
 
   if (isRace) {
     const base = sprintRace ? "SPRINT RACE" : "RACE";
@@ -45,9 +61,7 @@ export function getSessionDisplay(data: {
     return base;
   }
 
-  const label = sessionName ? sessionName.toUpperCase() : "";
   const left = (data.sessionTimeLeft ?? "").toString().trim();
   if (label && left) return `${label} • LEFT ${left}`;
   return label || (left ? `LEFT ${left}` : "");
 }
-

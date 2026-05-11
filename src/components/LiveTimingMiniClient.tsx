@@ -2,12 +2,16 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { TyreBadge } from "@/components/TyreBadge";
+import { sessionModeFromName } from "@/lib/liveTimingDisplay";
+import { TeamLogo } from "@/components/TeamLogo";
 
 type Entry = {
   position: number;
   participantIndex?: number;
   driver: string;
   team: string;
+  teamLogoUrl?: string | null;
   lap: number;
   gap: string;
   lastLap: string;
@@ -122,31 +126,6 @@ function statusStyle(status: Entry["status"]) {
   return { label: s, cls: "border-white/10 bg-black/25 text-white/80" };
 }
 
-function sessionModeByName(sessionName: string) {
-  const n = sessionName.trim().toLowerCase();
-  const isSprintQuali =
-    n.includes("sprint qualifying") ||
-    n.includes("sprint shootout") ||
-    n.includes("sq1") ||
-    n.includes("sq2") ||
-    n.includes("sq3");
-  if (!isSprintQuali) {
-    const isRaceByName =
-      n.includes("sprint race") || n.includes(" race") || n.startsWith("race") || n.includes("grand prix");
-    if (isRaceByName) return "race" as const;
-  }
-  const isPracticeOrQualiByName =
-    n.includes("practice") ||
-    n.includes("qualifying") ||
-    n.includes("q1") ||
-    n.includes("q2") ||
-    n.includes("q3") ||
-    n.includes("time trial") ||
-    isSprintQuali;
-  if (isPracticeOrQualiByName) return "practice" as const;
-  return "race" as const;
-}
-
 export function LiveTimingMiniClient({
   startsAtMs,
   disabled,
@@ -257,7 +236,7 @@ export function LiveTimingMiniClient({
   }
 
   const sessionName = (data?.sessionName ?? "").toString().trim();
-  const mode = sessionModeByName(sessionName);
+  const mode = sessionModeFromName(sessionName) === "race" ? "race" : "practice";
   const sorted = (data?.entries ?? [])
     .slice()
     .sort((a, b) => {
@@ -342,8 +321,9 @@ export function LiveTimingMiniClient({
               <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">
                 {r.driver}
               </div>
-              <div className="mt-1 text-[12px] font-semibold leading-snug text-white/70 line-clamp-2">
-                {r.team}
+              <div className="mt-1 flex items-center gap-2 text-[12px] font-semibold leading-snug text-white/70">
+                <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                <div className="min-w-0 line-clamp-2">{r.team}</div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", status.cls].join(" ")}>
@@ -382,8 +362,8 @@ export function LiveTimingMiniClient({
               <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
                 STOPS {stops !== null ? stops : "—"}
               </div>
-              <div className="ml-auto inline-flex min-w-[46px] justify-center rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
-                {r.tyre?.trim() ? r.tyre : "—"}
+              <div className="ml-auto">
+                <TyreBadge tyre={r.tyre} size={28} />
               </div>
             </div>
           ) : null}
@@ -399,8 +379,8 @@ export function LiveTimingMiniClient({
               <div className={["inline-flex min-w-[54px] justify-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold", sectorClass(r.sector3Color)].join(" ")}>
                 {sector3}
               </div>
-              <div className="ml-auto inline-flex min-w-[46px] justify-center rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
-                {r.tyre?.trim() ? r.tyre : "—"}
+              <div className="ml-auto">
+                <TyreBadge tyre={r.tyre} size={28} />
               </div>
             </div>
           ) : null}

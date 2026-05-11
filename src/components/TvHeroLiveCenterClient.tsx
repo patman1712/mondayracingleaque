@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getSessionDisplay } from "@/lib/liveTimingDisplay";
+import { getSessionDisplay, sessionModeFromName } from "@/lib/liveTimingDisplay";
 
 type LiveTimingAlert = {
   id: string;
@@ -59,24 +59,6 @@ function weatherLabel(raw: string) {
   if (v.includes("cloud")) return "LIGHT CLOUD";
   if (v.includes("clear")) return "CLEAR";
   return raw.toUpperCase();
-}
-
-function isSprintQualifyingBySessionName(sessionName: string) {
-  const n = sessionName.trim().toLowerCase();
-  if (!n) return false;
-  if (n.includes("sprint qualifying")) return true;
-  if (n.includes("sprint shootout")) return true;
-  if (n.includes("sq1") || n.includes("sq2") || n.includes("sq3")) return true;
-  return false;
-}
-
-function isRaceBySessionName(sessionName: string) {
-  const n = sessionName.trim().toLowerCase();
-  if (!n) return false;
-  if (isSprintQualifyingBySessionName(n)) return false;
-  if (n.includes(" race") || n.startsWith("race") || n.includes("grand prix")) return true;
-  if (n.includes("sprint")) return true;
-  return false;
 }
 
 function WeatherIcon({ weather }: { weather: string }) {
@@ -292,7 +274,7 @@ export function TvHeroLiveCenterClient({
       return;
     }
     const sessionNameRaw = (data?.sessionName ?? "").toString().trim();
-    const isRace = isRaceBySessionName(sessionNameRaw);
+    const isRace = sessionModeFromName(sessionNameRaw) === "race";
     const nextAlerts = Array.isArray(data?.alerts) ? (data.alerts as LiveTimingAlert[]) : [];
     const accepted = new Set([
       "fastest_lap",
@@ -338,7 +320,7 @@ export function TvHeroLiveCenterClient({
     sessionTimeLeft: liveData?.sessionTimeLeft ?? null,
     currentLap: liveData?.currentLap ?? null,
     totalLaps: liveData?.totalLaps ?? null,
-    sessionMode: isRaceBySessionName(sessionNameRaw) ? "race" : "practice"
+    sessionMode: sessionModeFromName(sessionNameRaw)
   });
   const sessionParts = (sessionDisplay ?? "").split(" • ");
   const sessionTitle = sessionParts[0]?.trim() ? sessionParts[0].trim() : sessionDisplay;

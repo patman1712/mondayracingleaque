@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { sessionModeFromName } from "@/lib/liveTimingDisplay";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -100,6 +101,7 @@ type LiveTimingParticipant = z.infer<typeof participantSchema>;
 type LiveTimingEntry = LiveTimingPostEntry & {
   portraitUrl: string | null;
   accent: string;
+  teamLogoUrl?: string | null;
 };
 
 type LiveTimingAlertMeta = {
@@ -184,26 +186,6 @@ function parsePenaltySeconds(raw: string | null | undefined) {
   if (!m) return 0;
   const v = Number(m[1]);
   return Number.isFinite(v) ? Math.max(0, v) : 0;
-}
-
-function sessionModeByName(sessionName: string) {
-  const n = (sessionName ?? "").trim().toLowerCase();
-  const isSprintQuali =
-    n.includes("sprint qualifying") || n.includes("sprint shootout") || n.includes("sq1") || n.includes("sq2") || n.includes("sq3");
-  if (!isSprintQuali) {
-    const isRace = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
-    if (isRace) return "race" as const;
-  }
-  const isQuali =
-    n.includes("practice") ||
-    n.includes("qualifying") ||
-    n.includes("q1") ||
-    n.includes("q2") ||
-    n.includes("q3") ||
-    n.includes("time trial") ||
-    isSprintQuali;
-  if (isQuali) return "qualifying" as const;
-  return "unknown" as const;
 }
 
 function ensureAlertMeta(state: LiveTimingState): LiveTimingAlertMeta {
@@ -393,6 +375,61 @@ async function resolvePortraitUrlsByDriverName(names: string[]) {
   return out;
 }
 
+async function resolveTeamLogoUrlsByTeamName(names: string[]) {
+  const wanted = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
+  if (wanted.length === 0) return new Map<string, string | null>();
+
+  const teams = await prisma.team
+    .findMany({
+      select: { name: true, logoPath: true },
+      take: 5000
+    })
+    .catch(() => []);
+
+  const byNorm = new Map<string, string | null>();
+  for (const t of teams) {
+    const url = imageUrl(t.logoPath);
+    const k = normalize(t.name);
+    if (!k) continue;
+    if (byNorm.has(k)) continue;
+    byNorm.set(k, url);
+  }
+
+  const out = new Map<string, string | null>();
+  for (const raw of wanted) {
+    const n = normalize(raw);
+    if (!n) {
+      out.set(raw, null);
+      continue;
+    }
+    if (byNorm.has(n)) {
+      out.set(raw, byNorm.get(n) ?? null);
+      continue;
+    }
+    for (const [k, v] of byNorm) {
+      if (k.includes(n) || n.includes(k)) {
+        out.set(raw, v ?? null);
+        break;
+      }
+    }
+    if (out.has(raw)) continue;
+    let best: { v: string | null; dist: number; len: number } | null = null;
+    for (const [k, v] of byNorm) {
+      const d = levenshtein(n, k);
+      if (!best || d < best.dist) best = { v: v ?? null, dist: d, len: Math.max(n.length, k.length) };
+    }
+    if (!best) {
+      out.set(raw, null);
+      continue;
+    }
+    const ratio = best.len ? best.dist / best.len : 1;
+    const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
+    out.set(raw, best.dist <= maxDist && ratio <= 0.25 ? best.v : null);
+  }
+
+  return out;
+}
+
 function defaultState(): LiveTimingState {
   return {
       sessionId: "default",
@@ -492,7 +529,8 @@ async function loadStateFromDb(leagueKey: string): Promise<LiveTimingState | nul
         entries: z.array(
           entrySchema.extend({
             portraitUrl: z.string().nullable().optional(),
-            accent: z.string().optional()
+            accent: z.string().optional(),
+            teamLogoUrl: z.string().nullable().optional()
           })
         )
       })
@@ -501,13 +539,15 @@ async function loadStateFromDb(leagueKey: string): Promise<LiveTimingState | nul
     if (!safe.success) return null;
     const s = safe.data;
     const entries = s.entries.map((e) => {
-      const maybe = e as unknown as { accent?: unknown; portraitUrl?: unknown };
+      const maybe = e as unknown as { accent?: unknown; portraitUrl?: unknown; teamLogoUrl?: unknown };
       const accent = typeof maybe.accent === "string" && maybe.accent.trim() ? maybe.accent : "#E10600";
       const portraitUrl = typeof maybe.portraitUrl === "string" ? maybe.portraitUrl : null;
+      const teamLogoUrl = typeof maybe.teamLogoUrl === "string" ? maybe.teamLogoUrl : null;
       return {
         ...(e as unknown as LiveTimingEntry),
         accent,
-        portraitUrl
+        portraitUrl,
+        teamLogoUrl
       };
     });
     const participants = Array.isArray(s.participants) ? (s.participants as LiveTimingParticipant[]) : [];
@@ -751,6 +791,25 @@ export async function POST(req: Request) {
   });
 
   const portraitByName = await resolvePortraitUrlsByDriverName(normalized.map((e) => e.driver));
+  const teamLogoByName = await resolveTeamLogoUrlsByTeamName(
+    Array.from(
+      new Set(
+        [
+          ...normalized.map((e) => e.team ?? ""),
+          ...state.participants.map((p) => (typeof p.team === "string" ? p.team : ""))
+        ].map((x) => x.trim())
+      )
+    ).filter(Boolean)
+  );
+  if (state.participants.length) {
+    state.participants = state.participants.map((p) => {
+      const team = typeof p.team === "string" ? p.team.trim() : "";
+      return {
+        ...p,
+        teamLogoUrl: team ? (teamLogoByName.get(team) ?? null) : null
+      };
+    });
+  }
   state.entries = normalized
     .slice()
     .sort((a, b) => {
@@ -764,7 +823,8 @@ export async function POST(req: Request) {
     .map((e) => ({
       ...e,
       accent: typeof e.accent === "string" && e.accent.trim() ? e.accent : "#E10600",
-      portraitUrl: portraitByName.get(e.driver) ?? null
+      portraitUrl: portraitByName.get(e.driver) ?? null,
+      teamLogoUrl: e.team?.trim() ? (teamLogoByName.get(e.team.trim()) ?? null) : null
     }));
 
   if (state.sessionId !== prevSessionId) {
@@ -774,7 +834,7 @@ export async function POST(req: Request) {
 
   const meta = ensureAlertMeta(state);
   const now = state.updatedAtMs;
-  const mode = sessionModeByName(state.sessionName ?? "");
+  const mode = sessionModeFromName(state.sessionName ?? "");
   const acceptedIncoming = new Set([
     "red_flag",
     "safety_car",

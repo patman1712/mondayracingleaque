@@ -4,13 +4,17 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { HeroTile } from "@/components/HeroTile";
 import { TvHeroLiveCenterClient } from "@/components/TvHeroLiveCenterClient";
+import { TyreBadge } from "@/components/TyreBadge";
+import { TeamLogo } from "@/components/TeamLogo";
 import { flagBackgroundUrl, flagCodeForText } from "@/lib/flags";
+import { sessionModeFromName } from "@/lib/liveTimingDisplay";
 
 type LiveTimingEntry = {
   position: number;
   participantIndex?: number;
   driver: string;
   team?: string | null;
+  teamLogoUrl?: string | null;
   lap?: number | null;
   gap?: string | null;
   lastLap?: string | null;
@@ -115,16 +119,6 @@ function sectorClass(color: string | undefined | null) {
   return "border-white/10 bg-black/25 text-white/85";
 }
 
-function tyreStyle(tyre: string | undefined | null) {
-  const t = (tyre ?? "").trim().toLowerCase();
-  if (t === "soft") return { label: "Soft", cls: "border-red-400/60 bg-red-500/15 text-red-100" };
-  if (t === "medium") return { label: "Medium", cls: "border-amber-300/60 bg-amber-500/15 text-amber-100" };
-  if (t === "hard") return { label: "Hard", cls: "border-white/25 bg-white/5 text-white/90" };
-  if (t === "inter" || t === "intermediate") return { label: "Inter", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
-  if (t === "wet") return { label: "Wet", cls: "border-sky-400/60 bg-sky-500/15 text-sky-100" };
-  return { label: tyre?.trim() || "—", cls: "border-white/10 bg-black/25 text-white/80" };
-}
-
 function formatUpdated(ms: number) {
   if (!ms) return "—";
   return new Date(ms).toLocaleTimeString("de-DE", {
@@ -133,30 +127,6 @@ function formatUpdated(ms: number) {
     minute: "2-digit",
     second: "2-digit"
   });
-}
-
-function sessionModeByName(sessionName: string) {
-  const n = sessionName.trim().toLowerCase();
-  const isSprintQuali =
-    n.includes("sprint qualifying") ||
-    n.includes("sprint shootout") ||
-    n.includes("sq1") ||
-    n.includes("sq2") ||
-    n.includes("sq3");
-  if (!isSprintQuali) {
-    const isRaceByName = n.includes(" race") || n.startsWith("race") || n.includes("grand prix") || n.includes("sprint");
-    if (isRaceByName) return "race" as const;
-  }
-  const isPracticeOrQualiByName =
-    n.includes("practice") ||
-    n.includes("qualifying") ||
-    n.includes("q1") ||
-    n.includes("q2") ||
-    n.includes("q3") ||
-    n.includes("time trial") ||
-    isSprintQuali;
-  if (isPracticeOrQualiByName) return "practice" as const;
-  return null;
 }
 
 type LeagueOption = { key: string; label: string; accent: string };
@@ -255,9 +225,9 @@ export default function LiveTimingPage() {
 
   const sessionType = typeof liveData?.sessionType === "number" ? liveData.sessionType : null;
   const sessionNameRaw = (liveData?.sessionName ?? "").toString();
-  const modeByName = sessionNameRaw ? sessionModeByName(sessionNameRaw) : null;
+  const modeByName = sessionNameRaw ? sessionModeFromName(sessionNameRaw) : "unknown";
   const isPracticeOrQuali = Boolean(
-    modeByName ? modeByName === "practice" : sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType)
+    modeByName !== "unknown" ? modeByName === "practice" : sessionType !== null && TRAINING_QUALI_TYPES.has(sessionType)
   );
 
   const circuit = ((liveData?.trackMap?.circuit ?? data?.trackMap?.circuit) ?? "").toString().trim();
@@ -274,6 +244,7 @@ export default function LiveTimingPage() {
           position: String(e.position),
           driver: e.driver,
           team: e.team ?? "",
+          teamLogoUrl: e.teamLogoUrl ?? null,
           gap: (e.gap ?? "").trim() ? (e.gap as string) : "—",
           lastLap: (e.lastLap ?? "").trim() ? (e.lastLap as string) : "—",
           tyre: (e.tyre ?? "").trim() ? (e.tyre as string) : null,
@@ -322,6 +293,7 @@ export default function LiveTimingPage() {
         position: String(idx + 1),
         driver: x.e.driver,
         team: x.e.team ?? "",
+        teamLogoUrl: x.e.teamLogoUrl ?? null,
         participantIndex: x.pi,
         currentLap: x.e.currentLap?.trim() ? x.e.currentLap : "—",
         bestLap: x.e.bestLap?.trim() ? x.e.bestLap : "—",
@@ -437,7 +409,6 @@ export default function LiveTimingPage() {
 
                       {view.rows.map((r) => {
                         const accent = r.accent ?? "#E10600";
-                        const tyre = tyreStyle(r.tyre);
                         return (
                           <div
                             key={`${r.position}-${r.driver}`}
@@ -476,8 +447,9 @@ export default function LiveTimingPage() {
                                     <div className="text-base font-extrabold uppercase leading-tight tracking-wide text-white whitespace-normal break-words">
                                       {r.driver}
                                     </div>
-                                    <div className="mt-1 text-xs font-semibold text-white/75 md:hidden whitespace-normal break-words">
-                                      {r.team}
+                                    <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-white/75 md:hidden">
+                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                      <div className="min-w-0 whitespace-normal break-words">{r.team}</div>
                                     </div>
                                     {r.status ? (
                                       <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80 md:hidden">
@@ -488,14 +460,7 @@ export default function LiveTimingPage() {
                                       <div className="hidden sm:inline-flex rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                         CUR {r.currentLap}
                                       </div>
-                                      <div
-                                        className={[
-                                          "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider",
-                                          tyre.cls
-                                        ].join(" ")}
-                                      >
-                                        {tyre.label}
-                                      </div>
+                                      <TyreBadge tyre={r.tyre} size={30} />
                                       <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                         {r.gap}
                                       </div>
@@ -510,7 +475,10 @@ export default function LiveTimingPage() {
                               </div>
 
                               <div className="min-w-0 hidden text-sm font-semibold text-white/90 xl:block">
-                                <div className="leading-tight whitespace-normal break-words">{r.team}</div>
+                                <div className="flex items-center gap-2 leading-tight whitespace-normal break-words">
+                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                  <div className="min-w-0">{r.team}</div>
+                                </div>
                               </div>
 
                               <div className="hidden sm:block text-right text-sm font-semibold text-white/90 md:text-base">{r.currentLap}</div>
@@ -549,14 +517,7 @@ export default function LiveTimingPage() {
                               </div>
 
                               <div className="hidden justify-end xl:flex">
-                                <div
-                                  className={[
-                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider",
-                                    tyre.cls
-                                  ].join(" ")}
-                                >
-                                  {tyre.label}
-                                </div>
+                                <TyreBadge tyre={r.tyre} size={34} />
                               </div>
                             </div>
                           </div>
@@ -578,7 +539,6 @@ export default function LiveTimingPage() {
 
                       {view.rows.map((r) => {
                         const accent = r.accent ?? "#E10600";
-                        const tyre = tyreStyle(r.tyre);
                         return (
                           <div
                             key={`${r.position}-${r.driver}`}
@@ -617,8 +577,9 @@ export default function LiveTimingPage() {
                                     <div className="text-base font-extrabold uppercase leading-tight tracking-wide text-white whitespace-normal break-words">
                                       {r.driver}
                                     </div>
-                                    <div className="mt-1 text-xs font-semibold text-white/75 lg:hidden whitespace-normal break-words">
-                                      {r.team}
+                                    <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-white/75 lg:hidden">
+                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                      <div className="min-w-0 whitespace-normal break-words">{r.team}</div>
                                     </div>
                                     {r.status ? (
                                       <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-white/80 lg:hidden">
@@ -629,14 +590,7 @@ export default function LiveTimingPage() {
                                       <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                         GAP {r.gap}
                                       </div>
-                                      <div
-                                        className={[
-                                          "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider",
-                                          tyre.cls
-                                        ].join(" ")}
-                                      >
-                                        {tyre.label}
-                                      </div>
+                                      <TyreBadge tyre={r.tyre} size={30} />
                                       {r.penalties?.trim() ? (
                                         <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white/85">
                                           PEN {r.penalties}
@@ -656,7 +610,10 @@ export default function LiveTimingPage() {
                               </div>
 
                               <div className="min-w-0 hidden text-sm font-semibold text-white/90 2xl:block">
-                                <div className="leading-tight whitespace-normal break-words">{r.team}</div>
+                                <div className="flex items-center gap-2 leading-tight whitespace-normal break-words">
+                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                  <div className="min-w-0">{r.team}</div>
+                                </div>
                               </div>
 
                               <div className="text-right text-sm font-semibold text-white/90 lg:text-base">{r.gap}</div>
@@ -664,14 +621,7 @@ export default function LiveTimingPage() {
 
                               <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.lastLap}</div>
                               <div className="hidden justify-end 2xl:flex">
-                                <div
-                                  className={[
-                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wider",
-                                    tyre.cls
-                                  ].join(" ")}
-                                >
-                                  {tyre.label}
-                                </div>
+                                <TyreBadge tyre={r.tyre} size={34} />
                               </div>
                               <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">{r.penalties ?? "—"}</div>
                               <div className="hidden text-right text-sm font-semibold text-white/85 2xl:block">
