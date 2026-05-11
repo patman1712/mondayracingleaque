@@ -4,6 +4,7 @@ import { Container } from "@/components/Container";
 import { HeroTile } from "@/components/HeroTile";
 import { prisma } from "@/lib/db";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import { configuredOrDefaultLiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
 import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { LiveTimingMiniClient } from "@/components/LiveTimingMiniClient";
 import { MrlTvDriverCamsClient } from "@/components/MrlTvDriverCamsClient";
@@ -72,19 +73,7 @@ export default async function LeagueTvPage({
   const configuredLiveTimingRow = await prisma.appConfig
     .findUnique({ where: { key: `liveTimingLeagueKeyForPublicSlug:${league}` }, select: { value: true } })
     .catch(() => null);
-  const configuredLiveTimingKeyRaw = (configuredLiveTimingRow?.value ?? "").trim().toLowerCase();
-  function leagueKeyFromPublicSlug(slug: string) {
-    const s = (slug ?? "").trim().toLowerCase();
-    if (s === "mrl-one" || s === "one" || s === "f1-one") return "liga-one";
-    if (s === "mrl-two" || s === "two" || s === "f1-two") return "liga-two";
-    if (s === "mrl-rookie" || s === "rookie") return "rookie";
-    if (s === "one-mini-wm") return "one-mini-wm";
-    if (s === "two-mini-wm") return "two-mini-wm";
-    return "liga-one";
-  }
-  const allowedKeys = new Set(["liga-one", "liga-two", "rookie", "one-mini-wm", "two-mini-wm"]);
-  const configuredLiveTimingKey = allowedKeys.has(configuredLiveTimingKeyRaw) ? configuredLiveTimingKeyRaw : "";
-  const leagueKey = configuredLiveTimingKey || leagueKeyFromPublicSlug(league);
+  const leagueKey = configuredOrDefaultLiveTimingLeagueKey({ configured: configuredLiveTimingRow?.value, publicSlug: league });
   const cfg = await resolveLeagueByPublicSlug(league);
   if (!cfg) notFound();
   if (!cfg.isActive) notFound();

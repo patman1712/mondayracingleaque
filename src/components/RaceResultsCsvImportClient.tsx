@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
+import type { LiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
 
 type DriverRef = { id: string; name: string; gamertag: string | null };
 
 type CsvRow = {
   position: number;
   driverName: string;
+  driverNameSource: string;
   driverId: string;
+  participantIndex: number | null;
   grid: string;
   stops: string;
   bestTime: string;
@@ -17,6 +20,21 @@ type CsvRow = {
   points: string;
   fastestLap: boolean;
   matchLabel: string;
+};
+
+type LiveTimingCache = {
+  participants?: Array<{
+    participantIndex: number;
+    driver: string;
+    team?: string;
+    accent?: string | null;
+  }>;
+  entries?: Array<{
+    position: number;
+    participantIndex?: number;
+    driver: string;
+  }>;
+  updatedAtMs?: number;
 };
 
 function normalize(s: string) {
@@ -191,10 +209,25 @@ function mapRow(obj: Record<string, string>) {
 
   const posRaw = get("pos", "position", "p", "rank", "place");
   const position = Number(posRaw.replace(/[^\d]+/g, ""));
+  const piRaw = get("participantindex", "carindex", "vehicleindex", "vehicle", "caridx", "car");
+  const participantIndexNum = Number(piRaw.replace(/[^\d]+/g, ""));
 
   return {
     position: Number.isFinite(position) ? Math.floor(position) : NaN,
-    driverName: get("driver", "name", "gamertag", "player", "user"),
+    driverName: get(
+      "driver",
+      "drivername",
+      "name",
+      "participant",
+      "participantname",
+      "player",
+      "playername",
+      "user",
+      "username",
+      "displayname",
+      "gamertag"
+    ),
+    participantIndex: Number.isFinite(participantIndexNum) ? Math.floor(participantIndexNum) : null,
     grid: get("grid", "start", "startpos", "gridposition"),
     stops: get("stops", "pitstops", "pits"),
     bestTime: get("best", "bestlap", "besttime", "bestlaptime"),
@@ -208,10 +241,12 @@ function mapRow(obj: Record<string, string>) {
 export function RaceResultsCsvImportClient({
   drivers,
   existingDraftJson,
+  liveTimingLeagueKey,
   action
 }: {
   drivers: DriverRef[];
   existingDraftJson: string | null;
+  liveTimingLeagueKey?: LiveTimingLeagueKey;
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [rows, setRows] = useState<CsvRow[]>(() => {
@@ -228,7 +263,9 @@ export function RaceResultsCsvImportClient({
           return {
             position: Number.isFinite(position) ? Math.floor(position) : NaN,
             driverName,
+            driverNameSource: String(o.driverNameSource ?? "").trim(),
             driverId: String(o.driverId ?? "").trim(),
+            participantIndex: typeof o.participantIndex === "number" ? o.participantIndex : null,
             grid: String(o.grid ?? "").trim(),
             stops: String(o.stops ?? "").trim(),
             bestTime: String(o.bestTime ?? "").trim(),
@@ -254,6 +291,8 @@ export function RaceResultsCsvImportClient({
         position: r.position,
         driverName: r.driverName.trim(),
         driverId: r.driverId.trim() || null,
+        driverNameSource: r.driverNameSource.trim() || null,
+        participantIndex: typeof r.participantIndex === "number" ? r.participantIndex : null,
         grid: r.grid.trim() || null,
         stops: r.stops.trim() || null,
         bestTime: r.bestTime.trim() || null,
@@ -282,6 +321,27 @@ export function RaceResultsCsvImportClient({
     setRows((prev) => prev.map((r) => (r.position === position ? { ...r, ...patch } : r)));
   }
 
+  function resolveNameFromCache(input: {
+    csvName: string;
+    participantIndex: number | null;
+    position: number;
+    cache: LiveTimingCache | null;
+  }) {
+    const csv = input.csvName.trim();
+    if (csv) return { name: csv, source: "" };
+    const participants = Array.isArray(input.cache?.participants) ? input.cache!.participants! : [];
+    const entries = Array.isArray(input.cache?.entries) ? input.cache!.entries! : [];
+    if (typeof input.participantIndex === "number") {
+      const p = participants.find((x) => x.participantIndex === input.participantIndex) ?? null;
+      if (p?.driver?.trim()) return { name: p.driver.trim(), source: "UDP Cache" };
+      const e = entries.find((x) => x.participantIndex === input.participantIndex) ?? null;
+      if (e?.driver?.trim()) return { name: e.driver.trim(), source: "Live Timing" };
+    }
+    const eByPos = entries.find((x) => x.position === input.position) ?? null;
+    if (eByPos?.driver?.trim()) return { name: eByPos.driver.trim(), source: "Live Timing" };
+    return { name: "", source: "" };
+  }
+
   async function onFile(file: File) {
     setParseError(null);
     const text = await file.text();
@@ -293,16 +353,47 @@ export function RaceResultsCsvImportClient({
       return;
     }
 
+    const cache: LiveTimingCache | null = await (async () => {
+      try {
+        const qs = liveTimingLeagueKey ? `?leagueKey=${encodeURIComponent(liveTimingLeagueKey)}` : "";
+        const r = await fetch(`/api/live-timing${qs}`, { cache: "no-store" });
+        if (!r.ok) return null;
+        return (await r.json()) as LiveTimingCache;
+      } catch {
+        return null;
+      }
+    })();
+
     const out: CsvRow[] = mapped
       .map((r) => {
-        const exact = driverIndex.get(normalize(r.driverName)) ?? "";
-        const fuzzy = !exact ? bestMatchId(r.driverName, drivers) : { id: "", label: "" };
+        const resolved = resolveNameFromCache({
+          csvName: r.driverName,
+          participantIndex: r.participantIndex,
+          position: r.position,
+          cache
+        });
+        const driverName = resolved.name || r.driverName;
+        const driverNameSource = resolved.name ? resolved.source : "";
+        if (!driverName.trim()) {
+          console.log("CSV Import: Name fehlt", {
+            position: r.position,
+            participantIndex: r.participantIndex,
+            hasLiveTimingCache: Boolean(cache),
+            cacheParticipants: Array.isArray(cache?.participants) ? cache!.participants!.length : 0,
+            cacheEntries: Array.isArray(cache?.entries) ? cache!.entries!.length : 0
+          });
+        }
+
+        const exact = driverIndex.get(normalize(driverName)) ?? "";
+        const fuzzy = !exact ? bestMatchId(driverName, drivers) : { id: "", label: "" };
         const driverId = exact || fuzzy.id || "";
         const matchLabel = exact ? "Gefunden" : fuzzy.id ? fuzzy.label : "Nicht gefunden";
         return {
           position: r.position,
-          driverName: r.driverName,
+          driverName,
+          driverNameSource,
           driverId,
+          participantIndex: r.participantIndex,
           grid: r.grid,
           stops: r.stops,
           bestTime: r.bestTime,
@@ -402,6 +493,7 @@ export function RaceResultsCsvImportClient({
                   {(() => {
                     const isMissing = r.matchLabel === "Nicht gefunden" || !r.driverId;
                     const csvName = r.driverName?.trim() ? r.driverName.trim() : "leer / nicht erkannt";
+                    const src = r.driverNameSource?.trim() ? r.driverNameSource.trim() : "";
                     const timeOrGap = r.timeText?.trim() ? r.timeText.trim() : "—";
                     const status = r.status?.trim() ? r.status.trim() : "—";
                     const grid = r.grid?.trim() ? r.grid.trim() : "—";
@@ -411,6 +503,7 @@ export function RaceResultsCsvImportClient({
                       <>
                         <div className={["mt-1 text-sm font-extrabold", isMissing ? "text-red-50" : "text-white"].join(" ")}>
                           CSV Name: {csvName}
+                          {src ? ` (${src})` : ""}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/70">
                           <span className={isMissing ? "font-semibold text-white" : ""}>Zeit {timeOrGap}</span>

@@ -6,6 +6,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { configuredOrDefaultLiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
 import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
 import { applyRaceScoring } from "@/lib/scoring";
 import { applyPublishedRaceStats, recalcSeasonStatsForRace } from "@/lib/seasonStats";
@@ -786,6 +787,13 @@ export default async function AdminRaceResultsPage({
   const cfg = await resolveLeagueByAdminSlug(league);
   if (!cfg) notFound();
   const l = cfg.league;
+  const configuredLiveTimingRow = await prisma.appConfig
+    .findUnique({ where: { key: `liveTimingLeagueKeyForPublicSlug:${cfg.publicSlug}` }, select: { value: true } })
+    .catch(() => null);
+  const liveTimingLeagueKey = configuredOrDefaultLiveTimingLeagueKey({
+    configured: configuredLiveTimingRow?.value,
+    publicSlug: cfg.publicSlug
+  });
 
   const race = await prisma.race
     .findUnique({
@@ -1007,6 +1015,7 @@ export default async function AdminRaceResultsPage({
           <RaceResultsCsvImportClient
             drivers={participatingDrivers.map((d) => ({ id: d.id, name: d.name, gamertag: d.gamertag }))}
             existingDraftJson={race.resultsCsvDraftJson ?? null}
+            liveTimingLeagueKey={liveTimingLeagueKey}
             action={importResultsFromCsv.bind(null, league, l, raceId)}
           />
         </div>

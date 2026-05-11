@@ -128,6 +128,7 @@ type LiveTimingState = {
   rainIntensity: number | null;
   trackGrip: number | null;
   trackMap: { circuit?: string; length?: number } | null;
+  participants: LiveTimingParticipant[];
   alerts: LiveTimingAlert[];
   updatedAtMs: number;
   entries: LiveTimingEntry[];
@@ -411,6 +412,7 @@ function defaultState(): LiveTimingState {
       rainIntensity: null,
       trackGrip: null,
       trackMap: null,
+      participants: [],
       alerts: [],
       updatedAtMs: 0,
       entries: [],
@@ -484,6 +486,7 @@ async function loadStateFromDb(leagueKey: string): Promise<LiveTimingState | nul
         rainIntensity: z.number().nullable(),
         trackGrip: z.number().nullable(),
         trackMap: z.object({ circuit: z.string().optional(), length: z.number().optional() }).nullable(),
+        participants: z.array(participantSchema).optional(),
         alerts: z.array(alertsSchema),
         updatedAtMs: z.number(),
         entries: z.array(
@@ -507,7 +510,8 @@ async function loadStateFromDb(leagueKey: string): Promise<LiveTimingState | nul
         portraitUrl
       };
     });
-    return { ...s, entries } as LiveTimingState;
+    const participants = Array.isArray(s.participants) ? (s.participants as LiveTimingParticipant[]) : [];
+    return { ...(s as unknown as LiveTimingState), entries, participants } as LiveTimingState;
   } catch {
     return null;
   }
@@ -554,6 +558,7 @@ export async function GET(req: Request) {
         rainIntensity: o.rainIntensity,
         trackGrip: o.trackGrip,
         trackMap: o.trackMap,
+        participants: o.participants,
         alerts: o.alerts,
         updatedAtMs: o.updatedAtMs,
         entries: o.entries
@@ -589,6 +594,7 @@ export async function GET(req: Request) {
         rainIntensity: o.rainIntensity,
         trackGrip: o.trackGrip,
         trackMap: o.trackMap,
+        participants: o.participants,
         alerts: o.alerts,
         updatedAtMs: o.updatedAtMs,
         entries: o.entries
@@ -652,6 +658,11 @@ export async function POST(req: Request) {
   if (participants.length) {
     const used = new Set<number>();
     const ordered = participants.slice().sort((a, b) => a.participantIndex - b.participantIndex);
+    state.participants = ordered.map((p) => ({
+      ...p,
+      driver: typeof p.driver === "string" ? p.driver.trim() : "",
+      team: typeof p.team === "string" ? p.team.trim() : undefined
+    }));
     for (const p of ordered) {
       const idx = matchEntryIndexByDriverName(p.driver, incomingEntries, used);
       if (idx !== null) {
@@ -695,6 +706,7 @@ export async function POST(req: Request) {
       merged.push(incomingEntries[i]);
     }
   } else {
+    state.participants = [];
     merged.push(...incomingEntries);
   }
 
@@ -970,6 +982,7 @@ export async function POST(req: Request) {
       rainIntensity: state.rainIntensity,
       trackGrip: state.trackGrip,
       trackMap: state.trackMap,
+      participants: state.participants,
       alerts: state.alerts,
       updatedAtMs: state.updatedAtMs,
       entries: state.entries
