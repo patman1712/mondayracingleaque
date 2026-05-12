@@ -50,6 +50,12 @@ export function AdminSidebarClient({ leagues }: { leagues: LeagueItem[] }) {
             News
           </Link>
           <Link
+            href="/admin/settings/admin-users"
+            className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            Admin User
+          </Link>
+          <Link
             href="/admin/settings/league-colors"
             className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
           >
@@ -156,4 +162,3 @@ export function AdminSidebarClient({ leagues }: { leagues: LeagueItem[] }) {
     </aside>
   );
 }
-
