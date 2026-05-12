@@ -90,16 +90,17 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
     const timeText =
       r && typeof r.finishTimeMs === "number" && Number.isFinite(r.finishTimeMs)
         ? formatRaceTimeMs(r.finishTimeMs)
-        : r?.timeText && !r.timeText.trim().startsWith("+")
-          ? (() => {
-              const base = r.timeText ?? "";
-              const pen = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
-              if (!pen) return base;
-              const parsed = parseRaceTimeMs(base);
-              if (typeof parsed !== "number") return base;
-              return formatRaceTimeMs(Math.max(0, parsed - pen * 1000));
-            })()
-          : "";
+        : (() => {
+            const base = (r?.timeText ?? "").trim();
+            if (!base) return "";
+            if (base.toUpperCase() === "WINNER") return "";
+            if (base.startsWith("+")) return base;
+            const pen = typeof r?.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+            if (!pen) return base;
+            const parsed = parseRaceTimeMs(base);
+            if (typeof parsed !== "number") return base;
+            return formatRaceTimeMs(Math.max(0, parsed - pen * 1000));
+          })();
     return {
       id: d.driverId,
       driverId: d.driverId,

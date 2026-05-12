@@ -240,13 +240,16 @@ function mapRow(obj: Record<string, string>) {
   })();
 
   const timeText = (() => {
-    if (gapRaw.trim()) {
-      const g = gapRaw.trim();
+    const raceTimeRaw = get("rennzeit", "racetime", "totaltime", "endzeit", "zeit");
+    const raceTimeToken = extractTimeToken(raceTimeRaw) || raceTimeRaw;
+    const g = gapRaw.trim();
+    const gu = g.toUpperCase();
+    if (gu === "WINNER") return raceTimeToken;
+    if (g) {
       if (/^[0-9]+$/.test(g)) return `+${(Number(g) / 1000).toFixed(3)}`;
       return g;
     }
-    const raceTimeRaw = get("rennzeit", "racetime", "totaltime", "endzeit", "zeit");
-    return extractTimeToken(raceTimeRaw) || raceTimeRaw;
+    return raceTimeToken;
   })();
 
   return {
