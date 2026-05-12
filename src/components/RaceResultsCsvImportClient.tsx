@@ -207,10 +207,35 @@ function mapRow(obj: Record<string, string>) {
     return "";
   };
 
+  const extractTimeToken = (raw: string) => {
+    const s = raw.trim();
+    if (!s) return "";
+    const h = s.match(/(\d+:\d{2}:\d{2}\.\d{3})/);
+    if (h) return h[1] ?? "";
+    const m = s.match(/(\d+:\d{2}\.\d{3})/);
+    if (m) return m[1] ?? "";
+    return "";
+  };
+
   const posRaw = get("pos", "position", "p", "rank", "place");
   const position = Number(posRaw.replace(/[^\d]+/g, ""));
   const piRaw = get("participantindex", "carindex", "vehicleindex", "vehicle", "caridx", "car");
   const participantIndexNum = Number(piRaw.replace(/[^\d]+/g, ""));
+
+  const bestRaw = get("best", "bestlap", "besttime", "bestlaptime", "bestzeit");
+  const bestFromRunde = extractTimeToken(get("runde"));
+  const bestTime = extractTimeToken(bestRaw) || bestFromRunde || bestRaw;
+
+  const raceTimeRaw = get("rennzeit", "racetime", "totaltime", "totaltimegap", "endzeit", "endzeitgap", "zeit", "zeitgap");
+  const gapRaw = get("timegap", "gap", "result");
+  const timeToken = extractTimeToken(raceTimeRaw) || extractTimeToken(gapRaw);
+  const numericGap =
+    !timeToken && gapRaw && /^[0-9]+$/.test(gapRaw.trim()) ? Number(gapRaw.trim()) : null;
+  const timeText = timeToken
+    ? timeToken
+    : typeof numericGap === "number" && Number.isFinite(numericGap)
+      ? `+${(numericGap / 1000).toFixed(3)}`
+      : raceTimeRaw || gapRaw;
 
   return {
     position: Number.isFinite(position) ? Math.floor(position) : NaN,
@@ -230,20 +255,8 @@ function mapRow(obj: Record<string, string>) {
     participantIndex: Number.isFinite(participantIndexNum) ? Math.floor(participantIndexNum) : null,
     grid: get("grid", "gridposition", "start", "startpos", "startplatz", "startposition"),
     stops: get("stops", "pitstops", "pits", "boxenstopps", "boxenstops"),
-    bestTime: get("best", "bestlap", "besttime", "bestlaptime", "bestzeit"),
-    timeText: get(
-      "time",
-      "timegap",
-      "totaltime",
-      "totaltimegap",
-      "racetime",
-      "result",
-      "gap",
-      "zeit",
-      "zeitgap",
-      "endzeit",
-      "endzeitgap"
-    ),
+    bestTime,
+    timeText,
     status: get("status", "resultstatus", "racestatus"),
     points: get("pts", "points", "punkte"),
     fastest: get("fl", "fastestlap", "fastest", "schnellsterunde")
