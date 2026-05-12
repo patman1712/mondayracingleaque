@@ -373,8 +373,19 @@ export default async function RaceDetailPage({
                     const statusRaw = (r.status ?? "").trim();
                     const statusUp = statusRaw.toUpperCase();
                     const statusIsFinished = statusUp === "FINISHED" || statusUp === "FINISH" || statusUp === "F";
+                    const statusDisplay = statusUp === "RETIRED" ? "RET" : statusUp;
                     const endOrStatus =
-                      r.timeText && (!statusRaw || statusIsFinished) ? r.timeText : r.status ? r.status : r.timeText ? r.timeText : "";
+                      statusUp && ["DNF", "DSQ", "DNS", "RET", "RETIRED"].includes(statusUp)
+                        ? statusDisplay
+                        : r.position === 1
+                          ? r.timeText ?? ""
+                          : r.timeText && r.timeText.trim().startsWith("+")
+                            ? r.timeText
+                            : statusIsFinished
+                              ? r.timeText && r.timeText.trim()
+                                ? `+${r.timeText}`
+                                : ""
+                              : r.timeText ?? "";
                     const best = r.bestTime ?? "";
                     const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
                     const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
