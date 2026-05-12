@@ -326,7 +326,6 @@ async function bulkUpsertResults(
     }
   });
 
-  await recalcRaceResults(prisma, raceId).catch(() => null);
   await applyRaceScoring(prisma, raceId).catch(() => null);
   await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 

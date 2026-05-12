@@ -222,20 +222,32 @@ function mapRow(obj: Record<string, string>) {
   const piRaw = get("participantindex", "carindex", "vehicleindex", "vehicle", "caridx", "car");
   const participantIndexNum = Number(piRaw.replace(/[^\d]+/g, ""));
 
-  const bestRaw = get("best", "bestlap", "besttime", "bestlaptime", "bestzeit");
+  const bestRaw = get("besterunde", "bestlap", "bestlaptime", "best", "besttime", "bestzeit");
   const bestFromRunde = extractTimeToken(get("runde"));
   const bestTime = extractTimeToken(bestRaw) || bestFromRunde || bestRaw;
 
-  const raceTimeRaw = get("rennzeit", "racetime", "totaltime", "totaltimegap", "endzeit", "endzeitgap", "zeit", "zeitgap");
-  const gapRaw = get("timegap", "gap", "result");
-  const timeToken = extractTimeToken(raceTimeRaw) || extractTimeToken(gapRaw);
-  const numericGap =
-    !timeToken && gapRaw && /^[0-9]+$/.test(gapRaw.trim()) ? Number(gapRaw.trim()) : null;
-  const timeText = timeToken
-    ? timeToken
-    : typeof numericGap === "number" && Number.isFinite(numericGap)
-      ? `+${(numericGap / 1000).toFixed(3)}`
-      : raceTimeRaw || gapRaw;
+  const gapRaw = get("gap", "timegap", "zeitgap");
+  const statusRaw = get("status", "resultstatus", "racestatus");
+  const statusUp = statusRaw.trim().toUpperCase();
+  const gapUp = gapRaw.trim().toUpperCase();
+
+  const status = (() => {
+    if (!statusUp) return "";
+    if (statusUp === "FINISHED") return "";
+    if (statusUp === "RETIRED") return "RET";
+    if (["DNF", "DSQ", "DNS", "RET"].includes(statusUp)) return statusUp;
+    return statusUp;
+  })();
+
+  const timeText = (() => {
+    if (gapRaw.trim()) {
+      const g = gapRaw.trim();
+      if (/^[0-9]+$/.test(g)) return `+${(Number(g) / 1000).toFixed(3)}`;
+      return g;
+    }
+    const raceTimeRaw = get("rennzeit", "racetime", "totaltime", "endzeit", "zeit");
+    return extractTimeToken(raceTimeRaw) || raceTimeRaw;
+  })();
 
   return {
     position: Number.isFinite(position) ? Math.floor(position) : NaN,
@@ -257,7 +269,7 @@ function mapRow(obj: Record<string, string>) {
     stops: get("stops", "pitstops", "pits", "boxenstopps", "boxenstops"),
     bestTime,
     timeText,
-    status: get("status", "resultstatus", "racestatus"),
+    status: status || (gapUp === "RETIRED" ? "RET" : gapUp === "DNF" ? "DNF" : gapUp === "DSQ" ? "DSQ" : ""),
     points: get("pts", "points", "punkte"),
     fastest: get("fl", "fastestlap", "fastest", "schnellsterunde")
   };
@@ -535,7 +547,7 @@ export function RaceResultsCsvImportClient({
                           <span>Status {status}</span>
                           <span>Grid {grid}</span>
                           <span>Stops {stops}</span>
-                          {r.bestTime ? <span className={r.fastestLap ? "text-violet-300" : ""}>Best {r.bestTime}</span> : null}
+                          <span className={r.fastestLap ? "text-violet-300" : ""}>Best {r.bestTime?.trim() ? r.bestTime : "—"}</span>
                           {r.points ? <span>PTS {r.points}</span> : null}
                         </div>
                         {isMissing && suggestions.length ? (
