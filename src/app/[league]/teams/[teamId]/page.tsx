@@ -103,6 +103,7 @@ export default async function TeamDetailPage({
           orderBy: [{ role: "asc" }, { driver: { number: "asc" } }, { driver: { name: "asc" } }],
           select: {
             role: true,
+            portraitPath: true,
             driver: {
               select: { id: true, name: true, gamertag: true, number: true, country: true, portraitPath: true }
             }
@@ -118,8 +119,12 @@ export default async function TeamDetailPage({
       ? `Saison ${fallbackParticipation.season.year} · Season ${fallbackParticipation.season.seasonNo}${fallbackParticipation.season.isTest ? " · TEST" : ""}`
       : null;
 
-  const mainDrivers = drivers.filter((d) => d.role === "MAIN").map((d) => d.driver);
-  const reserveDrivers = drivers.filter((d) => d.role === "RESERVE").map((d) => d.driver);
+  const mainDrivers = drivers
+    .filter((d) => d.role === "MAIN")
+    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? d.driver.portraitPath }));
+  const reserveDrivers = drivers
+    .filter((d) => d.role === "RESERVE")
+    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? d.driver.portraitPath }));
 
   const primaryDrivers = mainDrivers.length ? mainDrivers : reserveDrivers;
 

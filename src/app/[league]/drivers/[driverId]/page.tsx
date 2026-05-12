@@ -161,6 +161,7 @@ export default async function DriverDetailPage({
           .findUnique({
             where: { driverId_seasonId: { driverId: driver.id, seasonId: currentSeason.id } },
             select: {
+              portraitPath: true,
               starts: true,
               wins: true,
               podiums: true,
@@ -247,7 +248,7 @@ export default async function DriverDetailPage({
       driver.teamRef?.color ??
       fallback;
 
-  const portraitUrl = imageUrl(driver.portraitPath);
+  const portraitUrl = imageUrl(currentSeasonRow?.portraitPath ?? driver.portraitPath);
   const teamLogoUrl = imageUrl(seasonTeam?.teamRef?.logoPath);
   const currentSeasonLabel = currentSeason
     ? `Saison ${currentSeason.year} · Season ${currentSeason.seasonNo}${currentSeason.isTest ? " · TEST" : ""}`

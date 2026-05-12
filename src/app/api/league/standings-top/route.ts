@@ -34,6 +34,7 @@ export async function GET(req: Request) {
         driverId: true,
         teamId: true,
         role: true,
+        portraitPath: true,
         driver: { select: { name: true, gamertag: true, portraitPath: true } },
         teamRef: { select: { id: true } }
       },
@@ -56,7 +57,7 @@ export async function GET(req: Request) {
       name,
       role: r.role,
       teamId: r.teamId ?? r.teamRef?.id ?? null,
-      portraitUrl: imageUrl(r.driver.portraitPath)
+      portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath)
     });
   }
 

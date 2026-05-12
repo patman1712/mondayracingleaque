@@ -85,31 +85,10 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
   const numberRaw = String(formData.get("number") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
   const twitchChannelRaw = String(formData.get("twitchChannel") ?? "").trim();
-  const portrait = asUploadFile(formData.get("portrait"));
 
   if (!name) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=invalid`);
 
   const number = numberRaw ? Number(numberRaw) : null;
-
-  const current = await prisma.driver
-    .findUnique({
-      where: { id: driverId },
-      select: { id: true, portraitPath: true }
-    })
-    .catch(() => null);
-  if (!current) notFound();
-
-  let portraitPath: string | null | undefined = undefined;
-  let newPortraitPath: string | null = null;
-  if (portrait && portrait.size > 0) {
-    if (portrait.size > 8_000_000) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=image`);
-    const ext = extFromMime(portrait.type);
-    if (!ext) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=image`);
-    const fileName = `driver-portrait-${driverId}-${Date.now()}.${ext}`;
-    await writeUpload(fileName, portrait);
-    portraitPath = fileName;
-    newPortraitPath = fileName;
-  }
 
   try {
     await prisma.driver.update({
@@ -120,18 +99,14 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
         number: Number.isFinite(number) ? (number as number) : null,
         country: country || null,
         twitchChannel: twitchChannelRaw || null,
-        ...(portraitPath !== undefined ? { portraitPath } : {})
       }
     });
   } catch (e) {
-    deleteUpload(newPortraitPath);
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
       redirect(`/admin/${adminLeague}/drivers/${driverId}?error=db`);
     }
     redirect(`/admin/${adminLeague}/drivers/${driverId}?error=save`);
   }
-
-  if (newPortraitPath && current.portraitPath) deleteUpload(current.portraitPath);
 
   const pub = await publicSlugForLeague(league);
   revalidatePath(`/admin/${adminLeague}/drivers`);
@@ -141,6 +116,84 @@ async function updateBasics(adminLeague: string, league: League, driverId: strin
     revalidatePath(`/${pub}/drivers/${driverId}`);
   }
 
+  redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
+}
+
+async function updateSeasonPortrait(adminLeague: string, league: League, driverId: string, formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const portrait = asUploadFile(formData.get("portrait"));
+  if (!seasonId) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+  if (!portrait || portrait.size <= 0) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=image`);
+  if (portrait.size > 8_000_000) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=image`);
+  const ext = extFromMime(portrait.type);
+  if (!ext) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=image`);
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null);
+  if (!season || season.league !== league) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+
+  const current = await prisma.driverSeason
+    .findUnique({ where: { driverId_seasonId: { driverId, seasonId } }, select: { portraitPath: true } })
+    .catch(() => null);
+  if (!current) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+
+  const fileName = `driver-season-portrait-${driverId}-${Date.now()}.${ext}`;
+  await writeUpload(fileName, portrait);
+
+  try {
+    await prisma.driverSeason.update({
+      where: { driverId_seasonId: { driverId, seasonId } },
+      data: { portraitPath: fileName }
+    });
+  } catch (e) {
+    deleteUpload(fileName);
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+      redirect(`/admin/${adminLeague}/drivers/${driverId}?error=db`);
+    }
+    redirect(`/admin/${adminLeague}/drivers/${driverId}?error=save`);
+  }
+
+  if (current.portraitPath) deleteUpload(current.portraitPath);
+
+  const pub = await publicSlugForLeague(league);
+  revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+    revalidatePath(`/${pub}/tv`);
+    revalidatePath(`/${pub}/standings`);
+  }
+  redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
+}
+
+async function removeSeasonPortrait(adminLeague: string, league: League, driverId: string, formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  if (!seasonId) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { id: true, league: true } }).catch(() => null);
+  if (!season || season.league !== league) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+
+  const current = await prisma.driverSeason
+    .findUnique({ where: { driverId_seasonId: { driverId, seasonId } }, select: { portraitPath: true } })
+    .catch(() => null);
+  if (!current) redirect(`/admin/${adminLeague}/drivers/${driverId}?error=season`);
+
+  await prisma.driverSeason.update({ where: { driverId_seasonId: { driverId, seasonId } }, data: { portraitPath: null } }).catch(() => null);
+  if (current.portraitPath) deleteUpload(current.portraitPath);
+
+  const pub = await publicSlugForLeague(league);
+  revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
+  if (pub) {
+    revalidatePath(`/${pub}/drivers`);
+    revalidatePath(`/${pub}/drivers/${driverId}`);
+    revalidatePath(`/${pub}/tv`);
+    revalidatePath(`/${pub}/standings`);
+  }
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
@@ -316,21 +369,6 @@ async function updateSeason(adminLeague: string, league: League, driverId: strin
   redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
 }
 
-async function removePortrait(adminLeague: string, league: League, driverId: string) {
-  "use server";
-  await requireAdmin();
-  const current = await prisma.driver
-    .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
-    .catch(() => null);
-  if (!current) notFound();
-  await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: null } }).catch(() => null);
-  if (current.portraitPath) deleteUpload(current.portraitPath);
-  const pub = await publicSlugForLeague(league);
-  revalidatePath(`/admin/${adminLeague}/drivers/${driverId}`);
-  if (pub) revalidatePath(`/${pub}/drivers/${driverId}`);
-  redirect(`/admin/${adminLeague}/drivers/${driverId}?ok=1`);
-}
-
 export default async function AdminDriverDetailPage({
   params,
   searchParams
@@ -371,6 +409,7 @@ export default async function AdminDriverDetailPage({
             seasonId: true,
             teamId: true,
             role: true,
+            portraitPath: true,
             starts: true,
             wins: true,
             podiums: true,
@@ -426,7 +465,6 @@ export default async function AdminDriverDetailPage({
     .map((s) => ({ ...s, season: seasonById.get(s.seasonId) ?? null }))
     .filter((s) => s.season !== null);
   const activeSeasonIds = new Set(seasonRows.map((s) => s.seasonId));
-  const portraitUrl = imageUrl(driver.portraitPath);
 
   const seasonTotals = seasonRows.reduce(
     (acc, r) => {
@@ -547,45 +585,13 @@ export default async function AdminDriverDetailPage({
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                   />
                 </div>
+                <div className="md:col-span-3 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-white/60">
+                  Fahrerbild wird pro Saison gesetzt (siehe „Saisons“).
+                </div>
                 <div className="md:col-span-3">
-                  <label className="mb-1 block text-xs font-semibold text-white/70">
-                    Fahrerbild (PNG)
-                  </label>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center gap-3">
-                      {portraitUrl ? (
-                        <img
-                          src={portraitUrl}
-                          alt=""
-                          className="h-16 w-16 rounded-xl bg-black/20 object-cover"
-                        />
-                      ) : (
-                        <div className="h-16 w-16 rounded-xl bg-black/20" />
-                      )}
-                      <div className="text-xs text-white/60">
-                        {driver.portraitPath ?? "Kein Bild gesetzt"}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {driver.portraitPath ? (
-                        <button
-                          formAction={removePortrait.bind(null, adminLeague, l, driver.id)}
-                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                        >
-                          Bild entfernen
-                        </button>
-                      ) : null}
-                      <input
-                        name="portrait"
-                        type="file"
-                        accept="image/png"
-                        className="w-full max-w-[340px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                      />
-                      <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-                        Speichern
-                      </button>
-                    </div>
-                  </div>
+                  <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                    Speichern
+                  </button>
                 </div>
               </form>
             </details>
@@ -729,6 +735,12 @@ export default async function AdminDriverDetailPage({
                 {seasons.map((s) => {
                   const row = seasonRows.find((r) => r.seasonId === s.id) ?? null;
                   const active = Boolean(row);
+                  const seasonPortraitUrl = imageUrl(row?.portraitPath ?? driver.portraitPath);
+                  const seasonPortraitLabel = row?.portraitPath
+                    ? row.portraitPath
+                    : driver.portraitPath
+                      ? `${driver.portraitPath} (Fallback)`
+                      : "Kein Bild gesetzt";
                   return (
                     <details key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
                       <summary className="cursor-pointer text-sm font-semibold text-white/85">
@@ -737,11 +749,49 @@ export default async function AdminDriverDetailPage({
                         {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
                         {active && row?.role === "RESERVE" ? " · Ersatzfahrer" : ""}
                         {!active ? " · inaktiv" : ""}
+                        {active ? (row?.portraitPath ? " · Bild" : driver.portraitPath ? " · Fallback" : "") : ""}
                       </summary>
 
                       <div className="mt-4 space-y-3">
                         {active ? (
                           <>
+                            <form
+                              action={updateSeasonPortrait.bind(null, adminLeague, l, driver.id)}
+                              encType="multipart/form-data"
+                              className="rounded-xl border border-white/10 bg-black/20 p-4"
+                            >
+                              <input type="hidden" name="seasonId" value={s.id} />
+                              <div className="text-xs font-semibold text-white/70">Fahrerbild (Saison)</div>
+                              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  {seasonPortraitUrl ? (
+                                    <img src={seasonPortraitUrl} alt="" className="h-14 w-14 rounded-xl bg-black/20 object-cover" />
+                                  ) : (
+                                    <div className="h-14 w-14 rounded-xl bg-black/20" />
+                                  )}
+                                  <div className="text-xs text-white/60">{seasonPortraitLabel}</div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {row?.portraitPath ? (
+                                    <button
+                                      formAction={removeSeasonPortrait.bind(null, adminLeague, l, driver.id)}
+                                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                                    >
+                                      Bild entfernen
+                                    </button>
+                                  ) : null}
+                                  <input
+                                    name="portrait"
+                                    type="file"
+                                    accept="image/png"
+                                    className="w-full max-w-[340px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                                  />
+                                  <button className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15">
+                                    Speichern
+                                  </button>
+                                </div>
+                              </div>
+                            </form>
                             <form action={updateSeason.bind(null, adminLeague, l, driver.id)} className="grid gap-4 md:grid-cols-3">
                               <input type="hidden" name="seasonId" value={s.id} />
                               <div className="md:col-span-3">

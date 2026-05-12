@@ -4,7 +4,6 @@ import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
-import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -78,32 +77,35 @@ export default async function LeagueDriversPage({
     }).catch(() => null);
 
     if (currentSeason) {
+      const select = {
+        portraitPath: true,
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            gamertag: true,
+            number: true,
+            country: true,
+            portraitPath: true,
+          }
+        },
+        teamRef: {
+          select: {
+            color: true,
+            participations: {
+              where: { seasonId: currentSeason.id },
+              select: { color: true },
+              take: 1
+            }
+          }
+        }
+      } as const;
+
       const rows = await prisma.driverSeason
         .findMany({
           where: { seasonId: currentSeason.id, driver: { status: "ACTIVE" } },
           orderBy: [{ driver: { name: "asc" } }],
-          select: {
-            driver: {
-              select: {
-                id: true,
-                name: true,
-                gamertag: true,
-                number: true,
-                country: true,
-                portraitPath: true,
-              }
-            },
-            teamRef: {
-              select: {
-                color: true,
-                participations: {
-                  where: { seasonId: currentSeason.id },
-                  select: { color: true },
-                  take: 1
-                }
-              }
-            }
-          }
+          select
         })
         .catch(() => []);
 
@@ -118,7 +120,7 @@ export default async function LeagueDriversPage({
           number: r.driver.number ?? null,
           team: null,
           country: r.driver.country ?? null,
-          portraitPath: r.driver.portraitPath ?? null,
+          portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
           accent
         });
       }
@@ -127,6 +129,7 @@ export default async function LeagueDriversPage({
 
     if (!drivers.length) {
       const select = {
+        portraitPath: true,
         driver: {
           select: {
             id: true,
@@ -137,8 +140,7 @@ export default async function LeagueDriversPage({
             portraitPath: true
           }
         }
-      } satisfies Prisma.DriverSeasonSelect;
-      type Row = Prisma.DriverSeasonGetPayload<{ select: typeof select }>;
+      } as const;
 
       const rows = await prisma.driverSeason
         .findMany({
@@ -148,7 +150,7 @@ export default async function LeagueDriversPage({
           select,
           take: 5000
         })
-        .catch((): Row[] => []);
+        .catch(() => []);
 
       drivers = rows.map((r) => ({
         id: r.driver.id,
@@ -157,7 +159,7 @@ export default async function LeagueDriversPage({
         number: r.driver.number ?? null,
         team: null,
         country: r.driver.country ?? null,
-        portraitPath: r.driver.portraitPath ?? null,
+        portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
         accent: null
       }));
     }

@@ -185,6 +185,7 @@ export default async function LeagueTvPage({
           where: { seasonId: seasonRow.id, driverId: { in: driverIds } },
           select: {
             driverId: true,
+            portraitPath: true,
             teamRef: { select: { id: true, name: true, color: true, logoPath: true } }
           },
           take: 5000
@@ -223,7 +224,7 @@ export default async function LeagueTvPage({
         driverId: d.id,
         name: d.gamertag ?? d.name,
         twitchChannel: d.twitchChannel!,
-        portraitUrl: imageUrl(d.portraitPath),
+        portraitUrl: imageUrl(ds?.portraitPath ?? d.portraitPath),
         teamName: team?.name ?? null,
         teamLogoUrl: imageUrl(team?.logoPath),
         accent

@@ -8,7 +8,7 @@ import { TyreBadge } from "@/components/TyreBadge";
 import { TeamLogo } from "@/components/TeamLogo";
 import { flagBackgroundUrl, flagCodeForText } from "@/lib/flags";
 import { sessionModeFromName } from "@/lib/liveTimingDisplay";
-import { defaultLiveTimingLeagueKeyForPublicSlug, isLiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
+import { isLiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
 
 type LiveTimingEntry = {
   position: number;
@@ -161,30 +161,50 @@ export default function LiveTimingPage() {
   }, [leagueKey]);
 
   useEffect(() => {
-    fetch("/api/leagues", { cache: "no-store" })
+    fetch("/api/live-timing/leagues", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
-      .then((j: { leagues?: Array<{ slug: string; label: string; accent: string }> }) => {
+      .then((j: { leagues?: Array<{ key: string; label: string; accent: string }> }) => {
         const list = Array.isArray(j?.leagues) ? j.leagues : null;
         if (!list) return;
-        const mapped = new Map<string, LeagueOption>();
-        for (const l of list) {
-          if (!l?.slug || !l?.label) continue;
-          const key = defaultLiveTimingLeagueKeyForPublicSlug(l.slug);
-          if (!isLiveTimingLeagueKey(key)) continue;
-          if (mapped.has(key)) continue;
-          mapped.set(key, { key, label: l.label, accent: l.accent || "#E10600" });
-        }
-        const next = Array.from(mapped.values());
-        if (next.length) setLeagues((prev) => {
-          const prevKeys = new Set(prev.map((x) => x.key));
-          const merged = [...prev];
-          for (const x of next) {
-            if (!prevKeys.has(x.key)) merged.push(x);
-          }
-          return merged;
-        });
+        const next = list.filter((l) => l?.key && l?.label);
+        if (next.length) setLeagues(next);
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const stored = (() => {
+      try {
+        return localStorage.getItem("mrl.live.leagueKey");
+      } catch {
+        return null;
+      }
+    })();
+    fetch("/api/live-timing?all=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad response"))))
+      .then((j: Record<string, LiveTimingState>) => {
+        if (cancelled) return;
+        const now = Date.now();
+        const candidates = Object.entries(j ?? {})
+          .map(([k, v]) => ({
+            key: k,
+            updatedAtMs: typeof v?.updatedAtMs === "number" ? v.updatedAtMs : 0,
+            entriesLen: Array.isArray(v?.entries) ? v.entries.length : 0
+          }))
+          .filter((x) => isLiveTimingLeagueKey(x.key) && x.updatedAtMs && now - x.updatedAtMs < 10_000 && x.entriesLen > 0)
+          .sort((a, b) => b.updatedAtMs - a.updatedAtMs);
+        const best = candidates[0]?.key ?? null;
+        if (!best) return;
+        if (!stored || !isLiveTimingLeagueKey(stored)) {
+          setLeagueKey(best);
+          return;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

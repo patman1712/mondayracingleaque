@@ -62,6 +62,7 @@ export default async function AdminDriversPage({
   try {
     const select = {
       role: true,
+      portraitPath: true,
       teamRef: { select: { name: true } },
       driver: {
         select: {
@@ -74,7 +75,7 @@ export default async function AdminDriversPage({
           portraitPath: true
         }
       }
-    } satisfies Prisma.DriverSeasonSelect;
+    } as const;
     type Row = Prisma.DriverSeasonGetPayload<{ select: typeof select }>;
 
     const activeSeason = await getActiveSeason({
@@ -109,7 +110,7 @@ export default async function AdminDriversPage({
       number: r.driver.number ?? null,
       country: r.driver.country ?? null,
       twitchChannel: r.driver.twitchChannel ?? null,
-      portraitPath: r.driver.portraitPath ?? null,
+      portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
       role: r.role ?? null,
       teamName: r.teamRef?.name ?? null
     }));

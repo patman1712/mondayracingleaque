@@ -223,7 +223,7 @@ export default async function RaceDetailPage({
     ? await prisma.driverSeason
         .findMany({
           where: { seasonId: season.id, driverId: { in: driverIds } },
-          select: { driverId: true, role: true, teamRef: { select: { name: true, color: true, logoPath: true } } },
+          select: { driverId: true, role: true, portraitPath: true, teamRef: { select: { name: true, color: true, logoPath: true } } },
           take: 5000
         })
         .catch(() => [])
@@ -245,7 +245,7 @@ export default async function RaceDetailPage({
       name: e.driver.name,
       number: e.driver.number ?? null,
       country: e.driver.country ?? null,
-      portraitUrl: imageUrl(e.driver.portraitPath) ?? null,
+      portraitUrl: imageUrl(ds?.portraitPath ?? e.driver.portraitPath) ?? null,
       role,
       roleLabel,
       teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,

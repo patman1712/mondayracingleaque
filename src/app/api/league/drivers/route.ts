@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { getActiveSeason } from "@/lib/currentSeason";
-import { Prisma } from "@prisma/client";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
 
 function imageUrl(imagePath: string | null | undefined) {
@@ -30,6 +29,7 @@ export async function GET(req: Request) {
 
   const select = {
     role: true,
+    portraitPath: true,
     driver: {
       select: {
         id: true,
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
         }
       }
     }
-  } satisfies Prisma.DriverSeasonSelect;
+  } as const;
 
   const rows = await prisma.driverSeason
     .findMany({
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
           gamertag: r.driver.gamertag ?? null,
           number: r.driver.number ?? null,
           country: r.driver.country ?? null,
-          portraitUrl: imageUrl(r.driver.portraitPath),
+          portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath),
           accent,
           role: r.role
         };

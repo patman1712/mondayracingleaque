@@ -23,6 +23,7 @@ const driverSelect = {
   driverId: true,
   role: true,
   teamId: true,
+  portraitPath: true,
   driver: { select: { id: true, name: true, gamertag: true, portraitPath: true } },
   teamRef: { select: { name: true, color: true } }
 } as const;
@@ -30,6 +31,7 @@ type DriverRow = {
   driverId: string;
   role: "MAIN" | "RESERVE";
   teamId: string | null;
+  portraitPath: string | null;
   driver: { id: string; name: string; gamertag: string | null; portraitPath: string | null };
   teamRef: { name: string; color: string | null } | null;
 };
@@ -892,7 +894,7 @@ export default async function AdminRaceResultsPage({
       role: r.role,
       teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null,
       teamColor: r.role === "MAIN" ? r.teamRef?.color ?? null : null,
-      portraitUrl: imageUrl(r.driver.portraitPath)
+      portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath)
     }));
   } catch {}
 

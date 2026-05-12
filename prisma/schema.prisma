@@ -79,6 +79,7 @@ model DriverSeason {
   seasonId String
   teamId   String?
   role     DriverRole @default(MAIN)
+  portraitPath String?
   starts   Int @default(0)
   wins     Int @default(0)
   podiums  Int @default(0)
