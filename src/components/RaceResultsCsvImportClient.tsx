@@ -228,13 +228,25 @@ function mapRow(obj: Record<string, string>) {
       "gamertag"
     ),
     participantIndex: Number.isFinite(participantIndexNum) ? Math.floor(participantIndexNum) : null,
-    grid: get("grid", "start", "startpos", "gridposition"),
-    stops: get("stops", "pitstops", "pits"),
-    bestTime: get("best", "bestlap", "besttime", "bestlaptime"),
-    timeText: get("time", "totaltime", "racetime", "result", "gap"),
-    status: get("status", "resultstatus"),
-    points: get("pts", "points"),
-    fastest: get("fl", "fastestlap", "fastest")
+    grid: get("grid", "gridposition", "start", "startpos", "startplatz", "startposition"),
+    stops: get("stops", "pitstops", "pits", "boxenstopps", "boxenstops"),
+    bestTime: get("best", "bestlap", "besttime", "bestlaptime", "bestzeit"),
+    timeText: get(
+      "time",
+      "timegap",
+      "totaltime",
+      "totaltimegap",
+      "racetime",
+      "result",
+      "gap",
+      "zeit",
+      "zeitgap",
+      "endzeit",
+      "endzeitgap"
+    ),
+    status: get("status", "resultstatus", "racestatus"),
+    points: get("pts", "points", "punkte"),
+    fastest: get("fl", "fastestlap", "fastest", "schnellsterunde")
   };
 }
 

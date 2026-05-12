@@ -49,6 +49,15 @@ function formatRaceTimeMs(ms: number) {
 
 function parseRaceTimeMs(s: string) {
   const raw = s.trim();
+  const h = raw.match(/^(\d+):(\d{2}):(\d{2})\.(\d{3})$/);
+  if (h) {
+    const hours = Number(h[1]);
+    const min = Number(h[2]);
+    const sec = Number(h[3]);
+    const ms = Number(h[4]);
+    if (!Number.isFinite(hours) || !Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+    return ((hours * 3600 + min * 60 + sec) * 1000) + ms;
+  }
   const m = raw.match(/^(\d+):(\d{2})\.(\d{3})$/);
   if (!m) return null;
   const min = Number(m[1]);
