@@ -67,6 +67,66 @@ function f1Dots() {
   } as const;
 }
 
+function parseRaceTimeMs(raw: string | null | undefined) {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const h = s.match(/^(\d+):(\d{2}):(\d{2})\.(\d{3})$/);
+  if (h) {
+    const hours = Number(h[1]);
+    const min = Number(h[2]);
+    const sec = Number(h[3]);
+    const ms = Number(h[4]);
+    if (!Number.isFinite(hours) || !Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+    return ((hours * 3600 + min * 60 + sec) * 1000) + ms;
+  }
+  const m = s.match(/^(\d+):(\d{2})\.(\d{3})$/);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3]);
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return ((min * 60 + sec) * 1000) + ms;
+}
+
+function formatGapMs(ms: number) {
+  const total = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(total / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const milli = total % 1000;
+  if (minutes > 0) return `+${minutes}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
+  return `+${seconds}.${String(milli).padStart(3, "0")}`;
+}
+
+function getResultDisplayTime(
+  result: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null },
+  winnerRaceTimeMs: number | null
+) {
+  const statusUp = (result.status ?? "").trim().toUpperCase();
+  if (statusUp === "DNF") return "DNF";
+  if (statusUp === "RET" || statusUp === "RETIRED") return "RET";
+  if (statusUp === "DSQ") return "DSQ";
+  if (statusUp === "DNS") return "DNS";
+
+  const tt = (result.timeText ?? "").trim();
+  if (result.position === 1) {
+    if (tt && tt.toUpperCase() !== "WINNER") return tt;
+    if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs)) {
+      return formatGapMs(result.finishTimeMs).slice(1);
+    }
+    return "—";
+  }
+
+  if (tt.startsWith("+")) return tt;
+  if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs) && typeof winnerRaceTimeMs === "number") {
+    return formatGapMs(result.finishTimeMs - winnerRaceTimeMs);
+  }
+  const raceMs = parseRaceTimeMs(tt);
+  if (typeof raceMs === "number" && typeof winnerRaceTimeMs === "number") {
+    return formatGapMs(raceMs - winnerRaceTimeMs);
+  }
+  return "—";
+}
+
 export default async function RaceDetailPage({
   params
 }: {
@@ -202,6 +262,7 @@ export default async function RaceDetailPage({
     status: string | null;
     bestTime: string | null;
     timeText: string | null;
+    finishTimeMs: number | null;
     penaltySeconds: number;
     fastestLap: boolean;
     driver: { id: string; name: string; team: string | null; number: number | null; portraitPath: string | null };
@@ -220,6 +281,7 @@ export default async function RaceDetailPage({
           status: true,
           bestTime: true,
           timeText: true,
+          finishTimeMs: true,
           penaltySeconds: true,
           fastestLap: true,
           driver: { select: { id: true, name: true, team: true, number: true, portraitPath: true } }
@@ -227,6 +289,14 @@ export default async function RaceDetailPage({
       })
       .catch(() => []);
   }
+
+  const winner = results.find((r) => r.position === 1) ?? null;
+  const winnerRaceTimeMs =
+    winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
+      ? winner.finishTimeMs
+      : winner
+        ? parseRaceTimeMs(winner.timeText)
+        : null;
 
   const fieldByDriverId = new Map(field.map((d) => [d.id, d] as const));
   const splitAt = Math.ceil(results.length / 2);
@@ -370,22 +440,7 @@ export default async function RaceDetailPage({
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
                     const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
                     const accent = d?.accent ?? null;
-                    const statusRaw = (r.status ?? "").trim();
-                    const statusUp = statusRaw.toUpperCase();
-                    const statusIsFinished = statusUp === "FINISHED" || statusUp === "FINISH" || statusUp === "F";
-                    const statusDisplay = statusUp === "RETIRED" ? "RET" : statusUp;
-                    const endOrStatus =
-                      statusUp && ["DNF", "DSQ", "DNS", "RET", "RETIRED"].includes(statusUp)
-                        ? statusDisplay
-                        : r.position === 1
-                          ? r.timeText ?? ""
-                          : r.timeText && r.timeText.trim().startsWith("+")
-                            ? r.timeText
-                            : statusIsFinished
-                              ? r.timeText && r.timeText.trim()
-                                ? `+${r.timeText}`
-                                : ""
-                              : r.timeText ?? "";
+                    const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
                     const best = r.bestTime ?? "";
                     const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
                     const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
