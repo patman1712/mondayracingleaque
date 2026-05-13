@@ -80,6 +80,36 @@ async function writeUpload(fileName: string, file: File) {
   fs.writeFileSync(abs, buf);
 }
 
+async function seasonTotalsForDriver(driverId: string) {
+  const rows = await prisma.driverSeason
+    .findMany({
+      where: { driverId },
+      select: {
+        starts: true,
+        wins: true,
+        podiums: true,
+        driverOfDay: true,
+        driverTitles: true,
+        constructorTitles: true
+      },
+      take: 5000
+    })
+    .catch(() => []);
+
+  return rows.reduce(
+    (acc, r) => {
+      acc.starts += r.starts;
+      acc.wins += r.wins;
+      acc.podiums += r.podiums;
+      acc.driverOfDay += r.driverOfDay;
+      acc.driverTitles += r.driverTitles;
+      acc.constructorTitles += r.constructorTitles;
+      return acc;
+    },
+    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+  );
+}
+
 export default async function AdminSettingsDriverEditPage({
   params
 }: {
@@ -112,6 +142,15 @@ export default async function AdminSettingsDriverEditPage({
 
   if (!driver) notFound();
   const portraitUrl = imageUrl(driver.portraitPath);
+  const seasonTotals = await seasonTotalsForDriver(driverId);
+  const totalComputed = {
+    starts: seasonTotals.starts + (driver.starts ?? 0),
+    wins: seasonTotals.wins + (driver.wins ?? 0),
+    podiums: seasonTotals.podiums + (driver.podiums ?? 0),
+    driverOfDay: seasonTotals.driverOfDay + (driver.driverOfDay ?? 0),
+    driverTitles: seasonTotals.driverTitles + (driver.driverTitles ?? 0),
+    constructorTitles: seasonTotals.constructorTitles + (driver.constructorTitles ?? 0)
+  };
 
   async function updateDriver(formData: FormData) {
     "use server";
@@ -144,6 +183,14 @@ export default async function AdminSettingsDriverEditPage({
     const driverTitles = driverTitlesRaw ? Number(driverTitlesRaw) : 0;
     const constructorTitles = constructorTitlesRaw ? Number(constructorTitlesRaw) : 0;
 
+    const seasonTotals = await seasonTotalsForDriver(driverId);
+    const manualStarts = Math.max(0, Math.trunc((Number.isFinite(starts) ? starts : 0) - seasonTotals.starts));
+    const manualWins = Math.max(0, Math.trunc((Number.isFinite(wins) ? wins : 0) - seasonTotals.wins));
+    const manualPodiums = Math.max(0, Math.trunc((Number.isFinite(podiums) ? podiums : 0) - seasonTotals.podiums));
+    const manualDriverOfDay = Math.max(0, Math.trunc((Number.isFinite(driverOfDay) ? driverOfDay : 0) - seasonTotals.driverOfDay));
+    const manualDriverTitles = Math.max(0, Math.trunc((Number.isFinite(driverTitles) ? driverTitles : 0) - seasonTotals.driverTitles));
+    const manualConstructorTitles = Math.max(0, Math.trunc((Number.isFinite(constructorTitles) ? constructorTitles : 0) - seasonTotals.constructorTitles));
+
     const currentPortrait = await prisma.driver
       .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
       .then((r) => r?.portraitPath ?? null)
@@ -159,12 +206,12 @@ export default async function AdminSettingsDriverEditPage({
           number: Number.isFinite(number) ? (number as number) : null,
           country: countryRaw || null,
           twitchChannel: twitchChannelRaw || null,
-          starts: Number.isFinite(starts) ? (starts as number) : 0,
-          wins: Number.isFinite(wins) ? (wins as number) : 0,
-          podiums: Number.isFinite(podiums) ? (podiums as number) : 0,
-          driverOfDay: Number.isFinite(driverOfDay) ? (driverOfDay as number) : 0,
-          driverTitles: Number.isFinite(driverTitles) ? (driverTitles as number) : 0,
-          constructorTitles: Number.isFinite(constructorTitles) ? (constructorTitles as number) : 0
+          starts: manualStarts,
+          wins: manualWins,
+          podiums: manualPodiums,
+          driverOfDay: manualDriverOfDay,
+          driverTitles: manualDriverTitles,
+          constructorTitles: manualConstructorTitles
         }
       })
       .catch(() => null);
@@ -338,7 +385,7 @@ export default async function AdminSettingsDriverEditPage({
             <div className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 p-4">
               <div className="text-sm font-semibold text-white/85">Gesamtstatistik</div>
               <div className="mt-1 text-xs text-white/60">
-                Manuelle Gesamtwerte (zusätzlich zu den Saison-Stats).
+                Gesamtwerte (Saison + Manuell).
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div>
@@ -348,7 +395,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="starts"
                   inputMode="numeric"
-                  defaultValue={String(driver.starts ?? 0)}
+                  defaultValue={String(totalComputed.starts)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
@@ -359,7 +406,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="wins"
                   inputMode="numeric"
-                  defaultValue={String(driver.wins ?? 0)}
+                  defaultValue={String(totalComputed.wins)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
@@ -370,7 +417,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="podiums"
                   inputMode="numeric"
-                  defaultValue={String(driver.podiums ?? 0)}
+                  defaultValue={String(totalComputed.podiums)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
@@ -381,7 +428,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="driverOfDay"
                   inputMode="numeric"
-                  defaultValue={String(driver.driverOfDay ?? 0)}
+                  defaultValue={String(totalComputed.driverOfDay)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
@@ -392,7 +439,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="driverTitles"
                   inputMode="numeric"
-                  defaultValue={String(driver.driverTitles ?? 0)}
+                  defaultValue={String(totalComputed.driverTitles)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
@@ -403,7 +450,7 @@ export default async function AdminSettingsDriverEditPage({
                 <input
                   name="constructorTitles"
                   inputMode="numeric"
-                  defaultValue={String(driver.constructorTitles ?? 0)}
+                  defaultValue={String(totalComputed.constructorTitles)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
               </div>
