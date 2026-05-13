@@ -144,12 +144,12 @@ export default async function AdminSettingsDriverEditPage({
   const portraitUrl = imageUrl(driver.portraitPath);
   const seasonTotals = await seasonTotalsForDriver(driverId);
   const totalComputed = {
-    starts: seasonTotals.starts + (driver.starts ?? 0),
-    wins: seasonTotals.wins + (driver.wins ?? 0),
-    podiums: seasonTotals.podiums + (driver.podiums ?? 0),
-    driverOfDay: seasonTotals.driverOfDay + (driver.driverOfDay ?? 0),
-    driverTitles: seasonTotals.driverTitles + (driver.driverTitles ?? 0),
-    constructorTitles: seasonTotals.constructorTitles + (driver.constructorTitles ?? 0)
+    starts: Math.max(0, seasonTotals.starts + (driver.starts ?? 0)),
+    wins: Math.max(0, seasonTotals.wins + (driver.wins ?? 0)),
+    podiums: Math.max(0, seasonTotals.podiums + (driver.podiums ?? 0)),
+    driverOfDay: Math.max(0, seasonTotals.driverOfDay + (driver.driverOfDay ?? 0)),
+    driverTitles: Math.max(0, seasonTotals.driverTitles + (driver.driverTitles ?? 0)),
+    constructorTitles: Math.max(0, seasonTotals.constructorTitles + (driver.constructorTitles ?? 0))
   };
 
   async function updateDriver(formData: FormData) {
@@ -184,12 +184,14 @@ export default async function AdminSettingsDriverEditPage({
     const constructorTitles = constructorTitlesRaw ? Number(constructorTitlesRaw) : 0;
 
     const seasonTotals = await seasonTotalsForDriver(driverId);
-    const manualStarts = Math.max(0, Math.trunc((Number.isFinite(starts) ? starts : 0) - seasonTotals.starts));
-    const manualWins = Math.max(0, Math.trunc((Number.isFinite(wins) ? wins : 0) - seasonTotals.wins));
-    const manualPodiums = Math.max(0, Math.trunc((Number.isFinite(podiums) ? podiums : 0) - seasonTotals.podiums));
-    const manualDriverOfDay = Math.max(0, Math.trunc((Number.isFinite(driverOfDay) ? driverOfDay : 0) - seasonTotals.driverOfDay));
-    const manualDriverTitles = Math.max(0, Math.trunc((Number.isFinite(driverTitles) ? driverTitles : 0) - seasonTotals.driverTitles));
-    const manualConstructorTitles = Math.max(0, Math.trunc((Number.isFinite(constructorTitles) ? constructorTitles : 0) - seasonTotals.constructorTitles));
+    const manualStarts = Math.trunc((Number.isFinite(starts) ? starts : 0) - seasonTotals.starts);
+    const manualWins = Math.trunc((Number.isFinite(wins) ? wins : 0) - seasonTotals.wins);
+    const manualPodiums = Math.trunc((Number.isFinite(podiums) ? podiums : 0) - seasonTotals.podiums);
+    const manualDriverOfDay = Math.trunc((Number.isFinite(driverOfDay) ? driverOfDay : 0) - seasonTotals.driverOfDay);
+    const manualDriverTitles = Math.trunc((Number.isFinite(driverTitles) ? driverTitles : 0) - seasonTotals.driverTitles);
+    const manualConstructorTitles = Math.trunc(
+      (Number.isFinite(constructorTitles) ? constructorTitles : 0) - seasonTotals.constructorTitles
+    );
 
     const currentPortrait = await prisma.driver
       .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
