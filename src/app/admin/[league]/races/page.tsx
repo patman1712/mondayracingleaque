@@ -7,6 +7,7 @@ import { getActiveSeason } from "@/lib/currentSeason";
 import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
+import { recalcSeasonStats } from "@/lib/seasonStats";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -335,14 +336,38 @@ async function deleteRace(formData: FormData) {
   if (!id) return;
 
   const existing = await prisma.race
-    .findUnique({ where: { id }, select: { imagePath: true } })
+    .findUnique({
+      where: { id },
+      select: { imagePath: true, league: true, season: true, seasonNo: true, seasonIsTest: true }
+    })
     .catch(() => null);
+
+  const seasonRow = existing
+    ? await prisma.season
+        .findUnique({
+          where: {
+            league_year_seasonNo_isTest: {
+              league: existing.league,
+              year: existing.season,
+              seasonNo: existing.seasonNo,
+              isTest: existing.seasonIsTest
+            }
+          },
+          select: { id: true }
+        })
+        .catch(() => null)
+    : null;
+
   await prisma.race.delete({ where: { id } });
   if (existing?.imagePath && !existing.imagePath.startsWith("circuit-")) {
     try {
       const abs = path.join(dataRootDir(), "uploads", existing.imagePath);
       fs.unlinkSync(abs);
     } catch {}
+  }
+
+  if (seasonRow?.id) {
+    await recalcSeasonStats(prisma, seasonRow.id);
   }
 
   revalidatePath("/admin");
@@ -362,6 +387,7 @@ async function deleteRace(formData: FormData) {
     revalidatePath(`/admin/${l.adminSlug}/races`);
     revalidatePath(`/admin/${l.adminSlug}/results`);
     revalidatePath(`/${l.publicSlug}/calendar`);
+    revalidatePath(`/${l.publicSlug}/standings`);
   }
   revalidatePath("/calendar");
   revalidatePath("/");
