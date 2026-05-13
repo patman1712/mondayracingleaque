@@ -51,12 +51,15 @@ export async function GET(req: Request) {
       portraitUrl: string | null;
     }
   >();
+  const seasonTeamIds = new Set<string>();
   for (const r of seasonDrivers) {
     const name = (r.driver.gamertag ?? "").trim() ? String(r.driver.gamertag) : String(r.driver.name);
+    const teamId = r.teamId ?? r.teamRef?.id ?? null;
+    if (r.role === "MAIN" && teamId) seasonTeamIds.add(teamId);
     driverInfo.set(r.driverId, {
       name,
       role: r.role,
-      teamId: r.teamId ?? r.teamRef?.id ?? null,
+      teamId,
       portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath)
     });
   }
@@ -64,27 +67,6 @@ export async function GET(req: Request) {
   const driverRoleById = new Map<string, "MAIN" | "RESERVE">(
     seasonDrivers.map((r) => [r.driverId, r.role] as const)
   );
-
-  const teamsSeason = await prisma.teamSeason
-    .findMany({
-      where: { seasonId: currentSeason.id },
-      select: { color: true, team: { select: { id: true, name: true, color: true, logoPath: true } } },
-      take: 5000
-    })
-    .catch(() => []);
-
-  const teamAccentById = new Map<string, string | null>();
-  const teamLogoUrlById = new Map<string, string | null>();
-  for (const r of teamsSeason) {
-    const accent = r.color ?? r.team.color ?? null;
-    teamAccentById.set(r.team.id, accent);
-    teamLogoUrlById.set(r.team.id, imageUrl(r.team.logoPath));
-  }
-
-  const teamsSeasonFiltered = teamsSeason.filter((t) => {
-    const n = (t.team.name ?? "").trim().toLowerCase();
-    return n !== "ersatzfahrer" && n !== "reserve" && n !== "reserves";
-  });
 
   const races = await prisma.race
     .findMany({
@@ -106,11 +88,13 @@ export async function GET(req: Request) {
 
   const driverPoints = new Map<string, number>();
   const teamPoints = new Map<string, number>();
+  const raceTeamIds = new Set<string>();
 
   for (const race of races) {
     const raceTeamByDriverId = new Map<string, string | null>();
     for (const e of race.entries) {
       raceTeamByDriverId.set(e.driverId, e.teamId ?? null);
+      if (e.teamId) raceTeamIds.add(e.teamId);
     }
 
     const teamRacePoints = new Map<string, number[]>();
@@ -138,6 +122,37 @@ export async function GET(req: Request) {
     }
   }
 
+  const relevantTeamIds = Array.from(new Set([...seasonTeamIds, ...raceTeamIds, ...teamPoints.keys()]));
+
+  const teams = await prisma.team
+    .findMany({
+      where: { id: { in: relevantTeamIds } },
+      select: { id: true, name: true, color: true, logoPath: true },
+      take: 5000
+    })
+    .catch(() => []);
+  const teamById = new Map(teams.map((t) => [t.id, t] as const));
+
+  const teamsSeason = await prisma.teamSeason
+    .findMany({
+      where: { seasonId: currentSeason.id, teamId: { in: relevantTeamIds } },
+      select: { teamId: true, color: true, team: { select: { color: true, logoPath: true } } },
+      take: 5000
+    })
+    .catch(() => []);
+  const teamSeasonById = new Map(teamsSeason.map((t) => [t.teamId, t] as const));
+
+  const teamAccentById = new Map<string, string | null>();
+  const teamLogoUrlById = new Map<string, string | null>();
+  for (const teamId of relevantTeamIds) {
+    const t = teamById.get(teamId) ?? null;
+    const ts = teamSeasonById.get(teamId) ?? null;
+    const accent = ts?.color ?? ts?.team.color ?? t?.color ?? null;
+    teamAccentById.set(teamId, accent);
+    const logoPath = ts?.team.logoPath ?? t?.logoPath ?? null;
+    teamLogoUrlById.set(teamId, imageUrl(logoPath));
+  }
+
   const drivers = Array.from(driverInfo.entries())
     .map(([id, d]) => {
       const accent =
@@ -147,14 +162,21 @@ export async function GET(req: Request) {
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);
 
-  const teams = teamsSeasonFiltered
-    .map((t) => ({
-      id: t.team.id,
-      name: t.team.name,
-      points: teamPoints.get(t.team.id) ?? 0,
-      accent: teamAccentById.get(t.team.id) ?? null,
-      logoUrl: teamLogoUrlById.get(t.team.id) ?? null
-    }))
+  const teamsTop = relevantTeamIds
+    .map((teamId) => {
+      const t = teamById.get(teamId) ?? null;
+      if (!t) return null;
+      const n = (t.name ?? "").trim().toLowerCase();
+      if (n === "ersatzfahrer" || n === "reserve" || n === "reserves") return null;
+      return {
+        id: t.id,
+        name: t.name,
+        points: teamPoints.get(t.id) ?? 0,
+        accent: teamAccentById.get(t.id) ?? null,
+        logoUrl: teamLogoUrlById.get(t.id) ?? null
+      };
+    })
+    .filter((t): t is NonNullable<typeof t> => Boolean(t))
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))
     .slice(0, 3);
 
@@ -163,7 +185,7 @@ export async function GET(req: Request) {
       league,
       season: { year: currentSeason.year, seasonNo: currentSeason.seasonNo, isTest: currentSeason.isTest },
       drivers,
-      teams
+      teams: teamsTop
     },
     { headers: { "cache-control": "no-store" } }
   );

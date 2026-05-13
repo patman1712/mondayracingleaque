@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
 import { getActiveSeason } from "@/lib/currentSeason";
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -147,7 +148,7 @@ export default async function LeagueStandingsPage({
               participations: { where: { seasonId: currentSeason.id }, select: { color: true }, take: 1 }
             }
           }
-        },
+        } as unknown as Prisma.DriverSeasonSelect,
         take: 5000
       })
       .catch(() => [])) as SeasonDriverRow[];
@@ -212,11 +213,7 @@ export default async function LeagueStandingsPage({
         take: 5000
       })
       .catch(() => []);
-
-    const teamsSeasonFiltered = teamsSeason.filter((t) => {
-      const n = (t.team.name ?? "").trim().toLowerCase();
-      return n !== "ersatzfahrer" && n !== "reserve" && n !== "reserves";
-    });
+    const teamsSeasonById = new Map(teamsSeason.map((t) => [t.team.id, t] as const));
 
     const races = await prisma.race
       .findMany({
@@ -239,11 +236,13 @@ export default async function LeagueStandingsPage({
 
     const driverPoints = new Map<string, number>();
     const teamPoints = new Map<string, number>();
+    const raceTeamIds = new Set<string>();
 
     for (const race of races) {
       const raceTeamByDriverId = new Map<string, string | null>();
       for (const e of race.entries) {
         raceTeamByDriverId.set(e.driverId, e.teamId ?? null);
+        if (e.teamId) raceTeamIds.add(e.teamId);
       }
 
       const teamRacePoints = new Map<string, number[]>();
@@ -271,6 +270,21 @@ export default async function LeagueStandingsPage({
       }
     }
 
+    const seasonTeamIds = new Set<string>();
+    for (const r of seasonDrivers) {
+      const teamId = r.teamId ?? r.teamRef?.id ?? null;
+      if (r.role === "MAIN" && teamId) seasonTeamIds.add(teamId);
+    }
+    const relevantTeamIds = Array.from(new Set([...seasonTeamIds, ...raceTeamIds, ...teamPoints.keys()]));
+    const teams = await prisma.team
+      .findMany({
+        where: { id: { in: relevantTeamIds } },
+        select: { id: true, name: true, color: true, logoPath: true },
+        take: 5000
+      })
+      .catch(() => []);
+    const teamById = new Map(teams.map((t) => [t.id, t] as const));
+
     driverStandings = Array.from(driverInfo.entries())
       .map(([driverId, d]) => ({
         driverId,
@@ -288,15 +302,23 @@ export default async function LeagueStandingsPage({
       }))
       .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name)));
 
-    teamStandings = teamsSeasonFiltered
-      .map((t) => ({
-        teamId: t.team.id,
-        points: teamPoints.get(t.team.id) ?? 0,
-        name: t.team.name,
-        accent: t.color ?? t.team.color ?? null,
-        logoPath: t.team.logoPath ?? null,
-        drivers: teamDriverNames.get(t.team.id) ?? []
-      }))
+    teamStandings = relevantTeamIds
+      .map((teamId) => {
+        const t = teamById.get(teamId) ?? null;
+        if (!t) return null;
+        const n = (t.name ?? "").trim().toLowerCase();
+        if (n === "ersatzfahrer" || n === "reserve" || n === "reserves") return null;
+        const ts = teamsSeasonById.get(teamId) ?? null;
+        return {
+          teamId: t.id,
+          points: teamPoints.get(t.id) ?? 0,
+          name: t.name,
+          accent: ts?.color ?? ts?.team.color ?? t.color ?? null,
+          logoPath: ts?.team.logoPath ?? t.logoPath ?? null,
+          drivers: teamDriverNames.get(t.id) ?? []
+        };
+      })
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
       .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name)));
   } catch {}
 
