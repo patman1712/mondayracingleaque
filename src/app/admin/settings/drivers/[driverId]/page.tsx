@@ -45,6 +45,18 @@ function dataRootDir() {
   return path.join(process.cwd(), "data");
 }
 
+function deleteUpload(fileName: string | null | undefined) {
+  if (!fileName) return;
+  try {
+    fs.unlinkSync(path.join(dataRootDir(), "uploads", fileName));
+  } catch {}
+}
+
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 function extFromMime(mime: string) {
   if (mime === "image/png") return "png";
   return null;
@@ -99,6 +111,7 @@ export default async function AdminSettingsDriverEditPage({
     .catch(() => null);
 
   if (!driver) notFound();
+  const portraitUrl = imageUrl(driver.portraitPath);
 
   async function updateDriver(formData: FormData) {
     "use server";
@@ -131,6 +144,11 @@ export default async function AdminSettingsDriverEditPage({
     const driverTitles = driverTitlesRaw ? Number(driverTitlesRaw) : 0;
     const constructorTitles = constructorTitlesRaw ? Number(constructorTitlesRaw) : 0;
 
+    const currentPortrait = await prisma.driver
+      .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
+      .then((r) => r?.portraitPath ?? null)
+      .catch(() => null);
+
     await prisma.driver
       .update({
         where: { id: driverId },
@@ -157,8 +175,37 @@ export default async function AdminSettingsDriverEditPage({
       if (!ext) redirect(`/admin/settings/drivers/${driverId}?error=file`);
       const fileName = `driver-portrait-${driverId}-${Date.now()}.${ext}`;
       await writeUpload(fileName, portrait);
-      await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: fileName } }).catch(() => null);
+      const saved = await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: fileName } }).catch(() => null);
+      if (!saved) {
+        deleteUpload(fileName);
+      } else {
+        if (currentPortrait) deleteUpload(currentPortrait);
+      }
     }
+
+    revalidatePath("/admin/settings/drivers");
+    revalidatePath(`/admin/settings/drivers/${driverId}`);
+    const leagues = await listLeagueMeta();
+    for (const l of leagues) {
+      revalidatePath(`/admin/${l.adminSlug}/drivers`);
+      revalidatePath(`/admin/${l.adminSlug}/drivers/${driverId}`);
+      revalidatePath(`/${l.publicSlug}/drivers`);
+      revalidatePath(`/${l.publicSlug}/drivers/${driverId}`);
+    }
+    redirect(`/admin/settings/drivers/${driverId}?ok=1`);
+  }
+
+  async function removePortrait() {
+    "use server";
+    await requireAdmin();
+
+    const current = await prisma.driver
+      .findUnique({ where: { id: driverId }, select: { portraitPath: true } })
+      .catch(() => null);
+    if (!current) notFound();
+
+    await prisma.driver.update({ where: { id: driverId }, data: { portraitPath: null } }).catch(() => null);
+    if (current.portraitPath) deleteUpload(current.portraitPath);
 
     revalidatePath("/admin/settings/drivers");
     revalidatePath(`/admin/settings/drivers/${driverId}`);
@@ -258,12 +305,34 @@ export default async function AdminSettingsDriverEditPage({
               <label className="mb-1 block text-xs font-semibold text-white/70">
                 Fahrerbild (PNG)
               </label>
-              <input
-                name="portrait"
-                type="file"
-                accept="image/png"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-              />
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
+                <div className="flex items-center gap-3">
+                  {portraitUrl ? (
+                    <img src={portraitUrl} alt="" className="h-16 w-16 rounded-xl bg-black/20 object-cover" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl bg-black/20" />
+                  )}
+                  <div className="text-xs text-white/60">
+                    {driver.portraitPath ?? "Kein Bild gesetzt"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {driver.portraitPath ? (
+                    <button
+                      formAction={removePortrait}
+                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                    >
+                      Bild entfernen
+                    </button>
+                  ) : null}
+                  <input
+                    name="portrait"
+                    type="file"
+                    accept="image/png"
+                    className="w-full max-w-[340px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="md:col-span-2 grid gap-4 md:grid-cols-3">
