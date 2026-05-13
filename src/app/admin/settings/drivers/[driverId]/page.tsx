@@ -335,7 +335,12 @@ export default async function AdminSettingsDriverEditPage({
               </div>
             </div>
 
-            <div className="md:col-span-2 grid gap-4 md:grid-cols-3">
+            <div className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="text-sm font-semibold text-white/85">Gesamtstatistik</div>
+              <div className="mt-1 text-xs text-white/60">
+                Manuelle Gesamtwerte (zusätzlich zu den Saison-Stats).
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-white/70">
                   Rennstarts
@@ -401,6 +406,7 @@ export default async function AdminSettingsDriverEditPage({
                   defaultValue={String(driver.constructorTitles ?? 0)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
                 />
+              </div>
               </div>
             </div>
 

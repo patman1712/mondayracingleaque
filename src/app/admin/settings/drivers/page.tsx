@@ -577,7 +577,7 @@ export default async function AdminSettingsDriversPage() {
                               href={`/admin/settings/drivers/${d.id}`}
                               className="rounded-lg bg-mrl-red px-3 py-2 text-xs font-semibold text-white"
                             >
-                              Bearbeiten
+                              Details
                             </Link>
                             {activeLeagues.length ? (
                               activeLeagues
@@ -653,7 +653,7 @@ export default async function AdminSettingsDriversPage() {
                                 href={`/admin/settings/drivers/${d.id}`}
                                 className="rounded-lg bg-mrl-red px-3 py-2 text-xs font-semibold text-white"
                               >
-                                Bearbeiten
+                                Details
                               </Link>
                               {activeLeagues.length ? (
                                 activeLeagues
