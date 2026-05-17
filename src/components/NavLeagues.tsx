@@ -560,7 +560,7 @@ export function NavLeagues() {
                                           alt=""
                                           fill
                                           sizes="(max-width: 640px) 44vw, (max-width: 1024px) 22vw, 260px"
-                                          className="object-contain object-right object-bottom"
+                                        className="object-cover object-right object-top"
                                           quality={80}
                                         />
                                       </div>
