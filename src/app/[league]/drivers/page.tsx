@@ -204,7 +204,7 @@ export default async function LeagueDriversPage({
                 <div className="relative p-6">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate font-racing text-2xl font-bold uppercase tracking-[0.16em] text-white sm:text-3xl">
+                      <div className="break-words font-racing text-2xl font-bold uppercase leading-tight tracking-[0.16em] text-white sm:text-3xl">
                         {d.gamertag ? d.gamertag : d.name}
                       </div>
                     </div>

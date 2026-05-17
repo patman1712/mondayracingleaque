@@ -651,6 +651,20 @@ export function NavLeagues() {
                                       className="group relative overflow-hidden rounded-2xl border border-white/10"
                                       style={{ backgroundImage: teamBgSolid(d.accent ?? accent) }}
                                     >
+                                      {d.portraitUrl ? (
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 w-[62%]">
+                                          <div className="relative h-full w-full">
+                                            <Image
+                                              src={d.portraitUrl}
+                                              alt=""
+                                              fill
+                                              sizes="(max-width: 768px) 50vw, 360px"
+                                              className="object-cover object-right object-top opacity-95"
+                                              quality={80}
+                                            />
+                                          </div>
+                                        </div>
+                                      ) : null}
                                       <div className="pointer-events-none absolute inset-0 opacity-25" style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }} />
                                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
                                       <div className="pointer-events-none absolute left-0 top-0 h-[6px] w-full" style={{ backgroundColor: d.accent ?? accent }} />
@@ -675,18 +689,6 @@ export function NavLeagues() {
                                           </div>
                                         </div>
                                         <div className="flex shrink-0 items-center gap-3">
-                                          {d.portraitUrl ? (
-                                            <Image
-                                              src={d.portraitUrl}
-                                              alt=""
-                                              width={120}
-                                              height={120}
-                                              unoptimized
-                                              className="h-20 w-20 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
-                                            />
-                                          ) : (
-                                            <div className="h-20 w-20" />
-                                          )}
                                           <div className="text-right">
                                             <div className="text-xl font-extrabold text-white">{Math.round(d.points)}</div>
                                             <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">PTS</div>
