@@ -429,16 +429,16 @@ export default async function LeagueStandingsPage({
                                   <span className="truncate text-white/70">Ersatzfahrer</span>
                                 ) : (
                                   <>
-                                    <span className="truncate">{d.teamName ?? ""}</span>
-                                    {teamLogoUrl ? (
-                                      <span className="ml-auto flex items-center">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span className="truncate">{d.teamName ?? ""}</span>
+                                      {teamLogoUrl ? (
                                         <img
                                           src={teamLogoUrl}
                                           alt=""
-                                          className="h-8 w-auto object-contain opacity-95 sm:h-9 md:h-10"
+                                          className="h-8 w-auto shrink-0 object-contain opacity-95 sm:h-9 md:h-10"
                                         />
-                                      </span>
-                                    ) : null}
+                                      ) : null}
+                                    </div>
                                   </>
                                 )}
                               </div>
