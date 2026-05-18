@@ -45,12 +45,10 @@ export function TeamLogo({
     <img
       src={resolved}
       alt=""
-      width={size}
       height={size}
       onError={() => setFailed(true)}
       className={["shrink-0 opacity-85 drop-shadow-[0_0_10px_rgba(255,255,255,0.18)]", className].filter(Boolean).join(" ")}
-      style={{ width: size, height: size }}
+      style={{ height: size, width: "auto", maxWidth: size * 3 }}
     />
   );
 }
-

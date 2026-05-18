@@ -107,6 +107,16 @@ function WeatherIcon({ weather }: { weather: string }) {
 
 function flagFromText(texts: Array<string | null | undefined>) {
   const t = texts.filter(Boolean).join(" ").toLowerCase();
+  const tokens = texts
+    .map((x) => (x ?? "").toString().trim().toLowerCase())
+    .filter((x) => Boolean(x));
+  const numeric = tokens.find((x) => /^\d+$/.test(x)) ?? null;
+  if (numeric) {
+    if (numeric === "4") return { label: "RED FLAG", cls: "border-red-400/70 bg-red-500/15 text-red-100 shadow-[0_0_26px_rgba(239,68,68,0.25)]" };
+    if (numeric === "3") return { label: "SAFETY CAR", cls: "border-amber-300/70 bg-amber-500/15 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.22)]" };
+    if (numeric === "2") return { label: "YELLOW FLAG", cls: "border-amber-300/70 bg-amber-500/15 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.22)]" };
+    return { label: "GREEN FLAG", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,0.25)]" };
+  }
   if (!t) return { label: "GREEN FLAG", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,0.25)]" };
   if (t.includes("red")) return { label: "RED FLAG", cls: "border-red-400/70 bg-red-500/15 text-red-100 shadow-[0_0_26px_rgba(239,68,68,0.25)]" };
   if (t.includes("safety") && t.includes("car")) return { label: "SAFETY CAR", cls: "border-amber-300/70 bg-amber-500/15 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.22)]" };

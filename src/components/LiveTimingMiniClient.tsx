@@ -299,23 +299,27 @@ export function LiveTimingMiniClient({
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/75" />
         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: accent }} />
 
-        <div className="relative">
+        {r.portraitUrl ? (
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-[38%]">
+            <div className="relative h-full w-full">
+              <Image
+                src={r.portraitUrl}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 40vw, 240px"
+                unoptimized
+                className="object-contain object-bottom opacity-95 drop-shadow-[0_26px_70px_rgba(0,0,0,0.55)]"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div className={["relative", r.portraitUrl ? "pr-[38%]" : ""].join(" ")}>
           <div className="flex items-start gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/35 text-sm font-extrabold text-white">
               {r.position}
             </div>
-            {r.portraitUrl ? (
-              <Image
-                src={r.portraitUrl}
-                alt=""
-                width={32}
-                height={32}
-                unoptimized
-                className="h-8 w-8 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
-              />
-            ) : (
-              <div className="h-8 w-8 rounded-xl bg-black/25" />
-            )}
+            <div className="h-8 w-8 rounded-xl bg-black/25" />
 
             <div className="min-w-0 flex-1">
               <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">

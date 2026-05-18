@@ -194,13 +194,13 @@ export function MrlTvDriverCamsClient({
                   <Image
                     src={c.teamLogoUrl}
                     alt=""
-                    width={56}
-                    height={56}
+                    width={120}
+                    height={48}
                     unoptimized
-                    className="h-12 w-12 object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                    className="h-10 w-auto max-w-[112px] object-contain drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
                   />
                 ) : (
-                  <div className="h-12 w-12" />
+                  <div className="h-10 w-[112px]" />
                 )}
                 <div className="rounded-full bg-mrl-red/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">
                   Live
