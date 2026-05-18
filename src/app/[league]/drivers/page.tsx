@@ -201,6 +201,20 @@ export default async function LeagueDriversPage({
                   {d.number ?? "—"}
                 </div>
 
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[350px]">
+                  {d.portraitPath ? (
+                    <img
+                      src={imageUrl(d.portraitPath) ?? ""}
+                      alt=""
+                      className="absolute inset-x-0 bottom-0 mx-auto h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
+                      PORTRAIT
+                    </div>
+                  )}
+                </div>
+
                 <div className="relative p-6">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -215,19 +229,7 @@ export default async function LeagueDriversPage({
                     ) : null}
                   </div>
 
-                  <div className="relative mt-6 h-[280px] sm:h-[320px]">
-                    {d.portraitPath ? (
-                      <img
-                        src={imageUrl(d.portraitPath) ?? ""}
-                        alt=""
-                        className="absolute inset-x-0 bottom-0 mx-auto h-[300px] w-full object-contain sm:h-[350px]"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
-                        PORTRAIT
-                      </div>
-                    )}
-                  </div>
+                  <div className="mt-6 h-[280px] sm:h-[320px]" />
                 </div>
               </div>
             </Link>
