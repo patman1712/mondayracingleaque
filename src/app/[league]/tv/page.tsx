@@ -271,6 +271,7 @@ export default async function LeagueTvPage({
                 maxRows={22}
                 columns={2}
                 splitAt={11}
+                equalHeights
                 hideWhenNoLiveData={false}
                 className="max-w-none h-[calc(100vh-140px)]"
                 leagueKey={leagueKey}

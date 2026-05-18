@@ -302,7 +302,7 @@ export function LiveTimingMiniClient({
         {r.portraitUrl ? (
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[36%] overflow-hidden">
             <div
-              className="absolute inset-0 bg-gradient-to-l from-transparent via-black/10 to-black/55"
+              className="absolute inset-0 bg-gradient-to-l from-transparent via-black/10 to-black/30"
               style={{ clipPath: "polygon(18% 0, 100% 0, 100% 100%, 0 100%)" }}
             />
             <div className="relative h-full w-full">
@@ -312,7 +312,7 @@ export function LiveTimingMiniClient({
                 fill
                 sizes="(max-width: 640px) 40vw, 240px"
                 unoptimized
-                className="object-contain object-right object-bottom opacity-95 drop-shadow-[0_26px_70px_rgba(0,0,0,0.55)]"
+                className="object-contain object-right object-bottom opacity-95"
               />
             </div>
           </div>
