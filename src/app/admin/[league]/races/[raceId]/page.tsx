@@ -237,11 +237,13 @@ async function bulkUpsertRaceEntries(
   const eligible = await prisma.driverSeason
     .findMany({
       where: { seasonId: season.id },
-      select: { driverId: true, role: true },
+      select: { driverId: true, role: true, teamId: true, teamRef: { select: { id: true } } },
       take: 5000
     })
-    .catch((): Array<{ driverId: string; role: "MAIN" | "RESERVE" }> => []);
-  const roleByDriverId = new Map(eligible.map((e) => [e.driverId, e.role] as const));
+    .catch(
+      (): Array<{ driverId: string; role: "MAIN" | "RESERVE"; teamId: string | null; teamRef: { id: string } | null }> => []
+    );
+  const eligibleByDriverId = new Map(eligible.map((e) => [e.driverId, e] as const));
 
   const allowedTeams = await prisma.teamLeague
     .findMany({ where: { league }, select: { teamId: true }, take: 5000 })
@@ -251,13 +253,20 @@ async function bulkUpsertRaceEntries(
   for (const r of rows) {
     const driverId = String(r?.driverId ?? "").trim();
     if (!driverId) continue;
-    const role = roleByDriverId.get(driverId) ?? null;
-    if (!role) continue;
+    const d = eligibleByDriverId.get(driverId) ?? null;
+    if (!d) continue;
+    const role = d.role;
 
     const participates = String(r?.participates ?? "").trim() === "true" || String(r?.participates ?? "").trim() === "1";
     const teamIdRaw = String(r?.teamId ?? "").trim();
     const teamId =
-      role === "RESERVE" && participates && teamIdRaw && allowedTeamIds.has(teamIdRaw) ? teamIdRaw : null;
+      participates
+        ? role === "RESERVE"
+          ? teamIdRaw && allowedTeamIds.has(teamIdRaw)
+            ? teamIdRaw
+            : null
+          : d.teamId ?? d.teamRef?.id ?? null
+        : null;
 
     await prisma.raceEntry
       .upsert({

@@ -155,8 +155,7 @@ export async function GET(req: Request) {
 
   const drivers = Array.from(driverInfo.entries())
     .map(([id, d]) => {
-      const accent =
-        d.role === "MAIN" && d.teamId ? teamAccentById.get(d.teamId) ?? null : null;
+      const accent = d.role === "MAIN" && d.teamId ? teamAccentById.get(d.teamId) ?? null : null;
       return { id, name: d.name, points: driverPoints.get(id) ?? 0, accent, portraitUrl: d.portraitUrl };
     })
     .sort((a, b) => (b.points !== a.points ? b.points - a.points : a.name.localeCompare(b.name, "de-DE")))

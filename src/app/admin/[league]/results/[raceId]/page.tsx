@@ -935,7 +935,7 @@ export default async function AdminRaceResultsPage({
 
   const bulkDrivers = participatingDrivers.map((d) => {
     const entry = entryByDriverId.get(d.id) ?? null;
-    const teamName = d.role === "MAIN" ? d.teamName : entry?.team?.name ?? null;
+    const teamName = entry?.team?.name ?? (d.role === "MAIN" ? d.teamName : null);
     return { driverId: d.id, name: d.name, teamName };
   });
 
