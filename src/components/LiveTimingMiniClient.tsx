@@ -118,6 +118,7 @@ function sectorClass(color: string | null | undefined) {
 function statusStyle(status: Entry["status"]) {
   const s = (status ?? "WAITING").toString().toUpperCase();
   if (s === "FLYING LAP") return { label: s, cls: "border-violet-400/60 bg-violet-500/15 text-violet-100" };
+  if (s === "ACTIVE") return { label: "ON TRACK", cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
   if (s === "OUT LAP" || s === "ON TRACK") return { label: s, cls: "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" };
   if (s === "IN LAP" || s === "PIT") return { label: s, cls: "border-amber-400/60 bg-amber-500/15 text-amber-100" };
   if (s === "INVALID") return { label: s, cls: "border-orange-300/60 bg-orange-500/15 text-orange-100" };
@@ -332,11 +333,6 @@ export function LiveTimingMiniClient({
                 <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                 <div className="min-w-0 line-clamp-2">{r.team}</div>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", status.cls].join(" ")}>
-                  {status.label}
-                </div>
-              </div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -369,6 +365,11 @@ export function LiveTimingMiniClient({
               <div className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white/80">
                 STOPS {stops !== null ? stops : "—"}
               </div>
+              {status.label === "OUT LAP" || status.label === "ON TRACK" || status.label === "IN LAP" ? (
+                <div className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider", status.cls].join(" ")}>
+                  {status.label}
+                </div>
+              ) : null}
               <div className="ml-auto">
                 <TyreBadge tyre={r.tyre} size={28} />
               </div>
