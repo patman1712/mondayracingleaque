@@ -542,33 +542,38 @@ export default async function AdminLeagueTeamsPage({
                           : "Kein Hero Background"}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {p.carImagePath ? (
-                        <button
-                          formAction={clearParticipationImage}
-                          name="kind"
-                          value="car"
-                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                        >
-                          Design löschen
-                        </button>
-                      ) : null}
-                      {p.heroBackgroundPath ? (
-                        <button
-                          formAction={clearParticipationImage}
-                          name="kind"
-                          value="heroBackground"
-                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                        >
-                          Hover löschen
-                        </button>
-                      ) : null}
-                      <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-                        Speichern
-                      </button>
-                    </div>
+                    <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                      Speichern
+                    </button>
                   </div>
                 </form>
+
+                {(p.carImagePath || p.heroBackgroundPath) ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    {p.carImagePath ? (
+                      <form action={clearParticipationImage}>
+                        <input type="hidden" name="league" value={leagueSlug} />
+                        <input type="hidden" name="seasonId" value={seasonId ?? ""} />
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="kind" value="car" />
+                        <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                          Design löschen
+                        </button>
+                      </form>
+                    ) : null}
+                    {p.heroBackgroundPath ? (
+                      <form action={clearParticipationImage}>
+                        <input type="hidden" name="league" value={leagueSlug} />
+                        <input type="hidden" name="seasonId" value={seasonId ?? ""} />
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="kind" value="heroBackground" />
+                        <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                          Hover löschen
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ))
           )}
