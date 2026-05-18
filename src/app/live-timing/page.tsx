@@ -482,7 +482,7 @@ export default function LiveTimingPage() {
                                       {r.driver}
                                     </div>
                                     <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-white/75 md:hidden">
-                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                                       <div className="min-w-0 whitespace-normal break-words">{r.team}</div>
                                     </div>
                                     {r.status ? (
@@ -510,7 +510,7 @@ export default function LiveTimingPage() {
 
                               <div className="min-w-0 hidden text-sm font-semibold text-white/90 xl:block">
                                 <div className="flex items-center gap-2 leading-tight whitespace-normal break-words">
-                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                                   <div className="min-w-0">{r.team}</div>
                                 </div>
                               </div>
@@ -612,7 +612,7 @@ export default function LiveTimingPage() {
                                       {r.driver}
                                     </div>
                                     <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-white/75 lg:hidden">
-                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                      <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                                       <div className="min-w-0 whitespace-normal break-words">{r.team}</div>
                                     </div>
                                     {r.status ? (
@@ -645,7 +645,7 @@ export default function LiveTimingPage() {
 
                               <div className="min-w-0 hidden text-sm font-semibold text-white/90 2xl:block">
                                 <div className="flex items-center gap-2 leading-tight whitespace-normal break-words">
-                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                                  <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                                   <div className="min-w-0">{r.team}</div>
                                 </div>
                               </div>

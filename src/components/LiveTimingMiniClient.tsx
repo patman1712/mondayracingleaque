@@ -300,7 +300,11 @@ export function LiveTimingMiniClient({
         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: accent }} />
 
         {r.portraitUrl ? (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-[38%]">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-[36%] overflow-hidden">
+            <div
+              className="absolute inset-0 bg-gradient-to-l from-transparent via-black/10 to-black/55"
+              style={{ clipPath: "polygon(18% 0, 100% 0, 100% 100%, 0 100%)" }}
+            />
             <div className="relative h-full w-full">
               <Image
                 src={r.portraitUrl}
@@ -308,25 +312,24 @@ export function LiveTimingMiniClient({
                 fill
                 sizes="(max-width: 640px) 40vw, 240px"
                 unoptimized
-                className="object-contain object-bottom opacity-95 drop-shadow-[0_26px_70px_rgba(0,0,0,0.55)]"
+                className="object-contain object-right object-bottom opacity-95 drop-shadow-[0_26px_70px_rgba(0,0,0,0.55)]"
               />
             </div>
           </div>
         ) : null}
 
-        <div className={["relative", r.portraitUrl ? "pr-[38%]" : ""].join(" ")}>
-          <div className="flex items-start gap-3">
+        <div className={["relative", r.portraitUrl ? "pr-[36%]" : ""].join(" ")}>
+          <div className="flex items-start gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/35 text-sm font-extrabold text-white">
               {r.position}
             </div>
-            <div className="h-8 w-8 rounded-xl bg-black/25" />
 
             <div className="min-w-0 flex-1">
               <div className="min-w-0 text-[13px] font-extrabold leading-snug tracking-wide text-white line-clamp-2">
                 {r.driver}
               </div>
               <div className="mt-1 flex items-center gap-2 text-[12px] font-semibold leading-snug text-white/70">
-                <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5 w-5" />
+                <TeamLogo teamName={r.team} src={r.teamLogoUrl} size={20} className="h-5" />
                 <div className="min-w-0 line-clamp-2">{r.team}</div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
