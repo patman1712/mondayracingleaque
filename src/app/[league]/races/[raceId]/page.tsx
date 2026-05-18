@@ -364,6 +364,7 @@ export default async function RaceDetailPage({
                 splitAt={11}
                 className="mt-6 max-w-none"
                 leagueKey={liveTimingLeagueKey}
+                seasonId={season?.id ?? undefined}
               />
             ) : null}
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5">

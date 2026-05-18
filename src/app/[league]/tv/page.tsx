@@ -275,6 +275,7 @@ export default async function LeagueTvPage({
                 hideWhenNoLiveData={false}
                 className="max-w-none h-[calc(100vh-140px)]"
                 leagueKey={leagueKey}
+                seasonId={seasonRow?.id ?? undefined}
               />
             </div>
 

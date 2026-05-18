@@ -318,25 +318,49 @@ function matchEntryIndexByDriverName(wantedDriver: string, entries: LiveTimingPo
   return null;
 }
 
-async function resolvePortraitUrlsByDriverName(names: string[]) {
+async function resolvePortraitUrlsByDriverName(names: string[], seasonId?: string | null) {
   const wanted = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
   if (wanted.length === 0) return new Map<string, string | null>();
 
-  const drivers = await prisma.driver
-    .findMany({
-      select: { id: true, name: true, gamertag: true, portraitPath: true },
-      take: 5000
-    })
-    .catch(() => []);
-
   const byNorm = new Map<string, string | null>();
-  for (const d of drivers) {
-    const url = imageUrl(d.portraitPath);
-    const keys = [normalize(d.name), d.gamertag ? normalize(d.gamertag) : ""].filter(Boolean);
-    for (const k of keys) {
-      if (!k) continue;
-      if (byNorm.has(k)) continue;
-      byNorm.set(k, url);
+  if (seasonId) {
+    const rows = await prisma.driverSeason
+      .findMany({
+        where: { seasonId },
+        select: { portraitPath: true, driver: { select: { name: true, gamertag: true } } },
+        take: 5000
+      })
+      .catch(() => []);
+
+    for (const r of rows) {
+      const url = imageUrl(r.portraitPath);
+      const keys = [normalize(r.driver.name), r.driver.gamertag ? normalize(r.driver.gamertag) : ""].filter(Boolean);
+      for (const k of keys) {
+        if (!k) continue;
+        const prev = byNorm.get(k);
+        if (prev === undefined) {
+          byNorm.set(k, url);
+          continue;
+        }
+        if (prev === null && url !== null) byNorm.set(k, url);
+      }
+    }
+  } else {
+    const drivers = await prisma.driver
+      .findMany({
+        select: { id: true, name: true, gamertag: true, portraitPath: true },
+        take: 5000
+      })
+      .catch(() => []);
+
+    for (const d of drivers) {
+      const url = imageUrl(d.portraitPath);
+      const keys = [normalize(d.name), d.gamertag ? normalize(d.gamertag) : ""].filter(Boolean);
+      for (const k of keys) {
+        if (!k) continue;
+        if (byNorm.has(k)) continue;
+        byNorm.set(k, url);
+      }
     }
   }
 
@@ -568,6 +592,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const all = url.searchParams.get("all");
   const leagueKey = normalizeLeagueKey(url.searchParams.get("leagueKey"));
+  const seasonId = url.searchParams.get("seasonId");
   if (all) {
     const out: Record<string, unknown> = {};
     for (const { key } of allowedLeagueKeys()) {
@@ -614,6 +639,20 @@ export async function GET(req: Request) {
       }
     }
     const o = getState(leagueKey);
+    const entriesRaw = Array.isArray(o.entries) ? o.entries : [];
+    const entries =
+      seasonId && entriesRaw.length
+        ? await (async () => {
+            const portraitByName = await resolvePortraitUrlsByDriverName(
+              entriesRaw.map((e) => (typeof (e as { driver?: unknown })?.driver === "string" ? (e as { driver: string }).driver : "")),
+              seasonId
+            );
+            return entriesRaw.map((e) => {
+              const driver = typeof (e as { driver?: unknown })?.driver === "string" ? (e as { driver: string }).driver : "";
+              return { ...(e as object), portraitUrl: driver ? (portraitByName.get(driver) ?? null) : null };
+            });
+          })()
+        : entriesRaw;
     return NextResponse.json(
       {
         ok: true,
@@ -637,7 +676,7 @@ export async function GET(req: Request) {
         participants: o.participants,
         alerts: o.alerts,
         updatedAtMs: o.updatedAtMs,
-        entries: o.entries
+        entries
       },
       { headers: { "cache-control": "no-store" } }
     );
