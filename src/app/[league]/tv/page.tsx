@@ -224,7 +224,7 @@ export default async function LeagueTvPage({
         driverId: d.id,
         name: d.gamertag ?? d.name,
         twitchChannel: d.twitchChannel!,
-        portraitUrl: imageUrl(ds?.portraitPath ?? d.portraitPath),
+        portraitUrl: imageUrl(ds?.portraitPath),
         teamName: team?.name ?? null,
         teamLogoUrl: imageUrl(team?.logoPath),
         accent

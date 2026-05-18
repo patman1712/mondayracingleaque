@@ -60,7 +60,7 @@ export async function GET(req: Request) {
       name,
       role: r.role,
       teamId,
-      portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath)
+      portraitUrl: imageUrl(r.portraitPath)
     });
   }
 

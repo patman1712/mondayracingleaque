@@ -72,7 +72,7 @@ export async function GET(req: Request) {
           gamertag: r.driver.gamertag ?? null,
           number: r.driver.number ?? null,
           country: r.driver.country ?? null,
-          portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath),
+          portraitUrl: imageUrl(r.portraitPath),
           accent,
           role: r.role
         };

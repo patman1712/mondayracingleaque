@@ -121,10 +121,10 @@ export default async function TeamDetailPage({
 
   const mainDrivers = drivers
     .filter((d) => d.role === "MAIN")
-    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? d.driver.portraitPath }));
+    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? null }));
   const reserveDrivers = drivers
     .filter((d) => d.role === "RESERVE")
-    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? d.driver.portraitPath }));
+    .map((d) => ({ ...d.driver, portraitPath: d.portraitPath ?? null }));
 
   const primaryDrivers = mainDrivers.length ? mainDrivers : reserveDrivers;
 

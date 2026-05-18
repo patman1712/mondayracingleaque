@@ -110,7 +110,7 @@ export default async function AdminDriversPage({
       number: r.driver.number ?? null,
       country: r.driver.country ?? null,
       twitchChannel: r.driver.twitchChannel ?? null,
-      portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
+      portraitPath: r.portraitPath ?? null,
       role: r.role ?? null,
       teamName: r.teamRef?.name ?? null
     }));

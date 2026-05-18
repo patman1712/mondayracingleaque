@@ -176,7 +176,7 @@ export default async function LeagueStandingsPage({
         gamertag: r.driver.gamertag ?? null,
         number: r.driver.number ?? null,
         country: r.driver.country ?? null,
-        portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
+        portraitPath: r.portraitPath ?? null,
         accent,
         teamId: r.teamId ?? t?.id ?? null,
         teamName: t?.name ?? null,

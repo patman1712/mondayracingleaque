@@ -111,12 +111,17 @@ async function seasonTotalsForDriver(driverId: string) {
 }
 
 export default async function AdminSettingsDriverEditPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ driverId: string }>;
+  searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
   await requireAdmin();
   const { driverId } = await params;
+  const sp = await searchParams;
+  const ok = sp.ok === "1";
+  const error = sp.error ?? null;
 
   const driver = await prisma.driver
     .findUnique({
@@ -268,9 +273,67 @@ export default async function AdminSettingsDriverEditPage({
     redirect(`/admin/settings/drivers/${driverId}?ok=1`);
   }
 
+  async function deleteDriver(formData: FormData) {
+    "use server";
+    await requireAdmin();
+
+    const confirm = String(formData.get("confirm") ?? "").trim();
+    if (confirm !== "DELETE") redirect(`/admin/settings/drivers/${driverId}?error=confirm`);
+
+    const current = await prisma.driver
+      .findUnique({ where: { id: driverId }, select: { id: true, portraitPath: true } })
+      .catch(() => null);
+    if (!current) notFound();
+
+    const seasonPortraits = await prisma.driverSeason
+      .findMany({ where: { driverId }, select: { portraitPath: true }, take: 5000 })
+      .catch(() => []);
+
+    const files = Array.from(
+      new Set(
+        [current.portraitPath, ...seasonPortraits.map((r) => r.portraitPath)].filter(
+          (p): p is string => Boolean(p)
+        )
+      )
+    );
+
+    const deleted = await prisma
+      .$transaction([
+        prisma.race.updateMany({ where: { driverOfDayDriverId: driverId }, data: { driverOfDayDriverId: null } }),
+        prisma.driver.delete({ where: { id: driverId } })
+      ])
+      .catch(() => null);
+
+    if (!deleted) redirect(`/admin/settings/drivers/${driverId}?error=delete`);
+
+    for (const f of files) deleteUpload(f);
+
+    revalidatePath("/admin/settings/drivers");
+    const leagues = await listLeagueMeta();
+    for (const l of leagues) {
+      revalidatePath(`/admin/${l.adminSlug}/drivers`);
+      revalidatePath(`/admin/${l.adminSlug}/drivers/${driverId}`);
+      revalidatePath(`/${l.publicSlug}/drivers`);
+      revalidatePath(`/${l.publicSlug}/drivers/${driverId}`);
+      revalidatePath(`/${l.publicSlug}/standings`);
+      revalidatePath(`/${l.publicSlug}/tv`);
+    }
+    redirect("/admin/settings/drivers?ok=1");
+  }
+
   return (
     <AdminShell>
       <div className="space-y-6">
+        {ok ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+            Gespeichert.
+          </div>
+        ) : null}
+        {error ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+            Fehler: {error}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
           <div className="text-base font-semibold">Fahrer bearbeiten</div>
           <div className="mt-1 text-sm text-white/60">
@@ -470,6 +533,26 @@ export default async function AdminSettingsDriverEditPage({
                 Zurück
               </Link>
             </div>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold text-white/90">Fahrer löschen</div>
+          <div className="mt-1 text-sm text-white/60">
+            Löscht den Fahrer komplett inkl. Saison-Zuordnungen, Rennergebnissen/Teilnahmen, Stats und Bildern. Zum Bestätigen „DELETE“ eingeben.
+          </div>
+          <form action={deleteDriver} className="mt-4 flex flex-wrap items-end gap-2">
+            <div className="min-w-[240px]">
+              <label className="mb-1 block text-xs font-semibold text-white/70">Bestätigung</label>
+              <input
+                name="confirm"
+                placeholder="DELETE"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              />
+            </div>
+            <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+              Löschen
+            </button>
           </form>
         </div>
       </div>

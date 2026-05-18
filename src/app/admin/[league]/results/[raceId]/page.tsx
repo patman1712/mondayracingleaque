@@ -894,7 +894,7 @@ export default async function AdminRaceResultsPage({
       role: r.role,
       teamName: r.role === "MAIN" ? r.teamRef?.name ?? null : null,
       teamColor: r.role === "MAIN" ? r.teamRef?.color ?? null : null,
-      portraitUrl: imageUrl(r.portraitPath ?? r.driver.portraitPath)
+      portraitUrl: imageUrl(r.portraitPath)
     }));
   } catch {}
 

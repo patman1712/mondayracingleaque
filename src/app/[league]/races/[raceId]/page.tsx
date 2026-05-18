@@ -245,7 +245,7 @@ export default async function RaceDetailPage({
       name: e.driver.name,
       number: e.driver.number ?? null,
       country: e.driver.country ?? null,
-      portraitUrl: imageUrl(ds?.portraitPath ?? e.driver.portraitPath) ?? null,
+      portraitUrl: imageUrl(ds?.portraitPath) ?? null,
       role,
       roleLabel,
       teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
@@ -438,7 +438,7 @@ export default async function RaceDetailPage({
                 <div key={colIdx} className="grid gap-3">
                     {col.map((r) => {
                     const d = fieldByDriverId.get(r.driver.id) ?? null;
-                    const portraitUrl = d?.portraitUrl ?? imageUrl(r.driver.portraitPath) ?? null;
+                    const portraitUrl = d?.portraitUrl ?? null;
                     const accent = d?.accent ?? null;
                     const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
                     const best = r.bestTime ?? "";

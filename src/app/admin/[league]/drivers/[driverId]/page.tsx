@@ -735,12 +735,10 @@ export default async function AdminDriverDetailPage({
                 {seasons.map((s) => {
                   const row = seasonRows.find((r) => r.seasonId === s.id) ?? null;
                   const active = Boolean(row);
-                  const seasonPortraitUrl = imageUrl(row?.portraitPath ?? driver.portraitPath);
+                  const seasonPortraitUrl = imageUrl(row?.portraitPath);
                   const seasonPortraitLabel = row?.portraitPath
                     ? row.portraitPath
-                    : driver.portraitPath
-                      ? `${driver.portraitPath} (Fallback)`
-                      : "Kein Bild gesetzt";
+                    : "Kein Bild gesetzt";
                   return (
                     <details key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
                       <summary className="cursor-pointer text-sm font-semibold text-white/85">
@@ -749,7 +747,7 @@ export default async function AdminDriverDetailPage({
                         {s.placement === "ARCHIVE" ? " · ARCHIV" : ""}
                         {active && row?.role === "RESERVE" ? " · Ersatzfahrer" : ""}
                         {!active ? " · inaktiv" : ""}
-                        {active ? (row?.portraitPath ? " · Bild" : driver.portraitPath ? " · Fallback" : "") : ""}
+                        {active && row?.portraitPath ? " · Bild" : ""}
                       </summary>
 
                       <div className="mt-4 space-y-3">

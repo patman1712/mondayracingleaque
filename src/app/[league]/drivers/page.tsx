@@ -120,7 +120,7 @@ export default async function LeagueDriversPage({
           number: r.driver.number ?? null,
           team: null,
           country: r.driver.country ?? null,
-          portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
+          portraitPath: r.portraitPath ?? null,
           accent
         });
       }
@@ -159,7 +159,7 @@ export default async function LeagueDriversPage({
         number: r.driver.number ?? null,
         team: null,
         country: r.driver.country ?? null,
-        portraitPath: r.portraitPath ?? r.driver.portraitPath ?? null,
+        portraitPath: r.portraitPath ?? null,
         accent: null
       }));
     }
