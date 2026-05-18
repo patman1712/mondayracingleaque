@@ -254,6 +254,48 @@ async function deleteParticipation(formData: FormData) {
   redirect(`/admin/${leagueSlug}/teams?ok=1&seasonId=${encodeURIComponent(seasonId || current.seasonId)}`);
 }
 
+async function clearParticipationImage(formData: FormData) {
+  "use server";
+  const leagueSlug = String(formData.get("league") ?? "");
+  const cfg = await resolveLeagueByAdminSlug(leagueSlug);
+  if (!cfg) redirect("/admin?error=invalid");
+  const league = cfg.league;
+
+  const id = String(formData.get("id") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  if (!id) redirect(`/admin/${leagueSlug}/teams?error=invalid`);
+  if (kind !== "car" && kind !== "heroBackground") redirect(`/admin/${leagueSlug}/teams?error=invalid`);
+
+  const current = await prisma.teamSeason
+    .findUnique({
+      where: { id },
+      select: {
+        id: true,
+        teamId: true,
+        seasonId: true,
+        carImagePath: true,
+        heroBackgroundPath: true,
+        season: { select: { league: true } }
+      }
+    })
+    .catch(() => null);
+
+  if (!current || current.season.league !== league) redirect(`/admin/${leagueSlug}/teams?error=invalid`);
+
+  if (kind === "car") {
+    await prisma.teamSeason.update({ where: { id }, data: { carImagePath: null } }).catch(() => null);
+    deleteUpload(current.carImagePath);
+  } else {
+    await prisma.teamSeason.update({ where: { id }, data: { heroBackgroundPath: null } }).catch(() => null);
+    deleteUpload(current.heroBackgroundPath);
+  }
+
+  revalidatePath(`/admin/${leagueSlug}/teams`);
+  await revalidatePublicTeamsForLeague(cfg.publicSlug, current.teamId);
+  redirect(`/admin/${leagueSlug}/teams?ok=1&seasonId=${encodeURIComponent(seasonId || current.seasonId)}`);
+}
+
 export default async function AdminLeagueTeamsPage({
   params,
   searchParams
@@ -500,9 +542,31 @@ export default async function AdminLeagueTeamsPage({
                           : "Kein Hero Background"}
                       </div>
                     </div>
-                    <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
-                      Speichern
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {p.carImagePath ? (
+                        <button
+                          formAction={clearParticipationImage}
+                          name="kind"
+                          value="car"
+                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                        >
+                          Design löschen
+                        </button>
+                      ) : null}
+                      {p.heroBackgroundPath ? (
+                        <button
+                          formAction={clearParticipationImage}
+                          name="kind"
+                          value="heroBackground"
+                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                        >
+                          Hover löschen
+                        </button>
+                      ) : null}
+                      <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                        Speichern
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
