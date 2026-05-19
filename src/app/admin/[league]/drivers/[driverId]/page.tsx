@@ -76,6 +76,36 @@ function asInt(v: string, fallback: number) {
   return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : fallback;
 }
 
+async function seasonTotalsForDriver(driverId: string) {
+  const rows = await prisma.driverSeason
+    .findMany({
+      where: { driverId },
+      select: {
+        starts: true,
+        wins: true,
+        podiums: true,
+        driverOfDay: true,
+        driverTitles: true,
+        constructorTitles: true
+      },
+      take: 5000
+    })
+    .catch(() => []);
+
+  return rows.reduce(
+    (acc, r) => {
+      acc.starts += r.starts;
+      acc.wins += r.wins;
+      acc.podiums += r.podiums;
+      acc.driverOfDay += r.driverOfDay;
+      acc.driverTitles += r.driverTitles;
+      acc.constructorTitles += r.constructorTitles;
+      return acc;
+    },
+    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+  );
+}
+
 async function updateBasics(adminLeague: string, league: League, driverId: string, formData: FormData) {
   "use server";
   await requireAdmin();
@@ -209,17 +239,32 @@ async function updateTotals(adminLeague: string, league: League, driverId: strin
     .catch(() => null);
   if (!current) notFound();
 
-  const starts = asInt(String(formData.get("starts") ?? "0"), 0);
-  const wins = asInt(String(formData.get("wins") ?? "0"), 0);
-  const podiums = asInt(String(formData.get("podiums") ?? "0"), 0);
-  const driverOfDay = asInt(String(formData.get("driverOfDay") ?? "0"), 0);
-  const driverTitles = asInt(String(formData.get("driverTitles") ?? "0"), 0);
-  const constructorTitles = asInt(String(formData.get("constructorTitles") ?? "0"), 0);
+  const startsTotal = asInt(String(formData.get("starts") ?? "0"), 0);
+  const winsTotal = asInt(String(formData.get("wins") ?? "0"), 0);
+  const podiumsTotal = asInt(String(formData.get("podiums") ?? "0"), 0);
+  const driverOfDayTotal = asInt(String(formData.get("driverOfDay") ?? "0"), 0);
+  const driverTitlesTotal = asInt(String(formData.get("driverTitles") ?? "0"), 0);
+  const constructorTitlesTotal = asInt(String(formData.get("constructorTitles") ?? "0"), 0);
+
+  const seasonTotals = await seasonTotalsForDriver(driverId);
+  const manualStarts = Math.trunc(startsTotal - seasonTotals.starts);
+  const manualWins = Math.trunc(winsTotal - seasonTotals.wins);
+  const manualPodiums = Math.trunc(podiumsTotal - seasonTotals.podiums);
+  const manualDriverOfDay = Math.trunc(driverOfDayTotal - seasonTotals.driverOfDay);
+  const manualDriverTitles = Math.trunc(driverTitlesTotal - seasonTotals.driverTitles);
+  const manualConstructorTitles = Math.trunc(constructorTitlesTotal - seasonTotals.constructorTitles);
 
   await prisma.driver
     .update({
       where: { id: driverId },
-      data: { starts, wins, podiums, driverOfDay, driverTitles, constructorTitles }
+      data: {
+        starts: manualStarts,
+        wins: manualWins,
+        podiums: manualPodiums,
+        driverOfDay: manualDriverOfDay,
+        driverTitles: manualDriverTitles,
+        constructorTitles: manualConstructorTitles
+      }
     })
     .catch(() => null);
 
@@ -466,26 +511,14 @@ export default async function AdminDriverDetailPage({
     .filter((s) => s.season !== null);
   const activeSeasonIds = new Set(seasonRows.map((s) => s.seasonId));
 
-  const seasonTotals = seasonRows.reduce(
-    (acc, r) => {
-      acc.starts += r.starts;
-      acc.wins += r.wins;
-      acc.podiums += r.podiums;
-      acc.driverOfDay += r.driverOfDay;
-      acc.driverTitles += r.driverTitles;
-      acc.constructorTitles += r.constructorTitles;
-      return acc;
-    },
-    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
-  );
-
+  const seasonTotals = await seasonTotalsForDriver(driverId);
   const totalComputed = {
-    starts: seasonTotals.starts,
-    wins: seasonTotals.wins,
-    podiums: seasonTotals.podiums,
-    driverOfDay: seasonTotals.driverOfDay,
-    driverTitles: seasonTotals.driverTitles,
-    constructorTitles: seasonTotals.constructorTitles
+    starts: Math.max(0, seasonTotals.starts + (driver.starts ?? 0)),
+    wins: Math.max(0, seasonTotals.wins + (driver.wins ?? 0)),
+    podiums: Math.max(0, seasonTotals.podiums + (driver.podiums ?? 0)),
+    driverOfDay: Math.max(0, seasonTotals.driverOfDay + (driver.driverOfDay ?? 0)),
+    driverTitles: Math.max(0, seasonTotals.driverTitles + (driver.driverTitles ?? 0)),
+    constructorTitles: Math.max(0, seasonTotals.constructorTitles + (driver.constructorTitles ?? 0))
   };
 
   return (
@@ -634,28 +667,28 @@ export default async function AdminDriverDetailPage({
                 className="mt-4 grid gap-4 md:grid-cols-3"
               >
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Rennstarts (Manuell)</label>
-                  <input name="starts" defaultValue={driver.starts} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Rennstarts</label>
+                  <input name="starts" defaultValue={totalComputed.starts} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Siege (Manuell)</label>
-                  <input name="wins" defaultValue={driver.wins} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Siege</label>
+                  <input name="wins" defaultValue={totalComputed.wins} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Podien (Manuell)</label>
-                  <input name="podiums" defaultValue={driver.podiums} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Podien</label>
+                  <input name="podiums" defaultValue={totalComputed.podiums} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer des Tages (Manuell)</label>
-                  <input name="driverOfDay" defaultValue={driver.driverOfDay} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer des Tages</label>
+                  <input name="driverOfDay" defaultValue={totalComputed.driverOfDay} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer WM Titel (Manuell)</label>
-                  <input name="driverTitles" defaultValue={driver.driverTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Fahrer WM Titel</label>
+                  <input name="driverTitles" defaultValue={totalComputed.driverTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-white/70">Konstrukteurs WM Titel (Manuell)</label>
-                  <input name="constructorTitles" defaultValue={driver.constructorTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
+                  <label className="mb-1 block text-xs font-semibold text-white/70">Konstrukteurs WM Titel</label>
+                  <input name="constructorTitles" defaultValue={totalComputed.constructorTitles} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25" />
                 </div>
                 <div className="md:col-span-3">
                   <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
