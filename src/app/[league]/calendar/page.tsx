@@ -53,6 +53,8 @@ export default async function LeagueCalendarPage({
     location: string | null;
     startsAt: Date;
     imagePath: string | null;
+    resultsPublishedAt: Date | null;
+    results: { position: number; driver: { name: string } }[];
   };
 
   let races: RaceItem[] = [];
@@ -86,7 +88,13 @@ export default async function LeagueCalendarPage({
         circuit: true,
         location: true,
         startsAt: true,
-        imagePath: true
+        imagePath: true,
+        resultsPublishedAt: true,
+        results: {
+          orderBy: { position: "asc" },
+          take: 3,
+          select: { position: true, driver: { select: { name: true } } }
+        }
       }
     });
   } catch {}
@@ -132,6 +140,7 @@ export default async function LeagueCalendarPage({
                 flagCodeForRaceLike({ name: r.name, location: r.location, circuit: r.circuit })
               );
               const imgUrl = imageUrl(r.imagePath);
+              const hasPublishedResults = Boolean(r.resultsPublishedAt) && r.results.length > 0;
 
               return (
             <Link
@@ -177,6 +186,16 @@ export default async function LeagueCalendarPage({
                     <div className="truncate text-2xl font-extrabold tracking-tight text-white">
                       {title}
                     </div>
+                    {hasPublishedResults ? (
+                      <div className="mt-3 grid gap-1 text-xs font-semibold text-white/85">
+                        {r.results.map((res) => (
+                          <div key={res.position} className="flex min-w-0 items-center gap-2">
+                            <div className="w-4 shrink-0 text-white/60">{res.position}</div>
+                            <div className="truncate">{res.driver.name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
