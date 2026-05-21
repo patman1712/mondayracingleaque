@@ -286,10 +286,13 @@ export default async function LeagueCalendarPage({
                           const teamColor = teamColorByDriverId.get(res.driverId) ?? null;
                           const badgeBg = teamColor ? hexToRgba(teamColor, 0.9) : "rgba(255,255,255,0.12)";
                           const badgeBorder = teamColor ? hexToRgba(teamColor, 0.45) : "rgba(255,255,255,0.16)";
+                          const cardBorder = teamColor ? hexToRgba(teamColor, 0.22) : "rgba(255,255,255,0.10)";
+                          const cardBg = teamColor ? hexToRgba(teamColor, 0.14) : "rgba(0,0,0,0.35)";
                           return (
                             <div
                               key={res.position}
-                              className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-2 py-2 backdrop-blur-sm"
+                              className="flex items-center gap-2 rounded-xl border px-2 py-2 backdrop-blur-sm"
+                              style={{ borderColor: cardBorder, backgroundColor: cardBg }}
                             >
                               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-extrabold text-white/85">
                                 {res.position}
