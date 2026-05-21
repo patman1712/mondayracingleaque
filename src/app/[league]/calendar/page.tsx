@@ -32,6 +32,62 @@ function formatRaceDateTime(d: Date, includeTime: boolean) {
   return `${date} · ${time}`.toUpperCase();
 }
 
+function driverCode(name: string) {
+  const s = (name ?? "").trim().toUpperCase();
+  if (!s) return "—";
+  const compact = s.replace(/[^A-Z0-9]+/g, " ").trim();
+  const parts = compact.split(/\s+/g).filter(Boolean);
+  if (parts.length >= 3) return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}${parts[2][0] ?? ""}`.toUpperCase();
+  const base = (parts[0] ?? "").replace(/[^A-Z0-9]+/g, "");
+  return base.slice(0, 3).padEnd(3, base.slice(-1) || "X");
+}
+
+function parseRaceTimeMs(text: string) {
+  const t = (text ?? "").trim();
+  const m = t.match(/^(\d+):(\d{2})\.(\d{1,3})$/);
+  if (!m) return null;
+  const min = Number(m[1]);
+  const sec = Number(m[2]);
+  const ms = Number(m[3]);
+  if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
+  return ((min * 60 + sec) * 1000) + ms;
+}
+
+function formatGapMs(ms: number) {
+  const total = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(total / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const milli = total % 1000;
+  if (minutes > 0) return `+${minutes}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
+  return `+${seconds}.${String(milli).padStart(3, "0")}`;
+}
+
+function getResultDisplayTime(
+  result: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null },
+  winnerRaceTimeMs: number | null
+) {
+  const statusUp = (result.status ?? "").trim().toUpperCase();
+  if (statusUp === "DNF") return "DNF";
+  if (statusUp === "RET" || statusUp === "RETIRED") return "RET";
+  if (statusUp === "DSQ") return "DSQ";
+  if (statusUp === "DNS") return "DNS";
+
+  const tt = (result.timeText ?? "").trim();
+  if (result.position === 1) {
+    if (tt && tt.toUpperCase() !== "WINNER") return tt;
+    if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs)) return formatGapMs(result.finishTimeMs).slice(1);
+    return "—";
+  }
+
+  if (tt.startsWith("+")) return tt;
+  if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs) && typeof winnerRaceTimeMs === "number") {
+    return formatGapMs(result.finishTimeMs - winnerRaceTimeMs);
+  }
+  const raceMs = parseRaceTimeMs(tt);
+  if (typeof raceMs === "number" && typeof winnerRaceTimeMs === "number") return formatGapMs(raceMs - winnerRaceTimeMs);
+  return "—";
+}
+
 export default async function LeagueCalendarPage({
   params
 }: {
@@ -54,7 +110,7 @@ export default async function LeagueCalendarPage({
     startsAt: Date;
     imagePath: string | null;
     resultsPublishedAt: Date | null;
-    results: { position: number; driver: { name: string } }[];
+    results: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null; driver: { name: string } }[];
   };
 
   let races: RaceItem[] = [];
@@ -93,7 +149,7 @@ export default async function LeagueCalendarPage({
         results: {
           orderBy: { position: "asc" },
           take: 3,
-          select: { position: true, driver: { select: { name: true } } }
+          select: { position: true, status: true, timeText: true, finishTimeMs: true, driver: { select: { name: true } } }
         }
       }
     });
@@ -141,6 +197,13 @@ export default async function LeagueCalendarPage({
               );
               const imgUrl = imageUrl(r.imagePath);
               const hasPublishedResults = Boolean(r.resultsPublishedAt) && r.results.length > 0;
+              const winner = r.results.find((x) => x.position === 1) ?? null;
+              const winnerRaceTimeMs =
+                winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
+                  ? winner.finishTimeMs
+                  : winner?.timeText
+                    ? parseRaceTimeMs(winner.timeText)
+                    : null;
 
               return (
             <Link
@@ -183,15 +246,27 @@ export default async function LeagueCalendarPage({
                   </div>
                 ) : title ? (
                   <div className="mt-4">
-                    <div className="truncate text-2xl font-extrabold tracking-tight text-white">
+                    <div className={["truncate font-extrabold tracking-tight text-white", hasPublishedResults ? "text-xl" : "text-2xl"].join(" ")}>
                       {title}
                     </div>
                     {hasPublishedResults ? (
-                      <div className="mt-3 grid gap-1 text-xs font-semibold text-white/85">
+                      <div className="mt-4 grid grid-cols-3 gap-2">
                         {r.results.map((res) => (
-                          <div key={res.position} className="flex min-w-0 items-center gap-2">
-                            <div className="w-4 shrink-0 text-white/60">{res.position}</div>
-                            <div className="truncate">{res.driver.name}</div>
+                          <div
+                            key={res.position}
+                            className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-2 py-2 backdrop-blur-sm"
+                          >
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-extrabold text-white/85">
+                              {res.position}
+                            </div>
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-extrabold text-white/85">
+                              {driverCode(res.driver.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-[10px] font-semibold leading-tight text-white/70">
+                                {getResultDisplayTime(res, winnerRaceTimeMs)}
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
