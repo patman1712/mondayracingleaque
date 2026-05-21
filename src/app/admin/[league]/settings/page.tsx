@@ -26,6 +26,65 @@ function fallbackSlugsFor(league: League) {
   return { adminSlug: "rookie", publicSlug: "mrl-rookie" };
 }
 
+function parsePointsInput(raw: string) {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const parts = trimmed
+    .split(/[,\n\r\t ]+/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const points = parts
+    .map((v) => (v === "-" ? 0 : Number(v)))
+    .map((v) => (Number.isFinite(v) ? Math.max(0, Number(v)) : 0));
+  return points;
+}
+
+async function saveSprintScoring(formData: FormData) {
+  "use server";
+  const leagueRaw = String(formData.get("league") ?? "");
+  const adminSlug = String(formData.get("adminSlug") ?? "").trim();
+  const publicSlug = String(formData.get("publicSlug") ?? "").trim();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const raw = String(formData.get("sprintPoints") ?? "");
+  if (!isLeagueValue(leagueRaw) || !adminSlug || !publicSlug || !seasonId) {
+    redirect(`/admin/${adminSlug || "one"}/settings?error=invalid`);
+  }
+  const league = leagueRaw;
+
+  const season = await prisma.season
+    .findUnique({ where: { id: seasonId }, select: { id: true, league: true, year: true, seasonNo: true, isTest: true } })
+    .catch(() => null);
+  if (!season || season.league !== league) redirect(`/admin/${adminSlug}/settings?error=invalid`);
+
+  const points = parsePointsInput(raw);
+  await prisma.season
+    .update({
+      where: { id: season.id },
+      data: { sprintPointsByPositionJson: points ? JSON.stringify(points) : null }
+    })
+    .catch(() => null);
+
+  const sprintRaces = await prisma.race
+    .findMany({
+      where: { league, season: season.year, seasonNo: season.seasonNo, seasonIsTest: season.isTest, isSprint: true },
+      select: { id: true },
+      take: 5000
+    })
+    .catch(() => []);
+
+  for (const r of sprintRaces) {
+    await applyRaceScoring(prisma, r.id).catch(() => null);
+  }
+
+  revalidatePath(`/admin/${adminSlug}/settings`);
+  revalidatePath(`/admin/${adminSlug}/results`);
+  revalidatePath(`/admin/${adminSlug}/standings`);
+  revalidatePath(`/${publicSlug}/standings`);
+  revalidatePath(`/${publicSlug}/results`);
+  redirect(`/admin/${adminSlug}/settings?ok=1`);
+}
+
 async function setActiveSeason(formData: FormData) {
   "use server";
   const leagueRaw = String(formData.get("league") ?? "");
@@ -155,7 +214,7 @@ export default async function AdminLeagueSettingsPage({
       where: { league: l },
       orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
       take: 200,
-      select: { id: true, year: true, seasonNo: true, isTest: true, placement: true, label: true }
+      select: { id: true, year: true, seasonNo: true, isTest: true, placement: true, label: true, sprintPointsByPositionJson: true }
     })
     .catch(() => []);
 
@@ -163,6 +222,20 @@ export default async function AdminLeagueSettingsPage({
     .findUnique({ where: { key: activeKey(l) }, select: { value: true } })
     .catch(() => null);
   const activeId = active?.value ?? "";
+  const selectedSeason =
+    seasons.find((s) => s.id === activeId) ??
+    seasons.find((s) => s.placement === "CALENDAR" && !s.isTest) ??
+    seasons.find((s) => s.placement === "CALENDAR") ??
+    seasons[0] ??
+    null;
+  let sprintPointsValue = "";
+  const sprintRaw = (selectedSeason?.sprintPointsByPositionJson ?? "").trim();
+  if (sprintRaw) {
+    try {
+      const parsed = JSON.parse(sprintRaw) as unknown;
+      if (Array.isArray(parsed)) sprintPointsValue = parsed.join(", ");
+    } catch {}
+  }
   const liveTimingKeyRow = await prisma.appConfig
     .findUnique({ where: { key: liveTimingLeagueKeyKey(cfg.publicSlug) }, select: { value: true } })
     .catch(() => null);
@@ -269,6 +342,38 @@ export default async function AdminLeagueSettingsPage({
 
             <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">Speichern</button>
           </form>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold">Einstellungen · Sprint Punkte</div>
+          <div className="mt-1 text-sm text-white/60">
+            Punktevergabe für Sprint-Rennen dieser Saison (Platz 1..n). Leeres Feld bedeutet: Sprint nutzt die normale WM-Punktevergabe.
+          </div>
+
+          {selectedSeason ? (
+            <form action={saveSprintScoring} className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <input type="hidden" name="league" value={l} />
+              <input type="hidden" name="adminSlug" value={cfg.adminSlug} />
+              <input type="hidden" name="publicSlug" value={cfg.publicSlug} />
+              <input type="hidden" name="seasonId" value={selectedSeason.id} />
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-white/70">
+                  Sprint Punkte · {selectedSeason.isTest ? "TEST · " : ""}{selectedSeason.year} · Season {selectedSeason.seasonNo}
+                </label>
+                <input
+                  name="sprintPoints"
+                  defaultValue={sprintPointsValue}
+                  placeholder="8, 7, 6, 5, 4, 3, 2, 1"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                />
+              </div>
+              <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">Speichern</button>
+            </form>
+          ) : (
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+              Keine Saison vorhanden.
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
