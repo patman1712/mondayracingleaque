@@ -26,27 +26,13 @@ function fallbackSlugsFor(league: League) {
   return { adminSlug: "rookie", publicSlug: "mrl-rookie" };
 }
 
-function parsePointsInput(raw: string) {
-  const trimmed = (raw ?? "").trim();
-  if (!trimmed) return null;
-  const parts = trimmed
-    .split(/[,\n\r\t ]+/g)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (!parts.length) return null;
-  const points = parts
-    .map((v) => (v === "-" ? 0 : Number(v)))
-    .map((v) => (Number.isFinite(v) ? Math.max(0, Number(v)) : 0));
-  return points;
-}
-
 async function saveSprintScoring(formData: FormData) {
   "use server";
   const leagueRaw = String(formData.get("league") ?? "");
   const adminSlug = String(formData.get("adminSlug") ?? "").trim();
   const publicSlug = String(formData.get("publicSlug") ?? "").trim();
   const seasonId = String(formData.get("seasonId") ?? "").trim();
-  const raw = String(formData.get("sprintPoints") ?? "");
+  const enabled = formData.get("sprintEnabled") === "on";
   if (!isLeagueValue(leagueRaw) || !adminSlug || !publicSlug || !seasonId) {
     redirect(`/admin/${adminSlug || "one"}/settings?error=invalid`);
   }
@@ -57,11 +43,19 @@ async function saveSprintScoring(formData: FormData) {
     .catch(() => null);
   if (!season || season.league !== league) redirect(`/admin/${adminSlug}/settings?error=invalid`);
 
-  const points = parsePointsInput(raw);
+  const leagueScoring = await getLeagueScoring(prisma, league).catch(() => null);
+  const size = leagueScoring?.fieldSize ?? 20;
+  const points: number[] = [];
+  for (let i = 1; i <= size; i++) {
+    const raw = String(formData.get(`sp${i}`) ?? "").trim();
+    const v = raw === "" ? 0 : Number(raw);
+    points.push(Number.isFinite(v) ? Math.max(0, Number(v)) : 0);
+  }
+
   await prisma.season
     .update({
       where: { id: season.id },
-      data: { sprintPointsByPositionJson: points ? JSON.stringify(points) : null }
+      data: { sprintPointsByPositionJson: enabled ? JSON.stringify(points) : null }
     })
     .catch(() => null);
 
@@ -228,14 +222,6 @@ export default async function AdminLeagueSettingsPage({
     seasons.find((s) => s.placement === "CALENDAR") ??
     seasons[0] ??
     null;
-  let sprintPointsValue = "";
-  const sprintRaw = (selectedSeason?.sprintPointsByPositionJson ?? "").trim();
-  if (sprintRaw) {
-    try {
-      const parsed = JSON.parse(sprintRaw) as unknown;
-      if (Array.isArray(parsed)) sprintPointsValue = parsed.join(", ");
-    } catch {}
-  }
   const liveTimingKeyRow = await prisma.appConfig
     .findUnique({ where: { key: liveTimingLeagueKeyKey(cfg.publicSlug) }, select: { value: true } })
     .catch(() => null);
@@ -244,6 +230,23 @@ export default async function AdminLeagueSettingsPage({
     fieldSize: 20,
     pointsByPosition: Array.from({ length: 20 }).map(() => 0)
   }));
+  const sprintPointsRaw = (selectedSeason?.sprintPointsByPositionJson ?? "").trim();
+  let sprintEnabled = false;
+  let sprintPointsByPosition: number[] = Array.from({ length: scoring.fieldSize }).map(() => 0);
+  if (sprintPointsRaw) {
+    try {
+      const parsed = JSON.parse(sprintPointsRaw) as unknown;
+      if (Array.isArray(parsed)) {
+        sprintEnabled = true;
+        const clean = parsed
+          .map((v) => (v == null || String(v).trim() === "" ? 0 : Number(v)))
+          .map((v) => (Number.isFinite(v) ? Math.max(0, Number(v)) : 0))
+          .slice(0, scoring.fieldSize);
+        while (clean.length < scoring.fieldSize) clean.push(0);
+        sprintPointsByPosition = clean;
+      }
+    } catch {}
+  }
 
   return (
     <AdminShell>
@@ -351,22 +354,59 @@ export default async function AdminLeagueSettingsPage({
           </div>
 
           {selectedSeason ? (
-            <form action={saveSprintScoring} className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <form action={saveSprintScoring} className="mt-4 space-y-4">
               <input type="hidden" name="league" value={l} />
               <input type="hidden" name="adminSlug" value={cfg.adminSlug} />
               <input type="hidden" name="publicSlug" value={cfg.publicSlug} />
               <input type="hidden" name="seasonId" value={selectedSeason.id} />
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-white/70">
-                  Sprint Punkte · {selectedSeason.isTest ? "TEST · " : ""}{selectedSeason.year} · Season {selectedSeason.seasonNo}
-                </label>
-                <input
-                  name="sprintPoints"
-                  defaultValue={sprintPointsValue}
-                  placeholder="8, 7, 6, 5, 4, 3, 2, 1"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                />
+
+              <div className="grid gap-4 md:grid-cols-[240px_1fr] md:items-start">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-white/70">
+                    Saison
+                  </label>
+                  <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/85">
+                    {selectedSeason.isTest ? "TEST · " : ""}{selectedSeason.year} · Season {selectedSeason.seasonNo}
+                    {selectedSeason.label ? ` · ${selectedSeason.label}` : ""}
+                  </div>
+
+                  <label className="mt-3 flex w-fit items-center gap-2 text-sm text-white/80">
+                    <input
+                      name="sprintEnabled"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-white/20 bg-white/5"
+                      defaultChecked={sprintEnabled}
+                    />
+                    Eigene Sprint-Punkte verwenden
+                  </label>
+                  <div className="mt-1 text-xs text-white/60">
+                    Wenn deaktiviert, nutzt Sprint die normalen WM Punkte.
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-1 block text-xs font-semibold text-white/70">Punkte pro Platz</div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: scoring.fieldSize }).map((_, idx) => {
+                      const pos = idx + 1;
+                      return (
+                        <div key={pos} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="w-10 shrink-0 text-xs font-semibold text-white/70">P{pos}</div>
+                          <input
+                            name={`sp${pos}`}
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            defaultValue={sprintPointsByPosition[idx] ?? 0}
+                            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+
               <button className="w-fit rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">Speichern</button>
             </form>
           ) : (
