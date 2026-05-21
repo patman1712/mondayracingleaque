@@ -32,14 +32,38 @@ function formatRaceDateTime(d: Date, includeTime: boolean) {
   return `${date} · ${time}`.toUpperCase();
 }
 
+function hexToRgba(hex: string, a: number) {
+  const m = (hex ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return `rgba(255,255,255,${a})`;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function splitNameParts(name: string) {
+  const compact = (name ?? "").trim().replace(/[^A-Za-z0-9]+/g, " ").trim();
+  return compact.split(/\s+/g).filter(Boolean);
+}
+
 function driverCode(name: string) {
-  const s = (name ?? "").trim().toUpperCase();
-  if (!s) return "—";
-  const compact = s.replace(/[^A-Z0-9]+/g, " ").trim();
-  const parts = compact.split(/\s+/g).filter(Boolean);
-  if (parts.length >= 3) return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}${parts[2][0] ?? ""}`.toUpperCase();
-  const base = (parts[0] ?? "").replace(/[^A-Z0-9]+/g, "");
+  const parts = splitNameParts(name).map((p) => p.toUpperCase());
+  if (parts.length === 0) return "—";
+  const suffixes = new Set(["JR", "SR", "II", "III", "IV"]);
+  const basePart = [...parts].reverse().find((p) => !suffixes.has(p)) ?? parts[parts.length - 1];
+  const base = basePart.replace(/[^A-Z0-9]+/g, "");
   return base.slice(0, 3).padEnd(3, base.slice(-1) || "X");
+}
+
+function driverDisplayName(name: string) {
+  const parts = splitNameParts(name);
+  if (parts.length === 0) return "—";
+  if (parts.length === 1) return parts[0];
+  const suffixes = new Set(["Jr", "JR", "Sr", "SR", "II", "III", "IV"]);
+  const last = [...parts].reverse().find((p) => !suffixes.has(p)) ?? parts[parts.length - 1];
+  const first = parts[0];
+  return `${first[0]}. ${last}`;
 }
 
 function parseRaceTimeMs(text: string) {
@@ -110,7 +134,8 @@ export default async function LeagueCalendarPage({
     startsAt: Date;
     imagePath: string | null;
     resultsPublishedAt: Date | null;
-    results: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null; driver: { name: string } }[];
+    results: { driverId: string; position: number; status: string | null; timeText: string | null; finishTimeMs: number | null; driver: { name: string } }[];
+    entries: { driverId: string; team: { color: string | null } | null }[];
   };
 
   let races: RaceItem[] = [];
@@ -149,7 +174,12 @@ export default async function LeagueCalendarPage({
         results: {
           orderBy: { position: "asc" },
           take: 3,
-          select: { position: true, status: true, timeText: true, finishTimeMs: true, driver: { select: { name: true } } }
+          select: { driverId: true, position: true, status: true, timeText: true, finishTimeMs: true, driver: { select: { name: true } } }
+        },
+        entries: {
+          where: { participates: true },
+          select: { driverId: true, team: { select: { color: true } } },
+          take: 200
         }
       }
     });
@@ -198,6 +228,7 @@ export default async function LeagueCalendarPage({
               const imgUrl = imageUrl(r.imagePath);
               const hasPublishedResults = Boolean(r.resultsPublishedAt) && r.results.length > 0;
               const winner = r.results.find((x) => x.position === 1) ?? null;
+              const teamColorByDriverId = new Map(r.entries.map((e) => [e.driverId, e.team?.color ?? null] as const));
               const winnerRaceTimeMs =
                 winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
                   ? winner.finishTimeMs
@@ -251,24 +282,37 @@ export default async function LeagueCalendarPage({
                     </div>
                     {hasPublishedResults ? (
                       <div className="mt-4 grid grid-cols-3 gap-2">
-                        {r.results.map((res) => (
-                          <div
-                            key={res.position}
-                            className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-2 py-2 backdrop-blur-sm"
-                          >
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-extrabold text-white/85">
-                              {res.position}
-                            </div>
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-extrabold text-white/85">
-                              {driverCode(res.driver.name)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-[10px] font-semibold leading-tight text-white/70">
-                                {getResultDisplayTime(res, winnerRaceTimeMs)}
+                        {r.results.map((res) => {
+                          const teamColor = teamColorByDriverId.get(res.driverId) ?? null;
+                          const badgeBg = teamColor ? hexToRgba(teamColor, 0.9) : "rgba(255,255,255,0.12)";
+                          const badgeBorder = teamColor ? hexToRgba(teamColor, 0.45) : "rgba(255,255,255,0.16)";
+                          return (
+                            <div
+                              key={res.position}
+                              className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-2 py-2 backdrop-blur-sm"
+                            >
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-extrabold text-white/85">
+                                {res.position}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div
+                                    className="flex h-7 shrink-0 items-center justify-center rounded-full border px-2 text-[10px] font-extrabold text-white"
+                                    style={{ backgroundColor: badgeBg, borderColor: badgeBorder }}
+                                  >
+                                    {driverCode(res.driver.name)}
+                                  </div>
+                                  <div className="truncate text-[11px] font-semibold leading-tight text-white/85">
+                                    {driverDisplayName(res.driver.name)}
+                                  </div>
+                                </div>
+                                <div className="mt-0.5 truncate text-[10px] font-semibold leading-tight text-white/65">
+                                  {getResultDisplayTime(res, winnerRaceTimeMs)}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
