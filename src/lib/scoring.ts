@@ -5,6 +5,14 @@ export type LeagueScoring = {
   pointsByPosition: number[];
 };
 
+function normalizePoints(fieldSize: number, pointsByPosition: number[] | null) {
+  const points = (pointsByPosition ?? defaultPointsFor(fieldSize))
+    .slice(0, fieldSize)
+    .map((v) => (Number.isFinite(v as number) ? Math.max(0, Number(v)) : 0));
+  while (points.length < fieldSize) points.push(0);
+  return points;
+}
+
 function fieldSizeKey(league: League) {
   return `fieldSize:${league}`;
 }
@@ -42,10 +50,7 @@ export async function getLeagueScoring(prisma: PrismaClient, league: League): Pr
     } catch {}
   }
 
-  const normalized = (points ?? defaultPointsFor(fieldSize)).slice(0, fieldSize);
-  while (normalized.length < fieldSize) normalized.push(0);
-
-  return { fieldSize, pointsByPosition: normalized };
+  return { fieldSize, pointsByPosition: normalizePoints(fieldSize, points) };
 }
 
 export async function setLeagueScoring(
@@ -81,11 +86,50 @@ export function pointsForPosition(scoring: LeagueScoring, position: number) {
 }
 
 export async function applyRaceScoring(prisma: PrismaClient, raceId: string) {
-  const race = await prisma.race.findUnique({ where: { id: raceId }, select: { id: true, league: true } }).catch(() => null);
+  const race = await prisma.race
+    .findUnique({
+      where: { id: raceId },
+      select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true, isSprint: true }
+    })
+    .catch(() => null);
   if (!race) return;
 
   const scoring = await getLeagueScoring(prisma, race.league).catch(() => null);
   if (!scoring) return;
+
+  let effectiveScoring = scoring;
+  if (race.isSprint) {
+    const seasonRow = await prisma.season
+      .findUnique({
+        where: {
+          league_year_seasonNo_isTest: {
+            league: race.league,
+            year: race.season,
+            seasonNo: race.seasonNo,
+            isTest: race.seasonIsTest
+          }
+        },
+        select: { sprintPointsByPositionJson: true }
+      })
+      .catch(() => null);
+
+    let sprintPoints: number[] | null = null;
+    const raw = (seasonRow?.sprintPointsByPositionJson ?? "").trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          sprintPoints = parsed
+            .map((v) => (v == null || String(v).trim() === "" ? 0 : Number(v)))
+            .map((v) => (Number.isFinite(v) ? Math.max(0, Number(v)) : 0));
+        }
+      } catch {}
+    }
+
+    if (sprintPoints) {
+      effectiveScoring = { fieldSize: scoring.fieldSize, pointsByPosition: normalizePoints(scoring.fieldSize, sprintPoints) };
+    }
+  }
 
   const rows = await prisma.raceResult
     .findMany({
@@ -99,7 +143,7 @@ export async function applyRaceScoring(prisma: PrismaClient, raceId: string) {
     for (const r of rows) {
       const statusUp = (r.status ?? "").trim().toUpperCase();
       const dnf = statusUp && ["DNF", "DSQ", "DNS", "RET"].includes(statusUp);
-      const points = !dnf && r.timeText ? pointsForPosition(scoring, r.position) : 0;
+      const points = !dnf && r.timeText ? pointsForPosition(effectiveScoring, r.position) : 0;
       await tx.raceResult
         .update({
           where: { raceId_driverId: { raceId, driverId: r.driverId } },

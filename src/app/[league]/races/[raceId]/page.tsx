@@ -127,6 +127,80 @@ function getResultDisplayTime(
   return "—";
 }
 
+type RaceFieldDriver = {
+  id: string;
+  name: string;
+  number: number | null;
+  country: string | null;
+  portraitUrl: string | null;
+  role: "MAIN" | "RESERVE";
+  roleLabel: string;
+  teamName: string | null;
+  raceTeamName: string | null;
+  teamLogoUrl: string | null;
+  accent: string | null;
+};
+
+async function loadRaceField(raceId: string, seasonId: string | null): Promise<RaceFieldDriver[]> {
+  const entries = await prisma.raceEntry
+    .findMany({
+      where: { raceId, participates: true },
+      orderBy: [{ driver: { name: "asc" } }],
+      select: {
+        driverId: true,
+        driver: { select: { id: true, name: true, number: true, country: true } },
+        teamId: true,
+        team: { select: { id: true, name: true, color: true, logoPath: true } }
+      },
+      take: 5000
+    })
+    .catch(() => []);
+
+  const driverIds = entries.map((e) => e.driverId);
+  const driverSeasonRows =
+    seasonId && driverIds.length
+      ? await prisma.driverSeason
+          .findMany({
+            where: { seasonId, driverId: { in: driverIds } },
+            select: {
+              driverId: true,
+              role: true,
+              portraitPath: true,
+              teamRef: { select: { id: true, name: true, color: true, logoPath: true } }
+            },
+            take: 5000
+          })
+          .catch(() => [])
+      : [];
+
+  const dsByDriverId = new Map(driverSeasonRows.map((r) => [r.driverId, r] as const));
+
+  return entries.map((e) => {
+    const ds = dsByDriverId.get(e.driverId) ?? null;
+    const role = ds?.role ?? "MAIN";
+    const roleLabel = role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer";
+    const accent = e.team?.color ?? ds?.teamRef?.color ?? null;
+    const teamLogoUrl =
+      role === "MAIN"
+        ? imageUrl(ds?.teamRef?.logoPath ?? null) ?? imageUrl(e.team?.logoPath ?? null)
+        : imageUrl(e.team?.logoPath ?? null) ?? imageUrl(ds?.teamRef?.logoPath ?? null);
+
+    return {
+      id: e.driver.id,
+      name: e.driver.name,
+      number: e.driver.number ?? null,
+      country: e.driver.country ?? null,
+      portraitUrl: imageUrl(ds?.portraitPath) ?? null,
+      role,
+      roleLabel,
+      teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
+      raceTeamName: e.team?.name ?? null,
+      teamLogoUrl,
+      accent
+    };
+  });
+}
+
 export default async function RaceDetailPage({
   params
 }: {
@@ -146,6 +220,7 @@ export default async function RaceDetailPage({
         season: true,
         seasonNo: true,
         seasonIsTest: true,
+        isSprint: true,
         round: true,
         name: true,
         circuit: true,
@@ -165,10 +240,9 @@ export default async function RaceDetailPage({
   const start = new Date(race.startsAt);
   const startMs = start.getTime();
   const broadcastCloseMs = startMs + 3 * 60 * 60 * 1000;
-  const published = Boolean(race.resultsPublishedAt);
-  const showResults = published;
-  const showBroadcast = !published && Boolean(race.twitchChannel) && now <= broadcastCloseMs;
-  const showStartTime = !published && now <= broadcastCloseMs;
+  const showResults = Boolean(race.resultsPublishedAt);
+  const showBroadcast = !showResults && Boolean(race.twitchChannel) && now <= broadcastCloseMs;
+  const showStartTime = !showResults && now <= broadcastCloseMs;
 
   const hero = imageUrl(race.imagePath) ?? imageUrl(race.circuitRef?.imagePath ?? null);
   const subLine = [race.location, race.circuit].filter(Boolean).join(" · ");
@@ -190,20 +264,6 @@ export default async function RaceDetailPage({
               ? "MRL Two Mini WM"
               : "";
 
-  const entries = await prisma.raceEntry
-    .findMany({
-      where: { raceId: race.id, participates: true },
-      orderBy: [{ driver: { name: "asc" } }],
-      select: {
-        driverId: true,
-        driver: { select: { id: true, name: true, number: true, country: true, portraitPath: true } },
-        teamId: true,
-        team: { select: { id: true, name: true, color: true, logoPath: true } }
-      },
-      take: 5000
-    })
-    .catch(() => []);
-
   const season = await prisma.season
     .findUnique({
       where: {
@@ -218,42 +278,24 @@ export default async function RaceDetailPage({
     })
     .catch(() => null);
 
-  const driverIds = entries.map((e) => e.driverId);
-  const driverSeasonRows = season?.id && driverIds.length
-    ? await prisma.driverSeason
-        .findMany({
-          where: { seasonId: season.id, driverId: { in: driverIds } },
-          select: { driverId: true, role: true, portraitPath: true, teamRef: { select: { name: true, color: true, logoPath: true } } },
-          take: 5000
-        })
-        .catch(() => [])
-    : [];
+  const field = await loadRaceField(race.id, season?.id ?? null);
 
-  const dsByDriverId = new Map(driverSeasonRows.map((r) => [r.driverId, r] as const));
+  const otherRace = await prisma.race
+    .findFirst({
+      where: {
+        league: l,
+        season: race.season,
+        seasonNo: race.seasonNo,
+        seasonIsTest: race.seasonIsTest,
+        round: race.round,
+        isSprint: !race.isSprint
+      },
+      select: { id: true, name: true, isSprint: true, resultsPublishedAt: true }
+    })
+    .catch(() => null);
 
-  const field = entries.map((e) => {
-    const ds = dsByDriverId.get(e.driverId) ?? null;
-    const role = ds?.role ?? "MAIN";
-    const roleLabel = role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer";
-    const accent = e.team?.color ?? ds?.teamRef?.color ?? null;
-    const teamLogoUrl =
-      role === "MAIN"
-        ? imageUrl(ds?.teamRef?.logoPath ?? null) ?? imageUrl(e.team?.logoPath ?? null)
-        : imageUrl(e.team?.logoPath ?? null) ?? imageUrl(ds?.teamRef?.logoPath ?? null);
-    return {
-      id: e.driver.id,
-      name: e.driver.name,
-      number: e.driver.number ?? null,
-      country: e.driver.country ?? null,
-      portraitUrl: imageUrl(ds?.portraitPath) ?? null,
-      role,
-      roleLabel,
-      teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
-      raceTeamName: e.team?.name ?? null,
-      teamLogoUrl,
-      accent
-    };
-  });
+  const showOtherResults = Boolean(otherRace?.resultsPublishedAt);
+  const otherField = otherRace ? await loadRaceField(otherRace.id, season?.id ?? null) : [];
 
   type ResultRow = {
     id: string;
@@ -268,40 +310,206 @@ export default async function RaceDetailPage({
     driver: { id: string; name: string; team: string | null; number: number | null; portraitPath: string | null };
   };
 
-  let results: ResultRow[] = [];
-  if (showResults) {
-    results = await prisma.raceResult
-      .findMany({
-        where: { raceId: race.id },
-        orderBy: [{ position: "asc" }],
-        select: {
-          id: true,
-          position: true,
-          points: true,
-          status: true,
-          bestTime: true,
-          timeText: true,
-          finishTimeMs: true,
-          penaltySeconds: true,
-          fastestLap: true,
-          driver: { select: { id: true, name: true, team: true, number: true, portraitPath: true } }
-        }
-      })
-      .catch(() => []);
+  const results: ResultRow[] = showResults
+    ? await prisma.raceResult
+        .findMany({
+          where: { raceId: race.id },
+          orderBy: [{ position: "asc" }],
+          select: {
+            id: true,
+            position: true,
+            points: true,
+            status: true,
+            bestTime: true,
+            timeText: true,
+            finishTimeMs: true,
+            penaltySeconds: true,
+            fastestLap: true,
+            driver: { select: { id: true, name: true, team: true, number: true, portraitPath: true } }
+          }
+        })
+        .catch(() => [])
+    : [];
+
+  const otherResults: ResultRow[] =
+    showOtherResults && otherRace
+      ? await prisma.raceResult
+          .findMany({
+            where: { raceId: otherRace.id },
+            orderBy: [{ position: "asc" }],
+            select: {
+              id: true,
+              position: true,
+              points: true,
+              status: true,
+              bestTime: true,
+              timeText: true,
+              finishTimeMs: true,
+              penaltySeconds: true,
+              fastestLap: true,
+              driver: { select: { id: true, name: true, team: true, number: true, portraitPath: true } }
+            }
+          })
+          .catch(() => [])
+      : [];
+
+  type ResultSection = { id: string; isSprint: boolean; title: string; results: ResultRow[]; field: RaceFieldDriver[] };
+
+  const resultSections: ResultSection[] = [
+    showResults ? { id: race.id, isSprint: race.isSprint, title: race.isSprint ? "Sprintrennen" : "Rennen", results, field } : null,
+    showOtherResults && otherRace
+      ? { id: otherRace.id, isSprint: otherRace.isSprint, title: otherRace.isSprint ? "Sprintrennen" : "Rennen", results: otherResults, field: otherField }
+      : null
+  ]
+    .filter((v): v is ResultSection => v !== null)
+    .sort((a, b) => Number(b.isSprint) - Number(a.isSprint));
+
+  const anyResults = resultSections.length > 0;
+
+  function renderResultsSection(section: { id: string; isSprint: boolean; title: string; results: ResultRow[]; field: RaceFieldDriver[] }) {
+    const winner = section.results.find((r) => r.position === 1) ?? null;
+    const winnerRaceTimeMs =
+      winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
+        ? winner.finishTimeMs
+        : winner
+          ? parseRaceTimeMs(winner.timeText)
+          : null;
+
+    const fieldByDriverId = new Map(section.field.map((d) => [d.id, d] as const));
+    const splitAt = Math.ceil(section.results.length / 2);
+    const leftResults = section.results.slice(0, splitAt);
+    const rightResults = section.results.slice(splitAt);
+
+    return (
+      <div key={section.id} className="mt-8">
+        <div className="mb-3 px-1">
+          <div className="text-xl font-extrabold uppercase tracking-wide text-white">
+            {section.title}:
+          </div>
+        </div>
+        {section.results.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+            Keine Ergebnisse.
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
+              <div key={colIdx} className="grid gap-3">
+                {col.map((r) => {
+                  const d = fieldByDriverId.get(r.driver.id) ?? null;
+                  const portraitUrl = d?.portraitUrl ?? null;
+                  const accent = d?.accent ?? null;
+                  const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
+                  const best = r.bestTime ?? "";
+                  const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
+                  const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+                  const flag = countryToFlagEmoji(d?.country ?? null);
+                  const number = d?.number ?? r.driver.number ?? null;
+                  const teamLogoUrl = d?.teamLogoUrl ?? null;
+
+                  return (
+                    <Link
+                      key={r.id}
+                      href={`/${league}/drivers/${r.driver.id}`}
+                      className="group grid grid-cols-[56px_1fr_88px] gap-2"
+                    >
+                      <div
+                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
+                        style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                      >
+                        <div className="text-xl font-extrabold text-white">{r.position}</div>
+                      </div>
+
+                      <div
+                        className="relative overflow-hidden rounded-2xl border border-white/10"
+                        style={{ backgroundImage: heroBg(accent) }}
+                      >
+                        <div
+                          className="absolute inset-0 opacity-25"
+                          style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                        />
+                        <div
+                          className="absolute left-0 top-0 h-[4px] w-full"
+                          style={{ backgroundColor: accent ?? "#ffffff" }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/70" />
+
+                        {portraitUrl ? (
+                          <div className="absolute inset-y-0 right-0 w-[38%] p-2">
+                            <div className="relative h-full w-full">
+                              <img
+                                src={portraitUrl}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="relative p-4">
+                          <div className="flex items-center gap-2">
+                            {flag ? (
+                              <div className="text-base leading-none">
+                                {flag}
+                              </div>
+                            ) : null}
+                            <div className="min-w-0 truncate text-base font-extrabold uppercase tracking-wide text-white">
+                              {r.driver.name}
+                            </div>
+                            {number ? (
+                              <div className="shrink-0 text-xs font-extrabold text-white/70">
+                                #{number}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
+                            <span>{endOrStatus}</span>
+                            {penalty ? (
+                              <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
+                                +{penalty}s
+                              </span>
+                            ) : null}
+                            {teamLogoUrl ? (
+                              <span className="ml-auto flex items-center">
+                                <img
+                                  src={teamLogoUrl}
+                                  alt=""
+                                  className="h-10 w-auto object-contain opacity-95 sm:h-12 md:h-14"
+                                />
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {best ? (
+                            <div className={"mt-2 text-sm font-semibold " + bestClass}>
+                              Best Lap {best}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div
+                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
+                        style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                      >
+                        <div>
+                          <div className="text-xl font-extrabold text-white">{r.points.toFixed(0)}</div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
+                            PTS
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
-
-  const winner = results.find((r) => r.position === 1) ?? null;
-  const winnerRaceTimeMs =
-    winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
-      ? winner.finishTimeMs
-      : winner
-        ? parseRaceTimeMs(winner.timeText)
-        : null;
-
-  const fieldByDriverId = new Map(field.map((d) => [d.id, d] as const));
-  const splitAt = Math.ceil(results.length / 2);
-  const leftResults = results.slice(0, splitAt);
-  const rightResults = results.slice(splitAt);
 
   return (
     <>
@@ -429,126 +637,10 @@ export default async function RaceDetailPage({
           </>
         ) : null}
 
-        {showResults ? (
-          <div className="mt-8">
-            <div className="mb-3 px-1">
-              <div className="text-xl font-extrabold uppercase tracking-wide text-white">Rennergebnis:</div>
-            </div>
-            <div className="grid gap-6 lg:grid-cols-2">
-              {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
-                <div key={colIdx} className="grid gap-3">
-                    {col.map((r) => {
-                    const d = fieldByDriverId.get(r.driver.id) ?? null;
-                    const portraitUrl = d?.portraitUrl ?? null;
-                    const accent = d?.accent ?? null;
-                    const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
-                    const best = r.bestTime ?? "";
-                    const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
-                    const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
-                    const flag = countryToFlagEmoji(d?.country ?? null);
-                    const number = d?.number ?? r.driver.number ?? null;
-                    const teamLogoUrl = d?.teamLogoUrl ?? null;
-
-                    return (
-                      <Link
-                        key={r.id}
-                        href={`/${league}/drivers/${r.driver.id}`}
-                        className="group grid grid-cols-[56px_1fr_88px] gap-2"
-                      >
-                        <div
-                          className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
-                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
-                        >
-                          <div className="text-xl font-extrabold text-white">{r.position}</div>
-                        </div>
-
-                        <div
-                          className="relative overflow-hidden rounded-2xl border border-white/10"
-                          style={{ backgroundImage: heroBg(accent) }}
-                        >
-                          <div
-                            className="absolute inset-0 opacity-25"
-                            style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
-                          />
-                          <div
-                            className="absolute left-0 top-0 h-[4px] w-full"
-                            style={{ backgroundColor: accent ?? "#ffffff" }}
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/70" />
-
-                          {portraitUrl ? (
-                            <div className="absolute inset-y-0 right-0 w-[38%] p-2">
-                              <div className="relative h-full w-full">
-                                <img
-                                  src={portraitUrl}
-                                  alt=""
-                                  className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <div className="relative p-4">
-                            <div className="flex items-center gap-2">
-                              {flag ? (
-                                <div className="text-base leading-none">
-                                  {flag}
-                                </div>
-                              ) : null}
-                              <div className="min-w-0 truncate text-base font-extrabold uppercase tracking-wide text-white">
-                                {r.driver.name}
-                              </div>
-                              {number ? (
-                                <div className="shrink-0 text-xs font-extrabold text-white/70">
-                                  #{number}
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
-                              <span>{endOrStatus}</span>
-                              {penalty ? (
-                                <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
-                                  +{penalty}s
-                                </span>
-                              ) : null}
-                              {teamLogoUrl ? (
-                                <span className="ml-auto flex items-center">
-                                  <img
-                                    src={teamLogoUrl}
-                                    alt=""
-                                    className="h-10 w-auto object-contain opacity-95 sm:h-12 md:h-14"
-                                  />
-                                </span>
-                              ) : null}
-                            </div>
-
-                            {best ? (
-                              <div className={"mt-2 text-sm font-semibold " + bestClass}>
-                                Best Lap {best}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div
-                          className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
-                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
-                        >
-                          <div>
-                            <div className="text-xl font-extrabold text-white">{r.points.toFixed(0)}</div>
-                            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                              PTS
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                    })}
-                </div>
-              ))}
-            </div>
-          </div>
+        {anyResults ? (
+          <>
+            {resultSections.map((s) => renderResultsSection(s))}
+          </>
         ) : (
           <div className="mt-6">
             {showBroadcast && race.twitchChannel ? (

@@ -126,11 +126,13 @@ function buildRaceName(input: {
   seasonNo: number;
   seasonIsTest: boolean;
   round: number;
+  isSprint: boolean;
   circuit: string | null;
   location: string | null;
 }) {
   const base = input.circuit ? input.circuit : `Runde ${input.round}`;
-  return input.seasonIsTest ? `TEST · ${base}` : base;
+  const withSprint = input.isSprint ? `SPRINT · ${base}` : base;
+  return input.seasonIsTest ? `TEST · ${withSprint}` : withSprint;
 }
 
 async function createRace(
@@ -146,6 +148,7 @@ async function createRace(
   const seasonRaw = String(formData.get("season") ?? "").trim();
   const seasonNoRaw = String(formData.get("seasonNo") ?? "").trim();
   const roundRaw = String(formData.get("round") ?? "").trim();
+  const isSprint = formData.get("isSprint") === "on";
   const name = String(formData.get("name") ?? "").trim();
   const circuitId = String(formData.get("circuitId") ?? "").trim();
   const circuit = String(formData.get("circuit") ?? "").trim();
@@ -162,6 +165,7 @@ async function createRace(
   if (circuit) returnQuery.set("circuit", circuit);
   if (location) returnQuery.set("location", location);
   if (startsAtRaw) returnQuery.set("startsAt", startsAtRaw);
+  if (isSprint) returnQuery.set("isSprint", "1");
 
   const seasonFromKey = seasonKey.match(/^(\d{4})-(\d{1,2})-(0|1)$/);
   const season = Number.parseInt(seasonFromKey?.[1] ?? seasonRaw, 10);
@@ -217,6 +221,7 @@ async function createRace(
         seasonNo,
         seasonIsTest,
         round,
+        isSprint,
         circuit: circuitNameToSave,
         location: locationToSave
       });
@@ -232,6 +237,7 @@ async function createRace(
         seasonNo,
         seasonIsTest,
         round,
+        isSprint,
         name: nameToSave,
         circuitId: circuitId || null,
         circuit: circuitNameToSave,
@@ -405,6 +411,7 @@ export default async function AdminRacesPage({
     seasonNo?: string;
     seasonKey?: string;
     round?: string;
+    isSprint?: string;
     name?: string;
     circuitId?: string;
     circuit?: string;
@@ -422,6 +429,7 @@ export default async function AdminRacesPage({
     seasonNo: sp.seasonNo ?? "",
     seasonKey: sp.seasonKey ?? "",
     round: sp.round ?? "",
+    isSprint: sp.isSprint ?? "",
     name: sp.name ?? "",
     circuitId: sp.circuitId ?? "",
     circuit: sp.circuit ?? "",
@@ -484,6 +492,7 @@ export default async function AdminRacesPage({
     seasonNo: number;
     seasonIsTest: boolean;
     round: number;
+    isSprint: boolean;
     name: string;
     startsAt: Date;
     circuit: string | null;
@@ -501,6 +510,7 @@ export default async function AdminRacesPage({
         seasonNo: true,
         seasonIsTest: true,
         round: true,
+        isSprint: true,
         name: true,
         startsAt: true,
         circuit: true
@@ -595,6 +605,15 @@ export default async function AdminRacesPage({
               defaultValue={defaults.round}
             />
           </div>
+          <label className="flex w-fit items-center gap-2 text-sm text-white/80 md:col-span-2">
+            <input
+              name="isSprint"
+              type="checkbox"
+              className="h-4 w-4 rounded border-white/20 bg-white/5"
+              defaultChecked={defaults.isSprint === "1"}
+            />
+            Sprint-Rennen
+          </label>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-white/70">
               Rennen (optional)
@@ -702,7 +721,7 @@ export default async function AdminRacesPage({
               >
                 <div className="min-w-0">
                   <div className="truncate font-semibold">
-                    {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round} · {r.name}
+                    {r.seasonIsTest ? "TEST · " : ""}{r.isSprint ? "SPRINT · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round} · {r.name}
                   </div>
                   <div className="mt-1 text-sm text-white/60">
                     {new Date(r.startsAt).toLocaleString("de-DE", { timeZone: DISPLAY_TZ })}

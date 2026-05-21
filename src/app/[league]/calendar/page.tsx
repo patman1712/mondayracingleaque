@@ -128,6 +128,7 @@ export default async function LeagueCalendarPage({
     seasonNo: number;
     seasonIsTest: boolean;
     round: number;
+    isSprint: boolean;
     name: string;
     circuit: string | null;
     location: string | null;
@@ -165,6 +166,7 @@ export default async function LeagueCalendarPage({
         seasonNo: true,
         seasonIsTest: true,
         round: true,
+        isSprint: true,
         name: true,
         circuit: true,
         location: true,
@@ -258,7 +260,14 @@ export default async function LeagueCalendarPage({
               <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/35 to-black/70" />
 
               <div className="relative p-5">
-                <div className="flex justify-end">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {r.isSprint ? (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-100">
+                        Sprint
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80">
                     {formatRaceDateTime(start, isUpcoming)}
                   </div>

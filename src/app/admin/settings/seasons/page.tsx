@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { League } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { applyRaceScoring } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,68 @@ async function metaForLeague(league: League): Promise<LeagueMeta | null> {
 
 function activeKey(league: League) {
   return `activeSeasonId:${league}`;
+}
+
+function parsePointsInput(raw: string) {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const parts = trimmed
+    .split(/[,\n\r\t ]+/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const points = parts
+    .map((v) => (v === "-" ? 0 : Number(v)))
+    .map((v) => (Number.isFinite(v) ? Math.max(0, Number(v)) : 0));
+  return points;
+}
+
+async function setSprintPoints(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id") ?? "").trim();
+  const raw = String(formData.get("sprintPoints") ?? "");
+  if (!id) redirect("/admin/settings/seasons?error=invalid");
+
+  const season = await prisma.season
+    .findUnique({ where: { id }, select: { id: true, league: true, year: true, seasonNo: true, isTest: true } })
+    .catch(() => null);
+  if (!season) redirect("/admin/settings/seasons?error=invalid");
+
+  const points = parsePointsInput(raw);
+  await prisma.season
+    .update({
+      where: { id },
+      data: { sprintPointsByPositionJson: points ? JSON.stringify(points) : null }
+    })
+    .catch(() => null);
+
+  const sprintRaces = await prisma.race
+    .findMany({
+      where: {
+        league: season.league,
+        season: season.year,
+        seasonNo: season.seasonNo,
+        seasonIsTest: season.isTest,
+        isSprint: true
+      },
+      select: { id: true },
+      take: 1000
+    })
+    .catch(() => []);
+
+  for (const r of sprintRaces) {
+    await applyRaceScoring(prisma, r.id);
+  }
+
+  const meta = await metaForLeague(season.league);
+  if (meta) {
+    revalidatePath(`/${meta.publicSlug}/standings`);
+    revalidatePath(`/${meta.publicSlug}/results`);
+    revalidatePath(`/${meta.publicSlug}/calendar`);
+    revalidatePath(`/${meta.publicSlug}/archive`);
+  }
+
+  redirect("/admin/settings/seasons?ok=1");
 }
 
 async function createSeason(formData: FormData) {
@@ -337,6 +400,14 @@ export default async function AdminSeasonsPage({
                   const k = key(s);
                   const canDuplicate = s.isTest ? !hasNormal.has(k) : !hasTest.has(k);
                   const dupLabel = s.isTest ? "Als normal" : "Als Test";
+                  let sprintPointsValue = "";
+                  const raw = (s.sprintPointsByPositionJson ?? "").trim();
+                  if (raw) {
+                    try {
+                      const parsed = JSON.parse(raw) as unknown;
+                      if (Array.isArray(parsed)) sprintPointsValue = parsed.join(", ");
+                    } catch {}
+                  }
                   return (
                 <div
                   key={s.id}
@@ -364,6 +435,23 @@ export default async function AdminSeasonsPage({
                         Archiv
                       </div>
                     ) : null}
+                    <form action={setSprintPoints} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input type="hidden" name="id" value={s.id} />
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-1 block text-xs font-semibold text-white/70">
+                          Sprint Punkte (Platz 1..n, Komma getrennt)
+                        </label>
+                        <input
+                          name="sprintPoints"
+                          defaultValue={sprintPointsValue}
+                          placeholder="8, 7, 6, 5, 4, 3, 2, 1"
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                        />
+                      </div>
+                      <button className="h-fit w-fit rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+                        Sprint speichern
+                      </button>
+                    </form>
                   </div>
                   <div className="flex items-center gap-2">
                     <form action={setActiveSeason}>

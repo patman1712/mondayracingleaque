@@ -146,6 +146,7 @@ model Race {
   seasonNo  Int      @default(1)
   seasonIsTest Boolean @default(false)
   round     Int
+  isSprint  Boolean @default(false)
   name      String
   circuitId String?
   circuit   String?
@@ -166,7 +167,7 @@ model Race {
   resultImages RaceResultImage[]
   entries RaceEntry[]
 
-  @@unique([league, season, seasonNo, seasonIsTest, round])
+  @@unique([league, season, seasonNo, seasonIsTest, round, isSprint])
 }
 
 model RaceResultImage {
@@ -253,6 +254,7 @@ model Season {
   label String?
   isTest Boolean @default(false)
   placement SeasonPlacement @default(CALENDAR)
+  sprintPointsByPositionJson String?
 
   createdAt DateTime @default(now())
 

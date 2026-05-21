@@ -30,6 +30,7 @@ export default async function AdminResultsPage({
     seasonNo: number;
     seasonIsTest: boolean;
     round: number;
+    isSprint: boolean;
     name: string;
     startsAt: Date;
     resultsPublishedAt: Date | null;
@@ -49,6 +50,7 @@ export default async function AdminResultsPage({
         seasonNo: true,
         seasonIsTest: true,
         round: true,
+        isSprint: true,
         name: true,
         startsAt: true,
         resultsPublishedAt: true,
@@ -112,7 +114,7 @@ export default async function AdminResultsPage({
                         </div>
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-white">
-                            Runde {r.round} · {r.name}
+                            Runde {r.round} · {r.isSprint ? "SPRINT · " : ""}{r.name}
                             {r.resultsPublishedAt ? (
                               <span className="ml-2 text-xs font-semibold text-white/60">
                                 (veröffentlicht)
