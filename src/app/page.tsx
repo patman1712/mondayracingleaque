@@ -7,6 +7,11 @@ import { League } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 export default async function HomePage() {
   const now = new Date();
 
@@ -15,6 +20,7 @@ export default async function HomePage() {
     slug: string;
     title: string;
     excerpt: string | null;
+    imagePath: string | null;
   };
 
   type RaceItem = {
@@ -48,7 +54,7 @@ export default async function HomePage() {
       where: { publishedAt: { not: null, lte: now } },
       orderBy: { publishedAt: "desc" },
       take: 6,
-      select: { id: true, slug: true, title: true, excerpt: true }
+      select: { id: true, slug: true, title: true, excerpt: true, imagePath: true }
     });
   } catch {}
 
@@ -202,103 +208,94 @@ export default async function HomePage() {
       </section>
 
       <Container>
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center justify-between">
-              <div className="text-base font-semibold">Neueste News</div>
-              <Link
-                href="/news"
-                className="text-sm font-semibold text-white/70 hover:text-white"
-              >
-                Alle
-              </Link>
+        <div className="mt-10">
+          <div className="flex items-center justify-between">
+            <div className="text-base font-semibold">Neueste News</div>
+            <Link
+              href="/news"
+              className="text-sm font-semibold text-white/70 hover:text-white"
+            >
+              Alle
+            </Link>
+          </div>
+
+          {news.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+              Noch keine veröffentlichten News.
             </div>
-            <div className="mt-4 space-y-3">
-              {news.length === 0 ? (
-                <div className="text-sm text-white/60">
-                  Noch keine veröffentlichten News.
-                </div>
-              ) : (
-                news.map((n) => (
-                  <Link
-                    key={n.id}
-                    href={`/news/${n.slug}`}
-                    className="block rounded-xl border border-white/10 bg-black/20 p-4 hover:bg-black/30"
-                  >
+          ) : (
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              {news.map((n) => (
+                <Link
+                  key={n.id}
+                  href={`/news/${n.slug}`}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10"
+                >
+                  <div className="aspect-[16/9] w-full bg-black/20">
+                    {n.imagePath ? (
+                      <img
+                        src={imageUrl(n.imagePath) ?? ""}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="p-6">
                     <div className="font-semibold">{n.title}</div>
                     {n.excerpt ? (
-                      <div className="mt-1 line-clamp-2 text-sm text-white/70">
+                      <div className="mt-2 line-clamp-3 text-sm text-white/70">
                         {n.excerpt}
                       </div>
                     ) : null}
-                  </Link>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center justify-between">
-              <div className="text-base font-semibold">Nächste Rennen</div>
-              <Link
-                href="/calendar"
-                className="text-sm font-semibold text-white/70 hover:text-white"
-              >
-                Alle
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3">
-              {races.length === 0 ? (
-                <div className="text-sm text-white/60">
-                  Noch keine kommenden Rennen.
-                </div>
-              ) : (
-                races.map((r) => (
-                  <div
-                    key={r.id}
-                    className="rounded-xl border border-white/10 bg-black/20 p-4"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <div className="font-semibold">{r.name}</div>
-                      <div className="text-sm text-white/60">
-                        {new Date(r.startsAt).toLocaleString("de-DE", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
-                      </div>
-                    </div>
-                    <div className="mt-1 text-sm text-white/60">
-                      Saison {r.season} · Runde {r.round}
-                      {r.circuit ? ` · ${r.circuit}` : ""}
-                    </div>
                   </div>
-                ))
-              )}
+                </Link>
+              ))}
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {[
-            { href: "/mrl-one", label: "MRL One" },
-            { href: "/mrl-two", label: "MRL Two" },
-            { href: "/mrl-rookie", label: "MRL Rookie" }
-          ].map((l) => (
+        <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="flex items-center justify-between">
+            <div className="text-base font-semibold">Nächste Rennen</div>
             <Link
-              key={l.href}
-              href={l.href}
-              className="rounded-2xl border border-white/10 bg-white/5 p-6 hover:bg-white/10"
+              href="/calendar"
+              className="text-sm font-semibold text-white/70 hover:text-white"
             >
-              <div className="text-lg font-semibold">{l.label}</div>
-              <div className="mt-2 text-sm text-white/70">
-                Fahrer · Ergebnisse · WM-Stand · Rennkalender
-              </div>
+              Alle
             </Link>
-          ))}
+          </div>
+          <div className="mt-4 space-y-3">
+            {races.length === 0 ? (
+              <div className="text-sm text-white/60">
+                Noch keine kommenden Rennen.
+              </div>
+            ) : (
+              races.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="font-semibold">{r.name}</div>
+                    <div className="text-sm text-white/60">
+                      {new Date(r.startsAt).toLocaleString("de-DE", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-sm text-white/60">
+                    Saison {r.season} · Runde {r.round}
+                    {r.circuit ? ` · ${r.circuit}` : ""}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </Container>
     </div>

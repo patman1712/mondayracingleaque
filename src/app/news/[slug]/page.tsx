@@ -4,6 +4,11 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+function imageUrl(imagePath: string | null | undefined) {
+  if (!imagePath) return null;
+  return `/api/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 export default async function NewsArticlePage({
   params
 }: {
@@ -17,6 +22,7 @@ export default async function NewsArticlePage({
         title: true,
         excerpt: true,
         content: true,
+        imagePath: true,
         publishedAt: true
       }
     })
@@ -33,6 +39,17 @@ export default async function NewsArticlePage({
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
           {post.title}
         </h1>
+        {post.imagePath ? (
+          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+            <div className="aspect-[16/9] w-full bg-black/20">
+              <img
+                src={imageUrl(post.imagePath) ?? ""}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+          </div>
+        ) : null}
         {post.excerpt ? (
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-white/80">
             {post.excerpt}
