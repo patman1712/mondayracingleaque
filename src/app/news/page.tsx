@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -16,31 +15,23 @@ export default async function NewsPage() {
     slug: string;
     excerpt: string | null;
     publishedAt: Date | null;
-    imagePath: string | null;
+    imagePath?: string | null;
   };
 
   const now = new Date();
   let posts: NewsListItem[] = [];
 
   try {
-    posts = await prisma.newsPost.findMany({
+    posts = (await prisma.newsPost.findMany({
       where: { publishedAt: { not: null, lte: now } },
       orderBy: { publishedAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        excerpt: true,
-        publishedAt: true,
-        imagePath: true
-      }
-    });
+      take: 50
+    })) as unknown as NewsListItem[];
   } catch {}
 
   return (
-    <Container>
-      <div className="mt-10">
+    <div className="w-full px-4 py-10 md:px-10">
+      <div>
         <div className="text-2xl font-extrabold">News</div>
         <div className="mt-2 text-sm text-white/70">
           Aktuelles aus der Monday Racing League
@@ -78,8 +69,8 @@ export default async function NewsPage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
 
                 <div className="absolute bottom-4 left-4 right-4">
-                  <div className="max-w-xl rounded-xl border border-black/10 bg-emerald-400 px-4 py-3 text-mrl-black shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-black/70">
+                  <div className="max-w-xl rounded-xl border border-white/10 bg-mrl-red px-4 py-3 text-white shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-white/80">
                       Article
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3">
@@ -95,6 +86,6 @@ export default async function NewsPage() {
           })
         )}
       </div>
-    </Container>
+    </div>
   );
 }

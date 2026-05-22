@@ -20,7 +20,7 @@ export default async function HomePage() {
     slug: string;
     title: string;
     excerpt: string | null;
-    imagePath: string | null;
+    imagePath?: string | null;
   };
 
   type RaceItem = {
@@ -34,6 +34,7 @@ export default async function HomePage() {
 
   let news: NewsItem[] = [];
   let races: RaceItem[] = [];
+  let heroImagePath: string | null = null;
   const activeLeagues = await listPublicLeagues().catch(() => []);
   const nextByLeague = new Map<
     League,
@@ -50,12 +51,18 @@ export default async function HomePage() {
   >();
 
   try {
-    news = await prisma.newsPost.findMany({
+    news = (await prisma.newsPost.findMany({
       where: { publishedAt: { not: null, lte: now } },
       orderBy: { publishedAt: "desc" },
-      take: 6,
-      select: { id: true, slug: true, title: true, excerpt: true, imagePath: true }
-    });
+      take: 6
+    })) as unknown as NewsItem[];
+  } catch {}
+
+  try {
+    const row = await prisma.appConfig
+      .findUnique({ where: { key: "branding:homeHeroImagePath" }, select: { value: true } })
+      .catch(() => null);
+    heroImagePath = row?.value ? String(row.value) : null;
   } catch {}
 
   try {
@@ -120,7 +127,7 @@ export default async function HomePage() {
     <div>
       <section className="relative min-h-dvh border-b border-white/10">
         <img
-          src="/hero-1.svg"
+          src={heroImagePath ? imageUrl(heroImagePath) ?? "/hero-1.svg" : "/hero-1.svg"}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -250,8 +257,8 @@ export default async function HomePage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
 
                     <div className="absolute bottom-4 left-4 right-4">
-                      <div className="max-w-xl rounded-xl border border-black/10 bg-emerald-400 px-4 py-3 text-mrl-black shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-black/70">
+                      <div className="max-w-xl rounded-xl border border-white/10 bg-mrl-red px-4 py-3 text-white shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-white/80">
                           Article
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-3">

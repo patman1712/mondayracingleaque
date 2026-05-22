@@ -15,18 +15,15 @@ export default async function NewsArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = await prisma.newsPost
-    .findUnique({
-      where: { slug },
-      select: {
-        title: true,
-        excerpt: true,
-        content: true,
-        imagePath: true,
-        publishedAt: true
+  const post = (await prisma.newsPost.findUnique({ where: { slug } }).catch(() => null)) as
+    | {
+        title: string;
+        excerpt: string | null;
+        content: string;
+        imagePath?: string | null;
+        publishedAt: Date | null;
       }
-    })
-    .catch(() => null);
+    | null;
 
   if (!post || !post.publishedAt) notFound();
 

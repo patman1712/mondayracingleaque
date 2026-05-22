@@ -68,6 +68,12 @@ export function AdminSidebarClient({ leagues }: { leagues: LeagueItem[] }) {
             Ligen
           </Link>
           <Link
+            href="/admin/settings/appearance"
+            className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            Branding
+          </Link>
+          <Link
             href="/admin/settings/seasons"
             className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
           >

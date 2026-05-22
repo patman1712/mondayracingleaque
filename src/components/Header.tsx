@@ -7,7 +7,7 @@ import { Container } from "./Container";
 import { MobileNavLeagues, NavLeagues } from "./NavLeagues";
 import { MobileNavTv, NavTv } from "./NavTv";
 
-export function Header() {
+export function Header({ logoSrc }: { logoSrc?: string | null }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -38,7 +38,7 @@ export function Header() {
           <div className="flex items-center justify-between gap-6 py-4">
             <Link href="/" className="flex items-center gap-3">
               <img
-                src="/logo.svg"
+                src={logoSrc ?? "/logo.svg"}
                 alt="MRL"
                 className="h-10 w-10 rounded-full ring-1 ring-white/10"
               />
