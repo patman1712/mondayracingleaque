@@ -6,6 +6,7 @@ import { getActiveSeason } from "@/lib/currentSeason";
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { flagBackgroundUrl, flagCodeForRaceLike } from "@/lib/flags";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -441,10 +442,14 @@ export default async function LeagueStandingsPage({
                               {portraitUrl ? (
                                 <div className="absolute inset-y-0 right-0 w-[38%] p-2">
                                   <div className="relative h-full w-full">
-                                    <img
+                                    <Image
                                       src={portraitUrl}
                                       alt=""
-                                      className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                                      fill
+                                      priority={pos <= 3}
+                                      sizes="160px"
+                                      className="object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                                      quality={75}
                                     />
                                   </div>
                                 </div>
@@ -468,10 +473,13 @@ export default async function LeagueStandingsPage({
                                     <div className="flex min-w-0 items-center gap-2">
                                       <span className="truncate">{d.teamName ?? ""}</span>
                                       {teamLogoUrl ? (
-                                        <img
+                                        <Image
                                           src={teamLogoUrl}
                                           alt=""
+                                          width={120}
+                                          height={40}
                                           className="h-8 w-auto shrink-0 object-contain opacity-95 sm:h-9 md:h-10"
+                                          quality={75}
                                         />
                                       ) : null}
                                     </div>
@@ -602,7 +610,14 @@ export default async function LeagueStandingsPage({
                                       style={{ backgroundImage: heroBg(d.accent) }}
                                     >
                                       {portraitUrl ? (
-                                        <img src={portraitUrl} alt="" className="absolute inset-0 h-full w-full object-contain object-bottom" />
+                                        <Image
+                                          src={portraitUrl}
+                                          alt=""
+                                          fill
+                                          sizes="36px"
+                                          className="object-contain object-bottom"
+                                          quality={75}
+                                        />
                                       ) : null}
                                     </div>
                                     <div className="min-w-0">

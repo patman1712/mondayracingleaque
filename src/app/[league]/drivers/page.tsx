@@ -4,6 +4,7 @@ import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { resolveLeagueByPublicSlug } from "@/lib/league";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -180,7 +181,7 @@ export default async function LeagueDriversPage({
             Noch keine Fahrer eingetragen.
           </div>
         ) : (
-          drivers.map((d) => (
+          drivers.map((d, idx) => (
             <Link
               key={d.id}
               href={`/${league}/drivers/${d.id}`}
@@ -203,10 +204,14 @@ export default async function LeagueDriversPage({
 
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[350px]">
                   {d.portraitPath ? (
-                    <img
+                    <Image
                       src={imageUrl(d.portraitPath) ?? ""}
                       alt=""
-                      className="absolute inset-x-0 bottom-0 mx-auto h-full w-full object-contain"
+                      fill
+                      priority={idx < 3}
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-contain object-bottom"
+                      quality={75}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/35">
