@@ -140,8 +140,8 @@ export default async function HomePage() {
                 Season 2026
               </div>
               <h1 className="mt-4 max-w-3xl text-5xl font-extrabold tracking-tight md:text-7xl">
-                WE RACE
-                <span className="text-mrl-red"> AS ONE</span>.
+                ONE LEAQUE
+                <span className="text-mrl-red"> ONE FAMILY</span>.
               </h1>
               <div className="mt-4 max-w-xl text-sm text-white/70 md:text-base">
                 Monday Racing League · F1 26 Simracing Liga

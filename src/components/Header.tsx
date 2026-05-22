@@ -40,7 +40,7 @@ export function Header({ logoSrc }: { logoSrc?: string | null }) {
               <img
                 src={logoSrc ?? "/logo.svg"}
                 alt="MRL"
-                className="h-10 w-10 rounded-full ring-1 ring-white/10"
+                className="h-10 w-auto max-w-[160px] object-contain"
               />
               <div className="leading-tight">
                 <div className="text-sm font-semibold tracking-wide">MRL</div>
