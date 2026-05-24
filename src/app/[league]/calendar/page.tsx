@@ -244,6 +244,12 @@ export default async function LeagueCalendarPage({
               href={`/${league}/races/${r.id}`}
               className="relative block min-h-[190px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 sm:min-h-[210px]"
             >
+              <div
+                className={[
+                  "absolute left-0 top-0 h-[5px] w-full",
+                  r.isSprint ? "bg-amber-400/80" : "bg-mrl-red/90"
+                ].join(" ")}
+              />
               {flagUrl ? (
                 <img
                   src={flagUrl}
@@ -262,31 +268,51 @@ export default async function LeagueCalendarPage({
               <div className="relative p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
+                    {r.seasonIsTest ? (
+                      <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white/85">
+                        Test
+                      </div>
+                    ) : null}
                     {r.isSprint ? (
-                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-100">
+                      <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-100">
                         Sprint
                       </div>
                     ) : null}
                   </div>
-                  <div className="rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80">
+                  <div className="rounded-full border border-white/15 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white/85">
                     {formatRaceDateTime(start, isUpcoming)}
                   </div>
                 </div>
 
                 {isUpcoming ? (
                   <div className="mt-4">
+                    {title ? (
+                      <div className="truncate font-racing text-xl font-bold uppercase leading-tight tracking-[0.14em] text-white sm:text-2xl">
+                        {title}
+                      </div>
+                    ) : null}
                     {trackLine ? (
-                      <div className="truncate text-sm text-white/70">
+                      <div className="mt-2 truncate text-xs font-semibold uppercase tracking-wide text-white/70">
                         {trackLine}
                       </div>
                     ) : null}
-                    <div className="mt-2 text-xs text-white/60">
-                      {r.seasonIsTest ? "TEST · " : ""}Saison {r.season} · Season {r.seasonNo} · Runde {r.round}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white/80">
+                        Saison {r.season} · S{r.seasonNo}
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white/80">
+                        Runde {r.round}
+                      </div>
                     </div>
                   </div>
                 ) : title ? (
                   <div className="mt-4">
-                    <div className={["truncate font-extrabold tracking-tight text-white", hasPublishedResults ? "text-xl" : "text-2xl"].join(" ")}>
+                    <div
+                      className={[
+                        "truncate font-racing font-bold uppercase leading-tight tracking-[0.14em] text-white",
+                        hasPublishedResults ? "text-xl" : "text-2xl"
+                      ].join(" ")}
+                    >
                       {title}
                     </div>
                     {hasPublishedResults ? (
