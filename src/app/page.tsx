@@ -35,6 +35,10 @@ export default async function HomePage() {
   let news: NewsItem[] = [];
   let races: RaceItem[] = [];
   let heroImagePath: string | null = null;
+  let heroBadgeText = "Season 2026";
+  let heroHeadlinePrimary = "ONE LEAQUE";
+  let heroHeadlineAccent = "ONE FAMILY";
+  let heroSubline = "Monday Racing League · F1 26 Simracing Liga";
   const activeLeagues = await listPublicLeagues().catch(() => []);
   const nextByLeague = new Map<
     League,
@@ -59,10 +63,30 @@ export default async function HomePage() {
   } catch {}
 
   try {
-    const row = await prisma.appConfig
-      .findUnique({ where: { key: "branding:homeHeroImagePath" }, select: { value: true } })
-      .catch(() => null);
-    heroImagePath = row?.value ? String(row.value) : null;
+    const [imgRow, badgeRow, headlinePrimaryRow, headlineAccentRow, sublineRow] =
+      await Promise.all([
+        prisma.appConfig
+          .findUnique({ where: { key: "branding:homeHeroImagePath" }, select: { value: true } })
+          .catch(() => null),
+        prisma.appConfig
+          .findUnique({ where: { key: "branding:homeHeroBadge" }, select: { value: true } })
+          .catch(() => null),
+        prisma.appConfig
+          .findUnique({ where: { key: "branding:homeHeroHeadlinePrimary" }, select: { value: true } })
+          .catch(() => null),
+        prisma.appConfig
+          .findUnique({ where: { key: "branding:homeHeroHeadlineAccent" }, select: { value: true } })
+          .catch(() => null),
+        prisma.appConfig
+          .findUnique({ where: { key: "branding:homeHeroSubline" }, select: { value: true } })
+          .catch(() => null)
+      ]);
+
+    heroImagePath = imgRow?.value ? String(imgRow.value) : null;
+    heroBadgeText = badgeRow?.value ? String(badgeRow.value) : heroBadgeText;
+    heroHeadlinePrimary = headlinePrimaryRow?.value ? String(headlinePrimaryRow.value) : heroHeadlinePrimary;
+    heroHeadlineAccent = headlineAccentRow?.value ? String(headlineAccentRow.value) : heroHeadlineAccent;
+    heroSubline = sublineRow?.value ? String(sublineRow.value) : heroSubline;
   } catch {}
 
   try {
@@ -136,15 +160,20 @@ export default async function HomePage() {
         <Container>
           <div className="relative grid min-h-dvh items-center gap-10 pb-10 pt-24 md:grid-cols-[1fr_420px] md:pb-12 md:pt-28">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-semibold text-white/70">
-                Season 2026
-              </div>
+              {heroBadgeText ? (
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-semibold text-white/70">
+                  {heroBadgeText}
+                </div>
+              ) : null}
               <h1 className="mt-4 max-w-3xl text-5xl font-extrabold tracking-tight md:text-7xl">
-                ONE LEAQUE
-                <span className="text-mrl-red"> ONE FAMILY</span>.
+                {heroHeadlinePrimary}
+                {heroHeadlineAccent ? (
+                  <span className="text-mrl-red"> {heroHeadlineAccent}</span>
+                ) : null}
+                .
               </h1>
               <div className="mt-4 max-w-xl text-sm text-white/70 md:text-base">
-                Monday Racing League · F1 26 Simracing Liga
+                {heroSubline}
               </div>
 
               <div className="mt-8 flex flex-wrap gap-3">

@@ -148,6 +148,53 @@ async function removeHomeHero() {
   redirect("/admin/settings/appearance?ok=1");
 }
 
+async function saveHomeHeroText(formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const badge = String(formData.get("badge") ?? "").trim();
+  const headlinePrimary = String(formData.get("headlinePrimary") ?? "").trim();
+  const headlineAccent = String(formData.get("headlineAccent") ?? "").trim();
+  const subline = String(formData.get("subline") ?? "").trim();
+
+  async function setKey(key: string, v: string) {
+    if (!v) {
+      await prisma.appConfig.delete({ where: { key } }).catch(() => null);
+      return;
+    }
+    await prisma.appConfig.upsert({
+      where: { key },
+      create: { key, value: v },
+      update: { value: v }
+    });
+  }
+
+  await setKey("branding:homeHeroBadge", badge);
+  await setKey("branding:homeHeroHeadlinePrimary", headlinePrimary);
+  await setKey("branding:homeHeroHeadlineAccent", headlineAccent);
+  await setKey("branding:homeHeroSubline", subline);
+
+  revalidatePath("/");
+  revalidatePath("/admin/settings/appearance");
+  redirect("/admin/settings/appearance?ok=1");
+}
+
+async function removeHomeHeroText() {
+  "use server";
+  await requireAdmin();
+
+  const keys = [
+    "branding:homeHeroBadge",
+    "branding:homeHeroHeadlinePrimary",
+    "branding:homeHeroHeadlineAccent",
+    "branding:homeHeroSubline"
+  ];
+  for (const k of keys) await prisma.appConfig.delete({ where: { key: k } }).catch(() => null);
+  revalidatePath("/");
+  revalidatePath("/admin/settings/appearance");
+  redirect("/admin/settings/appearance?ok=1");
+}
+
 export default async function AdminAppearancePage({
   searchParams
 }: {
@@ -164,9 +211,26 @@ export default async function AdminAppearancePage({
   const heroRow = await prisma.appConfig
     .findUnique({ where: { key: "branding:homeHeroImagePath" }, select: { value: true } })
     .catch(() => null);
+  const heroBadgeRow = await prisma.appConfig
+    .findUnique({ where: { key: "branding:homeHeroBadge" }, select: { value: true } })
+    .catch(() => null);
+  const heroHeadlinePrimaryRow = await prisma.appConfig
+    .findUnique({ where: { key: "branding:homeHeroHeadlinePrimary" }, select: { value: true } })
+    .catch(() => null);
+  const heroHeadlineAccentRow = await prisma.appConfig
+    .findUnique({ where: { key: "branding:homeHeroHeadlineAccent" }, select: { value: true } })
+    .catch(() => null);
+  const heroSublineRow = await prisma.appConfig
+    .findUnique({ where: { key: "branding:homeHeroSubline" }, select: { value: true } })
+    .catch(() => null);
 
   const logoPath = logoRow?.value ? String(logoRow.value) : null;
   const heroPath = heroRow?.value ? String(heroRow.value) : null;
+  const heroBadge = heroBadgeRow?.value ? String(heroBadgeRow.value) : "";
+  const heroHeadlinePrimary = heroHeadlinePrimaryRow?.value ? String(heroHeadlinePrimaryRow.value) : "";
+  const heroHeadlineAccent = heroHeadlineAccentRow?.value ? String(heroHeadlineAccentRow.value) : "";
+  const heroSubline = heroSublineRow?.value ? String(heroSublineRow.value) : "";
+  const hasHeroText = Boolean(heroBadge || heroHeadlinePrimary || heroHeadlineAccent || heroSubline);
 
   return (
     <AdminShell>
@@ -283,8 +347,59 @@ export default async function AdminAppearancePage({
             </div>
           </div>
         </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold">Home Hero Text</div>
+          <div className="mt-1 text-sm text-white/60">
+            Überschreibt die Texte auf der Startseite.
+          </div>
+
+          <form action={saveHomeHeroText} className="mt-5 grid gap-3">
+            <input
+              name="badge"
+              defaultValue={heroBadge}
+              placeholder="Badge (z.B. Season 2026)"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              <input
+                name="headlinePrimary"
+                defaultValue={heroHeadlinePrimary}
+                placeholder="Headline links (z.B. ONE LEAQUE)"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              />
+              <input
+                name="headlineAccent"
+                defaultValue={heroHeadlineAccent}
+                placeholder="Headline rot (z.B. ONE FAMILY)"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+              />
+            </div>
+            <input
+              name="subline"
+              defaultValue={heroSubline}
+              placeholder="Subline (z.B. Monday Racing League · F1 26 Simracing Liga)"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            />
+
+            <div className="flex items-center justify-between gap-2">
+              {hasHeroText ? (
+                <button
+                  formAction={removeHomeHeroText}
+                  className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                >
+                  Zurücksetzen
+                </button>
+              ) : (
+                <div />
+              )}
+              <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                Speichern
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </AdminShell>
   );
 }
-
