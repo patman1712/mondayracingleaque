@@ -37,14 +37,12 @@ export default async function NewsArticlePage({
           {post.title}
         </h1>
         {post.imagePath ? (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-            <div className="aspect-[16/9] w-full bg-black/20">
-              <img
-                src={imageUrl(post.imagePath) ?? ""}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </div>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+            <img
+              src={imageUrl(post.imagePath) ?? ""}
+              alt=""
+              className="mx-auto block h-auto max-h-[560px] w-full object-contain"
+            />
           </div>
         ) : null}
         {post.excerpt ? (
