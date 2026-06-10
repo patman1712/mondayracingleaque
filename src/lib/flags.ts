@@ -17,7 +17,12 @@ export function flagCodeForText(text: string | null | undefined) {
   if (n.includes("spanien") || n.includes("spain")) return "es";
   if (n.includes("frankreich") || n.includes("france")) return "fr";
   if (n.includes("monaco")) return "mc";
-  if (n.includes("großbritannien") || n.includes("grossbritannien") || n.includes("britain") || n.includes("uk"))
+  if (
+    n.includes("großbritannien") ||
+    n.includes("grossbritannien") ||
+    n.includes("britain") ||
+    /\buk\b/.test(n)
+  )
     return "gb";
   if (n.includes("niederlande") || n.includes("netherlands") || n.includes("holland")) return "nl";
   if (n.includes("belgien") || n.includes("belgium")) return "be";
@@ -59,4 +64,3 @@ export function flagBackgroundUrl(code: string | null) {
   if (!code) return null;
   return `https://flagcdn.com/${code}.svg`;
 }
-
