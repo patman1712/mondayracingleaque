@@ -237,6 +237,12 @@ export default async function AdminNewsPage() {
                     >
                       Öffnen
                     </Link>
+                    <Link
+                      href={`/admin/news/${p.id}`}
+                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                    >
+                      Bearbeiten
+                    </Link>
                     <form action={deleteNews}>
                       <input type="hidden" name="id" value={p.id} />
                       <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
