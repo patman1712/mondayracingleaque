@@ -71,7 +71,7 @@ const entrySchema = z
 const schema = z
   .object({
   leagueKey: z.string().optional(),
-  sessionId: z.string(),
+  sessionId: z.string().optional(),
   sessionName: z.string().nullable().optional(),
   sessionType: z.number().nullable().optional(),
   sessionTimeLeft: z.string().nullable().optional(),
@@ -90,11 +90,16 @@ const schema = z
   trackMap: trackMapSchema,
   alerts: z.array(alertsSchema).optional(),
   participants: z.array(participantSchema).optional(),
-  entries: z.array(entrySchema)
+  entries: z.array(entrySchema).optional(),
+  csv: z.string().optional()
 })
-  .passthrough();
+  .passthrough()
+  .refine((data) => (Array.isArray(data.entries) && data.entries.length >= 0) || Boolean(data.csv?.trim()), {
+    message: "entries_or_csv_required"
+  });
 
-type LiveTimingPostEntry = z.infer<typeof schema>["entries"][number];
+type LiveTimingSchema = z.infer<typeof schema>;
+type LiveTimingPostEntry = NonNullable<LiveTimingSchema["entries"]>[number];
 type LiveTimingAlert = z.infer<typeof alertsSchema>;
 type LiveTimingParticipant = z.infer<typeof participantSchema>;
 
@@ -268,54 +273,154 @@ function makeAlert(input: {
   return { id, type: t, title, message: msg, driver, sector, time, createdAt: input.createdAt };
 }
 
-function levenshtein(a: string, b: string) {
-  if (a === b) return 0;
-  const al = a.length;
-  const bl = b.length;
-  if (al === 0) return bl;
-  if (bl === 0) return al;
-
-  const v0 = new Array(bl + 1);
-  const v1 = new Array(bl + 1);
-  for (let j = 0; j <= bl; j++) v0[j] = j;
-
-  for (let i = 0; i < al; i++) {
-    v1[0] = i + 1;
-    for (let j = 0; j < bl; j++) {
-      const cost = a[i] === b[j] ? 0 : 1;
-      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
-    }
-    for (let j = 0; j <= bl; j++) v0[j] = v1[j];
-  }
-
-  return v0[bl] as number;
-}
-
 function imageUrl(imagePath: string | null | undefined) {
   if (!imagePath) return null;
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
-function matchEntryIndexByDriverName(wantedDriver: string, entries: LiveTimingPostEntry[], used: Set<number>) {
-  const w = normalize(wantedDriver);
-  if (!w) return null;
-  let best: { idx: number; dist: number; len: number } | null = null;
-  for (let i = 0; i < entries.length; i++) {
-    if (used.has(i)) continue;
-    const cand = entries[i];
-    const c = normalize(cand.driver);
-    if (!c) continue;
-    if (c === w) return i;
-    if (c.includes(w) || w.includes(c)) return i;
-    const d = levenshtein(w, c);
-    const len = Math.max(w.length, c.length);
-    if (!best || d < best.dist) best = { idx: i, dist: d, len };
-  }
-  if (!best) return null;
-  const ratio = best.len ? best.dist / best.len : 1;
-  const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
-  if (best.dist <= maxDist && ratio <= 0.25) return best.idx;
+function stripUtf8Bom(input: string) {
+  return input.replace(/^\uFEFF/, "");
+}
+
+function normalizeCsvHeader(input: string) {
+  return stripUtf8Bom(input)
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function parseCsvInteger(raw: string | null | undefined, fallback: number) {
+  const value = (raw ?? "").trim();
+  if (!value) return fallback;
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.trunc(num) : fallback;
+}
+
+function parseCsvFloat(raw: string | null | undefined, fallback: number | null = null) {
+  const value = (raw ?? "").trim();
+  if (!value) return fallback;
+  const num = Number(value.replace(",", "."));
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function parseCsvBoolean(raw: string | null | undefined) {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (!value) return null;
+  if (["1", "true", "yes", "ja", "on", "active"].includes(value)) return true;
+  if (["0", "false", "no", "nein", "off", "inactive"].includes(value)) return false;
   return null;
+}
+
+function normalizeCsvStatus(raw: string | null | undefined) {
+  const value = (raw ?? "").trim().toUpperCase();
+  if (!value) return "ACTIVE";
+  if (value === "ACTIVE") return "ACTIVE";
+  if (value === "RETIRED") return "RETIRED";
+  if (value === "WAITING") return "WAITING";
+  return value;
+}
+
+function normalizeCsvGap(position: number, raw: string | null | undefined) {
+  const value = (raw ?? "").trim();
+  if (position <= 1) return value || "Leader";
+  return value || "—";
+}
+
+function normalizeCsvTime(raw: string | null | undefined) {
+  const value = (raw ?? "").trim();
+  return value || "—";
+}
+
+function normalizeCsvTyre(raw: string | null | undefined) {
+  const value = (raw ?? "").trim().toUpperCase();
+  return value || "UNKNOWN";
+}
+
+function isPlaceholderCar(driver: string) {
+  return /^car\s+/i.test(driver.trim());
+}
+
+function parseLiveTimingCsv(csv: string) {
+  const warnings: string[] = [];
+  const text = stripUtf8Bom(csv);
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\r/g, ""))
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length === 0) {
+    warnings.push("csv_empty");
+    return { entries: [] as LiveTimingPostEntry[], warnings };
+  }
+
+  const headerCells = lines[0].split(";").map((cell) => stripUtf8Bom(cell).trim());
+  const headerIndex = new Map<string, number>();
+  for (let i = 0; i < headerCells.length; i++) {
+    const normalized = normalizeCsvHeader(headerCells[i]);
+    if (normalized && !headerIndex.has(normalized)) headerIndex.set(normalized, i);
+  }
+
+  const requiredHeaders = ["pos", "fahrer", "team", "runde", "gap", "besterunde", "status", "tyre"];
+  for (const header of requiredHeaders) {
+    if (!headerIndex.has(header)) warnings.push(`missing_header:${header}`);
+  }
+
+  function readColumn(cells: string[], header: string, fallback = "") {
+    const idx = headerIndex.get(header);
+    if (idx === undefined) return fallback;
+    return (cells[idx] ?? "").trim();
+  }
+
+  const entries: LiveTimingPostEntry[] = [];
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
+    const rawLine = lines[lineIndex];
+    const cells = rawLine.split(";");
+    const driver = readColumn(cells, "fahrer", "");
+    const status = normalizeCsvStatus(readColumn(cells, "status", "ACTIVE"));
+
+    if (!driver) warnings.push(`row_${lineIndex + 1}:missing_driver`);
+    if (isPlaceholderCar(driver)) continue;
+    if (status === "WAITING") continue;
+    if (status !== "ACTIVE" && status !== "RETIRED") {
+      warnings.push(`row_${lineIndex + 1}:unexpected_status:${status}`);
+      continue;
+    }
+
+    const position = Math.max(1, parseCsvInteger(readColumn(cells, "pos", ""), lineIndex));
+    const team = readColumn(cells, "team", "");
+
+    entries.push({
+      position,
+      driver: driver || `Unknown ${lineIndex}`,
+      team,
+      lap: Math.max(0, parseCsvInteger(readColumn(cells, "runde", ""), 0)),
+      gap: normalizeCsvGap(position, readColumn(cells, "gap", "")),
+      bestLap: normalizeCsvTime(readColumn(cells, "besterunde", "")),
+      lastLap: normalizeCsvTime(readColumn(cells, "letzterunde", "")),
+      currentLap: normalizeCsvTime(readColumn(cells, "aktuellerunde", "")),
+      sector1: normalizeCsvTime(readColumn(cells, "s1", "")),
+      sector2: normalizeCsvTime(readColumn(cells, "s2", "")),
+      sector3: normalizeCsvTime(readColumn(cells, "s3", "")),
+      sector1Color: readColumn(cells, "s1color", "") || null,
+      sector2Color: readColumn(cells, "s2color", "") || null,
+      sector3Color: readColumn(cells, "s3color", "") || null,
+      penalties: readColumn(cells, "strafen", ""),
+      warnings: Math.max(0, parseCsvInteger(readColumn(cells, "warnungen", ""), 0)),
+      stops: Math.max(0, parseCsvInteger(readColumn(cells, "stops", ""), 0)),
+      status,
+      drs: parseCsvBoolean(readColumn(cells, "drs", "")),
+      ers: parseCsvFloat(readColumn(cells, "ers", ""), null),
+      tyre: normalizeCsvTyre(readColumn(cells, "tyre", "UNKNOWN")),
+      x: parseCsvFloat(readColumn(cells, "x", ""), null),
+      y: parseCsvFloat(readColumn(cells, "y", ""), null),
+      z: parseCsvFloat(readColumn(cells, "z", ""), null),
+      angle: parseCsvFloat(readColumn(cells, "angle", ""), null)
+    });
+  }
+
+  return { entries, warnings };
 }
 
 async function resolvePortraitUrlsByDriverName(names: string[], seasonId?: string | null) {
@@ -367,33 +472,7 @@ async function resolvePortraitUrlsByDriverName(names: string[], seasonId?: strin
   const out = new Map<string, string | null>();
   for (const raw of wanted) {
     const n = normalize(raw);
-    if (!n) {
-      out.set(raw, null);
-      continue;
-    }
-    if (byNorm.has(n)) {
-      out.set(raw, byNorm.get(n) ?? null);
-      continue;
-    }
-    for (const [k, v] of byNorm) {
-      if (k.includes(n) || n.includes(k)) {
-        out.set(raw, v ?? null);
-        break;
-      }
-    }
-    if (out.has(raw)) continue;
-    let best: { v: string | null; dist: number; len: number } | null = null;
-    for (const [k, v] of byNorm) {
-      const d = levenshtein(n, k);
-      if (!best || d < best.dist) best = { v: v ?? null, dist: d, len: Math.max(n.length, k.length) };
-    }
-    if (!best) {
-      out.set(raw, null);
-      continue;
-    }
-    const ratio = best.len ? best.dist / best.len : 1;
-    const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
-    out.set(raw, best.dist <= maxDist && ratio <= 0.25 ? best.v : null);
+    out.set(raw, n ? (byNorm.get(n) ?? null) : null);
   }
 
   return out;
@@ -422,33 +501,7 @@ async function resolveTeamLogoUrlsByTeamName(names: string[]) {
   const out = new Map<string, string | null>();
   for (const raw of wanted) {
     const n = normalize(raw);
-    if (!n) {
-      out.set(raw, null);
-      continue;
-    }
-    if (byNorm.has(n)) {
-      out.set(raw, byNorm.get(n) ?? null);
-      continue;
-    }
-    for (const [k, v] of byNorm) {
-      if (k.includes(n) || n.includes(k)) {
-        out.set(raw, v ?? null);
-        break;
-      }
-    }
-    if (out.has(raw)) continue;
-    let best: { v: string | null; dist: number; len: number } | null = null;
-    for (const [k, v] of byNorm) {
-      const d = levenshtein(n, k);
-      if (!best || d < best.dist) best = { v: v ?? null, dist: d, len: Math.max(n.length, k.length) };
-    }
-    if (!best) {
-      out.set(raw, null);
-      continue;
-    }
-    const ratio = best.len ? best.dist / best.len : 1;
-    const maxDist = best.len <= 10 ? 2 : best.len <= 16 ? 3 : 4;
-    out.set(raw, best.dist <= maxDist && ratio <= 0.25 ? best.v : null);
+    out.set(raw, n ? (byNorm.get(n) ?? null) : null);
   }
 
   return out;
@@ -689,13 +742,35 @@ export async function POST(req: Request) {
   }
 
   let body: unknown = null;
+  let rawText = "";
   try {
-    body = await req.json();
+    rawText = await req.text();
   } catch {
-    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
-  const parsed = schema.safeParse(body);
+  if (!rawText.trim()) {
+    body = {};
+  } else {
+    try {
+      body = JSON.parse(rawText);
+    } catch {
+      body = { csv: rawText };
+    }
+  }
+
+  const url = new URL(req.url);
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? {
+          sessionId: url.searchParams.get("sessionId") ?? undefined,
+          sessionName: url.searchParams.get("sessionName") ?? undefined,
+          leagueKey: url.searchParams.get("leagueKey") ?? undefined,
+          ...body
+        }
+      : body;
+
+  const parsed = schema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
@@ -705,27 +780,35 @@ export async function POST(req: Request) {
   const state = getState(leagueKey);
   const prevSessionId = state.sessionId;
 
-  state.sessionId = data.sessionId;
-  state.sessionName = typeof data.sessionName === "string" ? data.sessionName : null;
-  state.sessionType = typeof data.sessionType === "number" ? data.sessionType : null;
-  state.sessionTimeLeft = typeof data.sessionTimeLeft === "string" ? data.sessionTimeLeft : null;
-  state.sessionDuration = typeof data.sessionDuration === "string" ? data.sessionDuration : null;
-  state.totalLaps = typeof data.totalLaps === "number" ? data.totalLaps : null;
-  state.currentLap = typeof data.currentLap === "number" ? data.currentLap : null;
-  state.lapsRemaining = typeof data.lapsRemaining === "number" ? data.lapsRemaining : null;
-  state.trackStatus = typeof data.trackStatus === "string" ? data.trackStatus : null;
-  state.raceStatus = typeof data.raceStatus === "string" ? data.raceStatus : null;
-  state.racePhase = typeof data.racePhase === "string" ? data.racePhase : null;
-  state.weather = typeof data.weather === "string" ? data.weather : null;
-  state.airTemp = typeof data.airTemp === "number" ? data.airTemp : null;
-  state.trackTemp = typeof data.trackTemp === "number" ? data.trackTemp : null;
-  state.rainIntensity = typeof data.rainIntensity === "number" ? data.rainIntensity : null;
-  state.trackGrip = typeof data.trackGrip === "number" ? data.trackGrip : null;
-  state.trackMap = data.trackMap ?? null;
-  state.updatedAtMs = Date.now();
-  const incomingEntries = data.entries.slice();
+  const csvParsed = typeof data.csv === "string" && data.csv.trim() ? parseLiveTimingCsv(data.csv) : null;
+  if (csvParsed?.warnings.length) {
+    console.warn("[live-timing] CSV parse warnings:", csvParsed.warnings);
+  }
+  const incomingEntries = Array.isArray(data.entries)
+    ? data.entries.slice()
+    : csvParsed
+      ? csvParsed.entries
+      : [];
   const participants = Array.isArray(data.participants) ? (data.participants as LiveTimingParticipant[]) : [];
-  const merged: LiveTimingPostEntry[] = [];
+
+  state.sessionId = typeof data.sessionId === "string" && data.sessionId.trim() ? data.sessionId : state.sessionId || "default";
+  state.sessionName = typeof data.sessionName === "string" ? data.sessionName : state.sessionName;
+  state.sessionType = typeof data.sessionType === "number" ? data.sessionType : state.sessionType;
+  state.sessionTimeLeft = typeof data.sessionTimeLeft === "string" ? data.sessionTimeLeft : state.sessionTimeLeft;
+  state.sessionDuration = typeof data.sessionDuration === "string" ? data.sessionDuration : state.sessionDuration;
+  state.totalLaps = typeof data.totalLaps === "number" ? data.totalLaps : state.totalLaps;
+  state.currentLap = typeof data.currentLap === "number" ? data.currentLap : state.currentLap;
+  state.lapsRemaining = typeof data.lapsRemaining === "number" ? data.lapsRemaining : state.lapsRemaining;
+  state.trackStatus = typeof data.trackStatus === "string" ? data.trackStatus : state.trackStatus;
+  state.raceStatus = typeof data.raceStatus === "string" ? data.raceStatus : state.raceStatus;
+  state.racePhase = typeof data.racePhase === "string" ? data.racePhase : state.racePhase;
+  state.weather = typeof data.weather === "string" ? data.weather : state.weather;
+  state.airTemp = typeof data.airTemp === "number" ? data.airTemp : state.airTemp;
+  state.trackTemp = typeof data.trackTemp === "number" ? data.trackTemp : state.trackTemp;
+  state.rainIntensity = typeof data.rainIntensity === "number" ? data.rainIntensity : state.rainIntensity;
+  state.trackGrip = typeof data.trackGrip === "number" ? data.trackGrip : state.trackGrip;
+  state.trackMap = data.trackMap ?? state.trackMap;
+  state.updatedAtMs = Date.now();
 
   function str(v: unknown, fallback: string) {
     return typeof v === "string" && v.trim() ? v : fallback;
@@ -734,65 +817,22 @@ export async function POST(req: Request) {
     return typeof v === "number" && Number.isFinite(v) ? v : fallback;
   }
 
-  if (participants.length) {
-    const used = new Set<number>();
-    const ordered = participants.slice().sort((a, b) => a.participantIndex - b.participantIndex);
-    state.participants = ordered.map((p) => ({
+  state.participants = participants
+    .slice()
+    .sort((a, b) => a.participantIndex - b.participantIndex)
+    .map((p) => ({
       ...p,
       driver: typeof p.driver === "string" ? p.driver.trim() : "",
       team: typeof p.team === "string" ? p.team.trim() : undefined
     }));
-    for (const p of ordered) {
-      const idx = matchEntryIndexByDriverName(p.driver, incomingEntries, used);
-      if (idx !== null) {
-        used.add(idx);
-        const e = incomingEntries[idx];
-        merged.push({
-          ...e,
-          participantIndex: typeof e.participantIndex === "number" ? e.participantIndex : p.participantIndex,
-          driver: str(e.driver, p.driver),
-          team: str(e.team, str(p.team, "")),
-          accent: typeof e.accent === "string" ? e.accent : p.accent ?? null
-        });
-      } else {
-        merged.push({
-          position: p.participantIndex + 1,
-          participantIndex: p.participantIndex,
-          driver: p.driver,
-          team: str(p.team, ""),
-          lap: 0,
-          gap: "—",
-          lastLap: "—",
-          bestLap: "—",
-          currentLap: "—",
-          sector1: "—",
-          sector2: "—",
-          sector3: "—",
-          tyre: null,
-          drs: null,
-          ers: null,
-          x: null,
-          y: null,
-          z: null,
-          angle: null,
-          accent: p.accent ?? null,
-          status: "WAITING"
-        });
-      }
-    }
-    for (let i = 0; i < incomingEntries.length; i++) {
-      if (used.has(i)) continue;
-      merged.push(incomingEntries[i]);
-    }
-  } else {
-    state.participants = [];
-    merged.push(...incomingEntries);
-  }
 
-  const normalized = merged.map((e) => {
+  const normalized = incomingEntries
+    .map((e) => {
     const position = num(e.position, 0);
     const driver = str(e.driver, "—");
     const team = str(e.team, "");
+    const statusRaw = typeof e.status === "string" && e.status.trim() ? e.status.trim() : undefined;
+    const status = statusRaw?.toUpperCase() === "WAITING" ? "WAITING" : statusRaw;
     const lap = num(e.lap, 0);
     const gap = str(e.gap, "—");
     const lastLap = str(e.lastLap, "—");
@@ -821,13 +861,15 @@ export async function POST(req: Request) {
       y: typeof e.y === "number" ? e.y : null,
       z: typeof e.z === "number" ? e.z : null,
       angle: typeof e.angle === "number" ? e.angle : null,
-      status: typeof e.status === "string" && e.status.trim() ? e.status : undefined,
+      status,
       penalties: typeof e.penalties === "string" ? e.penalties : undefined,
       warnings: typeof e.warnings === "number" ? e.warnings : undefined,
       stops: typeof e.stops === "number" ? e.stops : undefined,
       participantIndex: typeof e.participantIndex === "number" ? e.participantIndex : undefined
     } as LiveTimingPostEntry;
-  });
+  })
+    .filter((e) => !isPlaceholderCar(e.driver))
+    .filter((e) => (e.status ?? "").toUpperCase() !== "WAITING");
 
   const portraitByName = await resolvePortraitUrlsByDriverName(normalized.map((e) => e.driver));
   const teamLogoByName = await resolveTeamLogoUrlsByTeamName(

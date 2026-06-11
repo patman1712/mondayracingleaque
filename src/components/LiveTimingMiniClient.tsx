@@ -245,6 +245,8 @@ export function LiveTimingMiniClient({
   const mode = sessionModeFromName(sessionName) === "race" ? "race" : "practice";
   const sorted = (data?.entries ?? [])
     .slice()
+    .filter((e) => !/^car\s+/i.test((e.driver ?? "").trim()))
+    .filter((e) => ((e.status ?? "").toString().trim().toUpperCase() || "ACTIVE") !== "WAITING")
     .sort((a, b) => {
       if (mode === "practice") {
         const am = parseLapTimeMs(a.bestLap);
