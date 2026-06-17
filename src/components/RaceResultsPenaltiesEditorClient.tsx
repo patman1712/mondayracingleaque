@@ -10,10 +10,12 @@ export function RaceResultsPenaltiesEditorClient({
   action: (formData: FormData) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [values, setValues] = useState(() => new Map(results.map((r) => [r.driverId, 0] as const)));
+  const [values, setValues] = useState<Map<string, number>>(
+    () => new Map(results.map((r) => [r.driverId, 0]))
+  );
 
   useEffect(() => {
-    setValues(new Map(results.map((r) => [r.driverId, 0] as const)));
+    setValues(new Map(results.map((r) => [r.driverId, 0])));
   }, [results]);
 
   const currentPenalties = useMemo(
@@ -139,7 +141,7 @@ export function RaceResultsPenaltiesEditorClient({
           disabled={isPending || !hasAnyPenalty}
           onClick={() => {
             const cleared = results.map((r) => ({ driverId: r.driverId, penaltySeconds: 0 }));
-            setValues(new Map(results.map((r) => [r.driverId, 0] as const)));
+            setValues(new Map(results.map((r) => [r.driverId, 0])));
             const next = new FormData();
             next.set("penaltiesJson", JSON.stringify(cleared));
             startTransition(() => action(next));
