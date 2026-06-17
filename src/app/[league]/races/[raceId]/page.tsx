@@ -97,18 +97,6 @@ function formatGapMs(ms: number) {
   return `+${seconds}.${String(milli).padStart(3, "0")}`;
 }
 
-function formatRaceTimeMs(ms: number) {
-  const total = Math.max(0, Math.round(ms));
-  const hours = Math.floor(total / 3600000);
-  const minutes = Math.floor((total % 3600000) / 60000);
-  const seconds = Math.floor((total % 60000) / 1000);
-  const milli = total % 1000;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
-  }
-  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
-}
-
 function getResultDisplayTime(
   result: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null; penaltySeconds?: number | null },
   winnerRaceTimeMs: number | null
@@ -121,15 +109,7 @@ function getResultDisplayTime(
 
   const tt = (result.timeText ?? "").trim();
   if (result.position === 1) {
-    if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs)) {
-      const penaltyMs =
-        typeof result.penaltySeconds === "number" && Number.isFinite(result.penaltySeconds) && result.penaltySeconds > 0
-          ? result.penaltySeconds * 1000
-          : 0;
-      return formatRaceTimeMs(result.finishTimeMs + penaltyMs);
-    }
-    if (tt && tt.toUpperCase() !== "WINNER") return tt;
-    return "—";
+    return "Race Winner";
   }
 
   if (tt.startsWith("+")) return tt;
@@ -462,17 +442,18 @@ export default async function RaceDetailPage({
                           </div>
                         ) : null}
 
-                        <div className="relative p-4">
+                        {teamLogoUrl ? (
+                          <div className="pointer-events-none absolute inset-y-0 right-[24%] z-0 flex w-[16%] items-center justify-center">
+                            <img
+                              src={teamLogoUrl}
+                              alt=""
+                              className="max-h-16 w-auto max-w-full object-contain opacity-20 sm:max-h-20"
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className="relative z-10 p-4">
                           <div className="flex items-center gap-2">
-                            {teamLogoUrl ? (
-                              <span className="flex shrink-0 items-center">
-                                <img
-                                  src={teamLogoUrl}
-                                  alt=""
-                                  className="h-7 w-auto max-w-[84px] object-contain opacity-95 sm:h-8"
-                                />
-                              </span>
-                            ) : null}
                             {flag ? (
                               <div className="text-base leading-none">
                                 {flag}
