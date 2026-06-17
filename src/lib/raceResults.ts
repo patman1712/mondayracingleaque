@@ -88,56 +88,85 @@ export async function recalcRaceResults(prisma: PrismaClient, raceId: string) {
     take: 5000
   });
 
-  const statusSet = new Set(["DNF", "DSQ", "DNS", "RET"]);
+  const statusSet = new Set(["DNF", "DSQ", "DNS", "RET", "RETIRED", "NC"]);
+  const dnfSet = new Set(["DNF", "RET", "RETIRED", "NC"]);
 
-  const finishMsByDriverId = new Map<string, number | null>();
+  function normalizedResultStatus(input: string | null | undefined) {
+    const value = (input ?? "").trim().toUpperCase();
+    if (!value) return null;
+    if (dnfSet.has(value)) return "DNF";
+    if (statusSet.has(value)) return value;
+    return null;
+  }
+
+  const finishInfoByDriverId = new Map<string, { ms: number | null; absolute: boolean }>();
   for (const r of rows) {
-    const status = (r.status ?? "").trim().toUpperCase();
-    if (status && statusSet.has(status)) {
-      finishMsByDriverId.set(r.driverId, null);
+    const status = normalizedResultStatus(r.status);
+    if (status) {
+      finishInfoByDriverId.set(r.driverId, { ms: null, absolute: false });
       continue;
     }
     if (typeof r.finishTimeMs === "number" && Number.isFinite(r.finishTimeMs)) {
-      finishMsByDriverId.set(r.driverId, Math.max(0, Math.floor(r.finishTimeMs)));
+      finishInfoByDriverId.set(r.driverId, { ms: Math.max(0, Math.floor(r.finishTimeMs)), absolute: true });
       continue;
     }
     const tt = (r.timeText ?? "").trim().toUpperCase();
-    if (tt && statusSet.has(tt)) {
-      finishMsByDriverId.set(r.driverId, null);
+    if (normalizedResultStatus(tt)) {
+      finishInfoByDriverId.set(r.driverId, { ms: null, absolute: false });
       continue;
     }
     if (tt && !tt.startsWith("+")) {
       const ms = parseRaceTimeMs(tt);
-      finishMsByDriverId.set(r.driverId, typeof ms === "number" ? ms : null);
-      continue;
+      if (typeof ms === "number") {
+        finishInfoByDriverId.set(r.driverId, { ms, absolute: true });
+        continue;
+      }
     }
-    finishMsByDriverId.set(r.driverId, null);
+    finishInfoByDriverId.set(r.driverId, { ms: null, absolute: false });
   }
 
-  const base = Array.from(finishMsByDriverId.values())
+  const absoluteBase = Array.from(finishInfoByDriverId.values())
+    .map((x) => x.ms)
     .filter((x): x is number => typeof x === "number")
     .sort((a, b) => a - b)[0];
 
-  if (typeof base === "number") {
-    for (const r of rows) {
-      const cur = finishMsByDriverId.get(r.driverId) ?? null;
-      if (typeof cur === "number") continue;
-      const tt = (r.timeText ?? "").trim();
-      const gap = parseGapMs(tt);
-      if (typeof gap === "number") finishMsByDriverId.set(r.driverId, base + gap);
+  for (const r of rows) {
+    const current = finishInfoByDriverId.get(r.driverId) ?? { ms: null, absolute: false };
+    if (typeof current.ms === "number") continue;
+    const tt = (r.timeText ?? "").trim();
+    const gap = parseGapMs(tt);
+    if (typeof gap === "number") {
+      finishInfoByDriverId.set(r.driverId, {
+        ms: typeof absoluteBase === "number" ? absoluteBase + gap : gap,
+        absolute: typeof absoluteBase === "number"
+      });
+      continue;
+    }
+    const upper = tt.toUpperCase();
+    if (upper === "LEADER" || upper === "WINNER" || r.position === 1) {
+      finishInfoByDriverId.set(r.driverId, {
+        ms: typeof absoluteBase === "number" ? absoluteBase : 0,
+        absolute: typeof absoluteBase === "number"
+      });
     }
   }
 
-  const finishers: Array<{ driverId: string; ms: number; penaltySeconds: number; prevPos: number }> = [];
-  const nonFinishers: Array<{ driverId: string; prevPos: number }> = [];
+  const finishers: Array<{ driverId: string; ms: number; absolute: boolean; penaltySeconds: number; prevPos: number }> = [];
+  const nonFinishers: Array<{ driverId: string; prevPos: number; displayStatus: string | null }> = [];
   const penaltyByDriverId = new Map<string, number>();
+  const displayStatusByDriverId = new Map<string, string | null>();
 
   for (const r of rows) {
-    const ms = finishMsByDriverId.get(r.driverId) ?? null;
+    const info = finishInfoByDriverId.get(r.driverId) ?? { ms: null, absolute: false };
     const pen = Number.isFinite(r.penaltySeconds) ? Math.max(0, Math.floor(r.penaltySeconds)) : 0;
+    const displayStatus = normalizedResultStatus(r.status) ?? normalizedResultStatus(r.timeText);
     penaltyByDriverId.set(r.driverId, pen);
-    if (typeof ms === "number") finishers.push({ driverId: r.driverId, ms, penaltySeconds: pen, prevPos: r.position });
-    else nonFinishers.push({ driverId: r.driverId, prevPos: r.position });
+    displayStatusByDriverId.set(r.driverId, displayStatus);
+    if (typeof info.ms === "number") {
+      finishers.push({ driverId: r.driverId, ms: info.ms, absolute: info.absolute, penaltySeconds: pen, prevPos: r.position });
+    } else {
+      nonFinishers.push({ driverId: r.driverId, prevPos: r.position, displayStatus });
+    }
   }
 
   finishers.sort((a, b) => (a.ms + a.penaltySeconds * 1000) - (b.ms + b.penaltySeconds * 1000) || a.prevPos - b.prevPos);
@@ -165,15 +194,17 @@ export async function recalcRaceResults(prisma: PrismaClient, raceId: string) {
     for (let i = 0; i < ordered.length; i++) {
       const driverId = ordered[i]!;
       const pos = i + 1;
-      const rawFinish = finishMsByDriverId.get(driverId) ?? null;
+      const info = finishInfoByDriverId.get(driverId) ?? { ms: null, absolute: false };
+      const rawFinish = info.ms;
       const pen = penaltyByDriverId.get(driverId) ?? 0;
       const adjusted = typeof rawFinish === "number" ? rawFinish + pen * 1000 : null;
-      const timeText =
-        typeof adjusted === "number" && typeof winnerAdjusted === "number"
-          ? adjusted === winnerAdjusted
-            ? formatRaceTimeMs(adjusted)
-            : formatGapMs(adjusted - winnerAdjusted)
-          : null;
+      const displayStatus = displayStatusByDriverId.get(driverId) ?? null;
+      const timeText = (() => {
+        if (displayStatus) return displayStatus;
+        if (typeof adjusted !== "number" || typeof winnerAdjusted !== "number") return null;
+        if (i === 0) return info.absolute ? formatRaceTimeMs(adjusted) : "Leader";
+        return formatGapMs(adjusted - winnerAdjusted);
+      })();
 
       await tx.raceResult
         .update({
@@ -181,7 +212,8 @@ export async function recalcRaceResults(prisma: PrismaClient, raceId: string) {
           data: {
             position: pos,
             finishTimeMs: typeof rawFinish === "number" ? Math.max(0, Math.floor(rawFinish)) : null,
-            ...(timeText ? { timeText } : {})
+            timeText,
+            status: displayStatus
           }
         })
         .catch(() => null);
