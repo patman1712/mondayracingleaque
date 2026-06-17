@@ -97,8 +97,20 @@ function formatGapMs(ms: number) {
   return `+${seconds}.${String(milli).padStart(3, "0")}`;
 }
 
+function formatRaceTimeMs(ms: number) {
+  const total = Math.max(0, Math.round(ms));
+  const hours = Math.floor(total / 3600000);
+  const minutes = Math.floor((total % 3600000) / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const milli = total % 1000;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
+}
+
 function getResultDisplayTime(
-  result: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null },
+  result: { position: number; status: string | null; timeText: string | null; finishTimeMs: number | null; penaltySeconds?: number | null },
   winnerRaceTimeMs: number | null
 ) {
   const statusUp = (result.status ?? "").trim().toUpperCase();
@@ -109,10 +121,14 @@ function getResultDisplayTime(
 
   const tt = (result.timeText ?? "").trim();
   if (result.position === 1) {
-    if (tt && tt.toUpperCase() !== "WINNER") return tt;
     if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs)) {
-      return formatGapMs(result.finishTimeMs).slice(1);
+      const penaltyMs =
+        typeof result.penaltySeconds === "number" && Number.isFinite(result.penaltySeconds) && result.penaltySeconds > 0
+          ? result.penaltySeconds * 1000
+          : 0;
+      return formatRaceTimeMs(result.finishTimeMs + penaltyMs);
     }
+    if (tt && tt.toUpperCase() !== "WINNER") return tt;
     return "—";
   }
 
@@ -448,6 +464,15 @@ export default async function RaceDetailPage({
 
                         <div className="relative p-4">
                           <div className="flex items-center gap-2">
+                            {teamLogoUrl ? (
+                              <span className="flex shrink-0 items-center">
+                                <img
+                                  src={teamLogoUrl}
+                                  alt=""
+                                  className="h-7 w-auto max-w-[84px] object-contain opacity-95 sm:h-8"
+                                />
+                              </span>
+                            ) : null}
                             {flag ? (
                               <div className="text-base leading-none">
                                 {flag}
@@ -468,15 +493,6 @@ export default async function RaceDetailPage({
                             {penalty ? (
                               <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
                                 +{penalty}s
-                              </span>
-                            ) : null}
-                            {teamLogoUrl ? (
-                              <span className="ml-auto flex items-center">
-                                <img
-                                  src={teamLogoUrl}
-                                  alt=""
-                                  className="h-10 w-auto object-contain opacity-95 sm:h-12 md:h-14"
-                                />
                               </span>
                             ) : null}
                           </div>
