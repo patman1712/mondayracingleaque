@@ -87,6 +87,60 @@ async function setResultsPublished(
   redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
 }
 
+async function clearRaceResults(
+  adminLeague: string,
+  league: League,
+  raceId: string
+) {
+  "use server";
+  await requireAdmin();
+
+  const race = await prisma.race
+    .findUnique({
+      where: { id: raceId },
+      select: { id: true, league: true }
+    })
+    .catch(() => null);
+  if (!race || race.league !== league) redirect(`/admin/${adminLeague}/results/${raceId}?error=invalid`);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.raceResult.deleteMany({ where: { raceId } }).catch(() => null);
+    await tx.race
+      .update({
+        where: { id: raceId },
+        data: {
+          resultsPublishedAt: null,
+          driverOfDayDriverId: null,
+          resultsCsvDraftJson: null
+        }
+      })
+      .catch(() => null);
+  });
+
+  await recalcSeasonStatsForRace(prisma, raceId).catch(() => null);
+
+  revalidatePath(`/admin/${adminLeague}/results/${raceId}`);
+  revalidatePath(`/admin/${adminLeague}/results`);
+  revalidatePath(`/admin/${adminLeague}/standings`);
+
+  const slugs =
+    (await prisma.leagueConfig
+      .findMany({ select: { publicSlug: true } })
+      .catch(() => [])) ?? [];
+  const list =
+    slugs.length > 0
+      ? slugs
+      : [{ publicSlug: "mrl-one" }, { publicSlug: "mrl-two" }, { publicSlug: "mrl-rookie" }];
+  for (const l of list) {
+    revalidatePath(`/${l.publicSlug}/races/${raceId}`);
+    revalidatePath(`/${l.publicSlug}/results`);
+    revalidatePath(`/${l.publicSlug}/standings`);
+    revalidatePath(`/${l.publicSlug}/drivers`);
+  }
+
+  redirect(`/admin/${adminLeague}/results/${raceId}?ok=1`);
+}
+
 async function bulkUpsertResults(
   adminLeague: string,
   league: League,
@@ -1061,6 +1115,22 @@ export default async function AdminRaceResultsPage({
             </FormSubmitButton>
           </form>
         </div>
+
+        {(results.length > 0 || race.resultsCsvDraftJson) ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <div className="text-sm text-white/80">
+              Ergebnis komplett entfernen, damit du es danach sauber neu importieren oder manuell neu anlegen kannst.
+            </div>
+            <form action={clearRaceResults.bind(null, league, l, raceId)}>
+              <FormSubmitButton
+                className="w-fit rounded-lg border border-red-500/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/20"
+                pendingText="Lösche…"
+              >
+                Ergebnis löschen
+              </FormSubmitButton>
+            </form>
+          </div>
+        ) : null}
 
         {results.length > 0 ? (
           <div className="mt-4">
