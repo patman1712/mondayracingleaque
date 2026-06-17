@@ -247,9 +247,6 @@ async function bulkUpsertResults(
         .catch(() => [])
     ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap, penaltySeconds: r.penaltySeconds }] as const)
   );
-  const hasAnyPenalty = Array.from(existing.values()).some(
-    (r) => typeof r.penaltySeconds === "number" && r.penaltySeconds > 0
-  );
 
   const anyEntries = await prisma.raceEntry.findFirst({ where: { raceId }, select: { id: true } }).catch(() => null);
   const participating = anyEntries
@@ -385,9 +382,6 @@ async function bulkUpsertResults(
     }
   });
 
-  if (hasAnyPenalty) {
-    await recalcRaceResults(prisma, raceId).catch(() => null);
-  }
   await applyRaceScoring(prisma, raceId).catch(() => null);
   await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
@@ -458,6 +452,7 @@ async function applyPenalties(
     }
   });
 
+  await recalcRaceResults(prisma, raceId).catch(() => null);
   await applyRaceScoring(prisma, raceId).catch(() => null);
   await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
@@ -662,9 +657,6 @@ async function importResultsFromCsv(
         .catch(() => [])
     ).map((r) => [r.driverId, { points: r.points, fastestLap: r.fastestLap, penaltySeconds: r.penaltySeconds }] as const)
   );
-  const hasAnyPenalty = Array.from(existing.values()).some(
-    (r) => typeof r.penaltySeconds === "number" && r.penaltySeconds > 0
-  );
 
   const used = new Set<string>();
   const included = rows
@@ -808,9 +800,6 @@ async function importResultsFromCsv(
     await tx.race.update({ where: { id: raceId }, data: { resultsCsvDraftJson: draft.length ? JSON.stringify(draft) : null } });
   });
 
-  if (hasAnyPenalty) {
-    await recalcRaceResults(prisma, raceId).catch(() => null);
-  }
   await applyRaceScoring(prisma, raceId).catch(() => null);
   await applyPublishedRaceStats(prisma, raceId).catch(() => null);
 
