@@ -107,11 +107,15 @@ function getResultDisplayTime(
   if (statusUp === "DSQ") return "DSQ";
   if (statusUp === "DNS") return "DNS";
 
+  const tt = (result.timeText ?? "").trim();
   if (result.position === 1) {
-    return "Winner";
+    if (tt && tt.toUpperCase() !== "WINNER") return tt;
+    if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs)) {
+      return formatGapMs(result.finishTimeMs).slice(1);
+    }
+    return "—";
   }
 
-  const tt = (result.timeText ?? "").trim();
   if (tt.startsWith("+")) return tt;
   if (typeof result.finishTimeMs === "number" && Number.isFinite(result.finishTimeMs) && typeof winnerRaceTimeMs === "number") {
     return formatGapMs(result.finishTimeMs - winnerRaceTimeMs);
