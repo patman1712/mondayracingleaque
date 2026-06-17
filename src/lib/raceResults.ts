@@ -133,6 +133,8 @@ export async function recalcRaceResults(prisma: PrismaClient, raceId: string) {
   for (const r of rows) {
     const current = finishInfoByDriverId.get(r.driverId) ?? { ms: null, absolute: false };
     if (typeof current.ms === "number") continue;
+    const displayStatus = normalizedResultStatus(r.status) ?? normalizedResultStatus(r.timeText);
+    if (displayStatus) continue;
     const tt = (r.timeText ?? "").trim();
     const gap = parseGapMs(tt);
     if (typeof gap === "number") {
