@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 
 type DriverItem = {
@@ -138,6 +138,11 @@ export function RaceResultsBulkEditorClient({
 }) {
   const initial = useMemo(() => toInitialRows(drivers, existingResults), [drivers, existingResults]);
   const [rows, setRows] = useState<Row[]>(initial);
+
+  useEffect(() => {
+    setRows(initial);
+  }, [initial]);
+
   const driverNameById = useMemo(() => new Map(drivers.map((d) => [d.driverId, d.name] as const)), [drivers]);
   const penalties = useMemo(() => {
     return existingResults
