@@ -3,6 +3,7 @@ import { TwitchEmbed } from "@/components/TwitchEmbed";
 import { getActiveSeason } from "@/lib/currentSeason";
 import { prisma } from "@/lib/db";
 import { getLeagueColors } from "@/lib/leagueColors";
+import { getDriverComputedStats } from "@/lib/driverStats";
 import { League } from "@prisma/client";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -188,6 +189,22 @@ export default async function DriverDetailPage({
     })
     .catch(() => []);
 
+  const currentSeasonStats = currentSeason
+    ? await getDriverComputedStats(prisma, driver.id, {
+        league: l,
+        season: currentSeason.year,
+        seasonNo: currentSeason.seasonNo,
+        seasonIsTest: currentSeason.isTest
+      })
+    : null;
+
+  const totalRaceStats = await getDriverComputedStats(prisma, driver.id).catch(() => ({
+    starts: 0,
+    wins: 0,
+    podiums: 0,
+    driverOfDay: 0
+  }));
+
   const sum = seasonStats.reduce(
     (acc, r) => {
       acc.starts += r.starts;
@@ -202,10 +219,10 @@ export default async function DriverDetailPage({
   );
 
   const totals = {
-    starts: Math.max(0, sum.starts + (driver.starts ?? 0)),
-    wins: Math.max(0, sum.wins + (driver.wins ?? 0)),
-    podiums: Math.max(0, sum.podiums + (driver.podiums ?? 0)),
-    driverOfDay: Math.max(0, sum.driverOfDay + (driver.driverOfDay ?? 0)),
+    starts: Math.max(0, totalRaceStats.starts + (driver.starts ?? 0)),
+    wins: Math.max(0, totalRaceStats.wins + (driver.wins ?? 0)),
+    podiums: Math.max(0, totalRaceStats.podiums + (driver.podiums ?? 0)),
+    driverOfDay: Math.max(0, totalRaceStats.driverOfDay + (driver.driverOfDay ?? 0)),
     driverTitles: Math.max(0, sum.driverTitles + (driver.driverTitles ?? 0)),
     constructorTitles: Math.max(0, sum.constructorTitles + (driver.constructorTitles ?? 0))
   };
@@ -450,10 +467,10 @@ export default async function DriverDetailPage({
                 Aktuelle Saison
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                {stat("Rennstarts", currentSeasonRow?.starts ?? 0)}
-                {stat("Siege", currentSeasonRow?.wins ?? 0)}
-                {stat("Podien", currentSeasonRow?.podiums ?? 0)}
-                {stat("Fahrer des Tages", currentSeasonRow?.driverOfDay ?? 0)}
+                {stat("Rennstarts", currentSeasonStats?.starts ?? 0)}
+                {stat("Siege", currentSeasonStats?.wins ?? 0)}
+                {stat("Podien", currentSeasonStats?.podiums ?? 0)}
+                {stat("Fahrer des Tages", currentSeasonStats?.driverOfDay ?? 0)}
                 {stat("WM Punkte", currentSeasonPointsDisplay)}
                 {stat("WM Platz", currentSeasonRank ?? "—")}
               </div>

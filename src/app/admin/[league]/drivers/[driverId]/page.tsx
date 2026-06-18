@@ -1,6 +1,7 @@
 import { AdminShell } from "@/components/AdminShell";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/db";
+import { getDriverComputedStats } from "@/lib/driverStats";
 import { ensureReserveTeam } from "@/lib/reserveTeam";
 import { DriverRole, League, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -77,32 +78,39 @@ function asInt(v: string, fallback: number) {
 }
 
 async function seasonTotalsForDriver(driverId: string) {
-  const rows = await prisma.driverSeason
-    .findMany({
-      where: { driverId },
-      select: {
-        starts: true,
-        wins: true,
-        podiums: true,
-        driverOfDay: true,
-        driverTitles: true,
-        constructorTitles: true
-      },
-      take: 5000
-    })
-    .catch(() => []);
+  const [raceStats, rows] = await Promise.all([
+    getDriverComputedStats(prisma, driverId).catch(() => ({
+      starts: 0,
+      wins: 0,
+      podiums: 0,
+      driverOfDay: 0
+    })),
+    prisma.driverSeason
+      .findMany({
+        where: { driverId },
+        select: {
+          driverTitles: true,
+          constructorTitles: true
+        },
+        take: 5000
+      })
+      .catch(() => [])
+  ]);
 
   return rows.reduce(
     (acc, r) => {
-      acc.starts += r.starts;
-      acc.wins += r.wins;
-      acc.podiums += r.podiums;
-      acc.driverOfDay += r.driverOfDay;
       acc.driverTitles += r.driverTitles;
       acc.constructorTitles += r.constructorTitles;
       return acc;
     },
-    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+    {
+      starts: raceStats.starts,
+      wins: raceStats.wins,
+      podiums: raceStats.podiums,
+      driverOfDay: raceStats.driverOfDay,
+      driverTitles: 0,
+      constructorTitles: 0
+    }
   );
 }
 
