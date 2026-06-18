@@ -234,9 +234,11 @@ function mapRow(obj: Record<string, string>) {
   const status = (() => {
     if (!statusUp) return "";
     if (statusUp === "FINISHED") return "";
+    if (statusUp === "ACTIVE") return "";
+    if (statusUp === "WAITING") return "";
     if (statusUp === "RETIRED") return "RET";
     if (["DNF", "DSQ", "DNS", "RET"].includes(statusUp)) return statusUp;
-    return statusUp;
+    return "";
   })();
 
   const timeText = (() => {
@@ -255,6 +257,7 @@ function mapRow(obj: Record<string, string>) {
   return {
     position: Number.isFinite(position) ? Math.floor(position) : NaN,
     driverName: get(
+      "fahrer",
       "driver",
       "drivername",
       "name",

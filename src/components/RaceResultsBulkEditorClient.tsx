@@ -27,6 +27,7 @@ type Row = {
   teamName: string | null;
   bestTime: string;
   endTime: string;
+  gapText: string;
   status: string;
   fastestLap: boolean;
 };
@@ -136,17 +137,18 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
       .filter((x): x is number => typeof x === "number")
       .sort((a, b) => a - b)[0] ?? null;
 
-  const rows: Row[] = ordered.map((d) => {
+  const rows: Row[] = ordered.map((d, index) => {
     const r = byDriverId.get(d.driverId) ?? null;
+    const baseText = (r?.timeText ?? "").trim();
     const endTime = (() => {
       const status = (r?.status ?? "").trim().toUpperCase();
       if (status && ["DNF", "DSQ", "DNS", "RET"].includes(status)) return "";
-      const baseText = (r?.timeText ?? "").trim();
       if (baseText && ["DNF", "DSQ", "DNS", "RET"].includes(baseText.toUpperCase())) return "";
       const pen = typeof r?.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
       if (r && typeof r.finishTimeMs === "number" && Number.isFinite(r.finishTimeMs)) {
         return formatRaceTimeMs(r.finishTimeMs + pen * 1000);
       }
+      if (baseText.toUpperCase() === "LEADER" || baseText.toUpperCase() === "FASTEST") return "";
       if (baseText && !baseText.startsWith("+")) {
         const parsed = parseRaceTimeMs(baseText);
         return typeof parsed === "number" ? formatRaceTimeMs(parsed) : baseText;
@@ -157,6 +159,21 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
       }
       return "";
     })();
+    const gapText = (() => {
+      const status = (r?.status ?? "").trim().toUpperCase();
+      if (status && ["DNF", "DSQ", "DNS", "RET"].includes(status)) return "";
+      if (baseText.startsWith("+")) return baseText;
+      if (baseText.toUpperCase() === "LEADER" || baseText.toUpperCase() === "FASTEST") return index === 0 ? "Leader" : "";
+      const pen = typeof r?.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+      const ms =
+        r && typeof r.finishTimeMs === "number" && Number.isFinite(r.finishTimeMs)
+          ? r.finishTimeMs + pen * 1000
+          : baseText && !baseText.startsWith("+")
+            ? parseRaceTimeMs(baseText)
+            : null;
+      if (typeof ms === "number" && typeof baseMs === "number") return ms <= baseMs ? "" : formatGapMs(ms - baseMs);
+      return "";
+    })();
     return {
       id: d.driverId,
       driverId: d.driverId,
@@ -164,6 +181,7 @@ function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
       teamName: d.teamName,
       bestTime: r?.bestTime ?? "",
       endTime,
+      gapText,
       status: r?.status ?? "",
       fastestLap: Boolean(r?.fastestLap)
     };
@@ -222,7 +240,7 @@ export function RaceResultsBulkEditorClient({
         driverId: r.driverId,
         position: idx + 1,
         bestTime: r.bestTime.trim() || null,
-        timeText: r.endTime.trim() || null,
+        timeText: r.endTime.trim() || r.gapText.trim() || null,
         status: r.status.trim() || null,
         fastestLap: Boolean(r.fastestLap)
       }))
@@ -324,9 +342,9 @@ export function RaceResultsBulkEditorClient({
                       .sort((a, b) => a - b)[0] ??
                     null;
                   const ms = parseRaceTimeMs((r.endTime ?? "").trim());
-                  if (idx === 0) return "";
+                  if (idx === 0) return r.gapText;
                   if (typeof ms === "number" && typeof winnerMs === "number") return formatGapMs(ms - winnerMs);
-                  return "";
+                  return r.gapText;
                 })()}
                 readOnly
                 className="w-full rounded-lg border border-white/10 bg-black/15 px-2 py-2 text-xs text-white/70 outline-none"
