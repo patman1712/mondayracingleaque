@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { League, PrismaClient } from "@prisma/client";
 
 const BAD_STATUSES = new Set(["DNF", "DSQ", "DNS", "RET"]);
 
@@ -9,7 +9,7 @@ function isClassified(status: string | null | undefined, timeText: string | null
 }
 
 type RaceFilter = {
-  league?: string;
+  league?: League;
   season?: number;
   seasonNo?: number;
   seasonIsTest?: boolean;
@@ -17,7 +17,7 @@ type RaceFilter = {
 
 function buildRaceWhere(filter?: RaceFilter) {
   return {
-    resultsPublishedAt: { not: null as null | Date },
+    resultsPublishedAt: { not: null },
     ...(filter?.league ? { league: filter.league } : {}),
     ...(typeof filter?.season === "number" ? { season: filter.season } : {}),
     ...(typeof filter?.seasonNo === "number" ? { seasonNo: filter.seasonNo } : {}),
