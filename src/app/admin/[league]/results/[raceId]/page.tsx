@@ -7,7 +7,7 @@ import { League } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveLeagueByAdminSlug } from "@/lib/league";
 import { configuredOrDefaultLiveTimingLeagueKey } from "@/lib/liveTimingLeagueKey";
-import { parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
+import { formatGapMs, parseGapMs, parseRaceTimeMs, recalcRaceResults } from "@/lib/raceResults";
 import { applyRaceScoring } from "@/lib/scoring";
 import { applyPublishedRaceStats, recalcSeasonStatsForRace } from "@/lib/seasonStats";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
@@ -323,6 +323,48 @@ async function bulkUpsertResults(
     finishMsByDriverId.set(r.driverId, typeof ms === "number" ? ms : null);
   }
 
+  const baseFinishMs = (() => {
+    const leaderId = included[0]?.driverId ?? null;
+    const leaderMs = leaderId ? finishMsByDriverId.get(leaderId) ?? null : null;
+    if (typeof leaderMs === "number") return leaderMs;
+    return (
+      Array.from(finishMsByDriverId.values())
+        .filter((x): x is number => typeof x === "number")
+        .sort((a, b) => a - b)[0] ?? null
+    );
+  })();
+
+  const storedTimeTextByDriverId = new Map<string, string | null>();
+  for (let i = 0; i < included.length; i++) {
+    const r = included[i];
+    const tt = (r.timeText ?? "").trim();
+    const status = (r.status ?? "").trim().toUpperCase();
+    const isBad = (v: string) => ["DNF", "DSQ", "DNS", "RET"].includes(v.trim().toUpperCase());
+    if (status && isBad(status)) {
+      storedTimeTextByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt && isBad(tt)) {
+      storedTimeTextByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt.startsWith("+")) {
+      storedTimeTextByDriverId.set(r.driverId, tt);
+      continue;
+    }
+    const ms = finishMsByDriverId.get(r.driverId) ?? null;
+    if (typeof ms === "number" && typeof baseFinishMs === "number") {
+      if (i === 0) {
+        storedTimeTextByDriverId.set(r.driverId, tt || null);
+        continue;
+      }
+      const diff = ms - baseFinishMs;
+      storedTimeTextByDriverId.set(r.driverId, diff > 0 ? formatGapMs(diff) : null);
+      continue;
+    }
+    storedTimeTextByDriverId.set(r.driverId, tt || null);
+  }
+
   const base = 1000 + (Date.now() % 100000);
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < included.length; i++) {
@@ -360,7 +402,7 @@ async function bulkUpsertResults(
           grid: r.grid,
           stops: r.stops,
           bestTime: r.bestTime,
-          timeText: r.timeText,
+          timeText: storedTimeTextByDriverId.get(r.driverId) ?? r.timeText,
           status: r.status,
           penaltySeconds,
           finishTimeMs,
@@ -713,6 +755,48 @@ async function importResultsFromCsv(
     finishMsByDriverId.set(r.driverId, typeof ms === "number" ? ms : null);
   }
 
+  const baseFinishMs = (() => {
+    const leaderId = included[0]?.driverId ?? null;
+    const leaderMs = leaderId ? finishMsByDriverId.get(leaderId) ?? null : null;
+    if (typeof leaderMs === "number") return leaderMs;
+    return (
+      Array.from(finishMsByDriverId.values())
+        .filter((x): x is number => typeof x === "number")
+        .sort((a, b) => a - b)[0] ?? null
+    );
+  })();
+
+  const storedTimeTextByDriverId = new Map<string, string | null>();
+  for (let i = 0; i < included.length; i++) {
+    const r = included[i];
+    const tt = (r.timeText ?? "").trim();
+    const status = (r.status ?? "").trim().toUpperCase();
+    const isBad = (v: string) => ["DNF", "DSQ", "DNS", "RET"].includes(v.trim().toUpperCase());
+    if (status && isBad(status)) {
+      storedTimeTextByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt && isBad(tt)) {
+      storedTimeTextByDriverId.set(r.driverId, null);
+      continue;
+    }
+    if (tt.startsWith("+")) {
+      storedTimeTextByDriverId.set(r.driverId, tt);
+      continue;
+    }
+    const ms = finishMsByDriverId.get(r.driverId) ?? null;
+    if (typeof ms === "number" && typeof baseFinishMs === "number") {
+      if (i === 0) {
+        storedTimeTextByDriverId.set(r.driverId, tt || null);
+        continue;
+      }
+      const diff = ms - baseFinishMs;
+      storedTimeTextByDriverId.set(r.driverId, diff > 0 ? formatGapMs(diff) : null);
+      continue;
+    }
+    storedTimeTextByDriverId.set(r.driverId, tt || null);
+  }
+
   const draft = rows
     .filter((r) => !r.driverId)
     .sort((a, b) => a.position - b.position)
@@ -776,7 +860,7 @@ async function importResultsFromCsv(
           grid: r.grid,
           stops: r.stops,
           bestTime: r.bestTime,
-          timeText: r.timeText,
+          timeText: storedTimeTextByDriverId.get(r.driverId) ?? r.timeText,
           status: r.status,
           penaltySeconds: current ? current.penaltySeconds : 0,
           finishTimeMs,
