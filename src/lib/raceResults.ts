@@ -10,20 +10,24 @@ function pad3(n: number) {
 
 export function parseRaceTimeMs(s: string | null | undefined) {
   const raw = (s ?? "").trim();
-  const h = raw.match(/^(\d+):(\d{2}):(\d{2})\.(\d{3})$/);
+  const h = raw.match(/^(\d+):(\d{1,2}):(\d{1,2})\.(\d{1,3})$/);
   if (h) {
     const hours = Number(h[1]);
     const min = Number(h[2]);
     const sec = Number(h[3]);
-    const ms = Number(h[4]);
+    const msRaw = String(h[4]);
+    const ms =
+      msRaw.length === 1 ? Number(msRaw) * 100 : msRaw.length === 2 ? Number(msRaw) * 10 : Number(msRaw);
     if (!Number.isFinite(hours) || !Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
     return ((hours * 3600 + min * 60 + sec) * 1000) + ms;
   }
-  const m = raw.match(/^(\d+):(\d{2})\.(\d{3})$/);
+  const m = raw.match(/^(\d+):(\d{1,2})\.(\d{1,3})$/);
   if (!m) return null;
   const min = Number(m[1]);
   const sec = Number(m[2]);
-  const ms = Number(m[3]);
+  const msRaw = String(m[3]);
+  const ms =
+    msRaw.length === 1 ? Number(msRaw) * 100 : msRaw.length === 2 ? Number(msRaw) * 10 : Number(msRaw);
   if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
   return (min * 60 + sec) * 1000 + ms;
 }
@@ -32,27 +36,33 @@ export function parseGapMs(s: string | null | undefined) {
   const raw = (s ?? "").trim();
   if (!raw.startsWith("+")) return null;
   const t = raw.slice(1);
-  const m1 = t.match(/^(\d+)\.(\d{3})$/);
+  const m1 = t.match(/^(\d+)\.(\d{1,3})$/);
   if (m1) {
     const sec = Number(m1[1]);
-    const ms = Number(m1[2]);
+    const msRaw = String(m1[2]);
+    const ms =
+      msRaw.length === 1 ? Number(msRaw) * 100 : msRaw.length === 2 ? Number(msRaw) * 10 : Number(msRaw);
     if (!Number.isFinite(sec) || !Number.isFinite(ms)) return null;
     return sec * 1000 + ms;
   }
-  const h = t.match(/^(\d+):(\d{2}):(\d{2})\.(\d{3})$/);
+  const h = t.match(/^(\d+):(\d{1,2}):(\d{1,2})\.(\d{1,3})$/);
   if (h) {
     const hours = Number(h[1]);
     const min = Number(h[2]);
     const sec = Number(h[3]);
-    const ms = Number(h[4]);
+    const msRaw = String(h[4]);
+    const ms =
+      msRaw.length === 1 ? Number(msRaw) * 100 : msRaw.length === 2 ? Number(msRaw) * 10 : Number(msRaw);
     if (!Number.isFinite(hours) || !Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
     return ((hours * 3600 + min * 60 + sec) * 1000) + ms;
   }
-  const m2 = t.match(/^(\d+):(\d{2})\.(\d{3})$/);
+  const m2 = t.match(/^(\d+):(\d{1,2})\.(\d{1,3})$/);
   if (!m2) return null;
   const min = Number(m2[1]);
   const sec = Number(m2[2]);
-  const ms = Number(m2[3]);
+  const msRaw = String(m2[3]);
+  const ms =
+    msRaw.length === 1 ? Number(msRaw) * 100 : msRaw.length === 2 ? Number(msRaw) * 10 : Number(msRaw);
   if (!Number.isFinite(min) || !Number.isFinite(sec) || !Number.isFinite(ms)) return null;
   return (min * 60 + sec) * 1000 + ms;
 }
