@@ -63,7 +63,7 @@ export function TvBroadcastWithTimingClient({
         showTiming ? "lg:grid-cols-[minmax(0,1fr)_520px] lg:items-start" : ""
       ].join(" ")}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 lg:sticky lg:top-24">
         {channel ? (
           <TwitchEmbed channel={channel} startsAtMs={startsAtMs} />
         ) : (

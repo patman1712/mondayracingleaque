@@ -280,13 +280,15 @@ export default async function LeagueTvPage({
             </div>
 
             <div className="min-w-0">
-              {race.twitchChannel ? (
-                <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact />
-              ) : (
-                <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
-                  Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
-                </div>
-              )}
+              <div className="xl:sticky xl:top-24">
+                {race.twitchChannel ? (
+                  <TwitchEmbed channel={race.twitchChannel} startsAtMs={startsAtMs} compact />
+                ) : (
+                  <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/70">
+                    Für dieses Rennen ist kein Twitch-Broadcast hinterlegt.
+                  </div>
+                )}
+              </div>
 
               <div className="mt-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
