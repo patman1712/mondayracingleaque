@@ -101,7 +101,14 @@ async function seasonTotalsForDriver(driverId: string) {
       .catch(() => [])
   ]);
 
-  return rows.reduce(
+  return rows.reduce<{
+    starts: number;
+    wins: number;
+    podiums: number;
+    driverOfDay: number;
+    driverTitles: number;
+    constructorTitles: number;
+  }>(
     (acc, r) => {
       acc.driverTitles += r.driverTitles;
       acc.constructorTitles += r.constructorTitles;
