@@ -1,5 +1,6 @@
 import { AdminShell } from "@/components/AdminShell";
 import { prisma } from "@/lib/db";
+import { getDriverComputedStats } from "@/lib/driverStats";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { DriverStatus, League } from "@prisma/client";
 import Link from "next/link";
@@ -81,32 +82,39 @@ async function writeUpload(fileName: string, file: File) {
 }
 
 async function seasonTotalsForDriver(driverId: string) {
-  const rows = await prisma.driverSeason
-    .findMany({
-      where: { driverId },
-      select: {
-        starts: true,
-        wins: true,
-        podiums: true,
-        driverOfDay: true,
-        driverTitles: true,
-        constructorTitles: true
-      },
-      take: 5000
-    })
-    .catch(() => []);
+  const [raceStats, rows] = await Promise.all([
+    getDriverComputedStats(prisma, driverId).catch(() => ({
+      starts: 0,
+      wins: 0,
+      podiums: 0,
+      driverOfDay: 0
+    })),
+    prisma.driverSeason
+      .findMany({
+        where: { driverId },
+        select: {
+          driverTitles: true,
+          constructorTitles: true
+        },
+        take: 5000
+      })
+      .catch(() => [])
+  ]);
 
   return rows.reduce(
     (acc, r) => {
-      acc.starts += r.starts;
-      acc.wins += r.wins;
-      acc.podiums += r.podiums;
-      acc.driverOfDay += r.driverOfDay;
       acc.driverTitles += r.driverTitles;
       acc.constructorTitles += r.constructorTitles;
       return acc;
     },
-    { starts: 0, wins: 0, podiums: 0, driverOfDay: 0, driverTitles: 0, constructorTitles: 0 }
+    {
+      starts: raceStats.starts,
+      wins: raceStats.wins,
+      podiums: raceStats.podiums,
+      driverOfDay: raceStats.driverOfDay,
+      driverTitles: 0,
+      constructorTitles: 0
+    }
   );
 }
 
@@ -149,12 +157,12 @@ export default async function AdminSettingsDriverEditPage({
   const portraitUrl = imageUrl(driver.portraitPath);
   const seasonTotals = await seasonTotalsForDriver(driverId);
   const totalComputed = {
-    starts: Math.max(0, seasonTotals.starts + (driver.starts ?? 0)),
-    wins: Math.max(0, seasonTotals.wins + (driver.wins ?? 0)),
-    podiums: Math.max(0, seasonTotals.podiums + (driver.podiums ?? 0)),
-    driverOfDay: Math.max(0, seasonTotals.driverOfDay + (driver.driverOfDay ?? 0)),
-    driverTitles: Math.max(0, seasonTotals.driverTitles + (driver.driverTitles ?? 0)),
-    constructorTitles: Math.max(0, seasonTotals.constructorTitles + (driver.constructorTitles ?? 0))
+    starts: seasonTotals.starts + Math.max(0, driver.starts ?? 0),
+    wins: seasonTotals.wins + Math.max(0, driver.wins ?? 0),
+    podiums: seasonTotals.podiums + Math.max(0, driver.podiums ?? 0),
+    driverOfDay: seasonTotals.driverOfDay + Math.max(0, driver.driverOfDay ?? 0),
+    driverTitles: seasonTotals.driverTitles + Math.max(0, driver.driverTitles ?? 0),
+    constructorTitles: seasonTotals.constructorTitles + Math.max(0, driver.constructorTitles ?? 0)
   };
 
   async function updateDriver(formData: FormData) {
@@ -189,13 +197,20 @@ export default async function AdminSettingsDriverEditPage({
     const constructorTitles = constructorTitlesRaw ? Number(constructorTitlesRaw) : 0;
 
     const seasonTotals = await seasonTotalsForDriver(driverId);
-    const manualStarts = Math.trunc((Number.isFinite(starts) ? starts : 0) - seasonTotals.starts);
-    const manualWins = Math.trunc((Number.isFinite(wins) ? wins : 0) - seasonTotals.wins);
-    const manualPodiums = Math.trunc((Number.isFinite(podiums) ? podiums : 0) - seasonTotals.podiums);
-    const manualDriverOfDay = Math.trunc((Number.isFinite(driverOfDay) ? driverOfDay : 0) - seasonTotals.driverOfDay);
-    const manualDriverTitles = Math.trunc((Number.isFinite(driverTitles) ? driverTitles : 0) - seasonTotals.driverTitles);
-    const manualConstructorTitles = Math.trunc(
-      (Number.isFinite(constructorTitles) ? constructorTitles : 0) - seasonTotals.constructorTitles
+    const manualStarts = Math.max(0, Math.trunc((Number.isFinite(starts) ? starts : 0) - seasonTotals.starts));
+    const manualWins = Math.max(0, Math.trunc((Number.isFinite(wins) ? wins : 0) - seasonTotals.wins));
+    const manualPodiums = Math.max(0, Math.trunc((Number.isFinite(podiums) ? podiums : 0) - seasonTotals.podiums));
+    const manualDriverOfDay = Math.max(
+      0,
+      Math.trunc((Number.isFinite(driverOfDay) ? driverOfDay : 0) - seasonTotals.driverOfDay)
+    );
+    const manualDriverTitles = Math.max(
+      0,
+      Math.trunc((Number.isFinite(driverTitles) ? driverTitles : 0) - seasonTotals.driverTitles)
+    );
+    const manualConstructorTitles = Math.max(
+      0,
+      Math.trunc((Number.isFinite(constructorTitles) ? constructorTitles : 0) - seasonTotals.constructorTitles)
     );
 
     const currentPortrait = await prisma.driver
@@ -450,7 +465,7 @@ export default async function AdminSettingsDriverEditPage({
             <div className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 p-4">
               <div className="text-sm font-semibold text-white/85">Gesamtstatistik</div>
               <div className="mt-1 text-xs text-white/60">
-                Gesamtwerte (Saison + Manuell).
+                Automatische Werte aus Ergebnissen plus manuelle Zusatzwerte. Unter den automatisch berechneten Wert kann nicht gespeichert werden.
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div>

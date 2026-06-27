@@ -262,12 +262,12 @@ async function updateTotals(adminLeague: string, league: League, driverId: strin
   const constructorTitlesTotal = asInt(String(formData.get("constructorTitles") ?? "0"), 0);
 
   const seasonTotals = await seasonTotalsForDriver(driverId);
-  const manualStarts = Math.trunc(startsTotal - seasonTotals.starts);
-  const manualWins = Math.trunc(winsTotal - seasonTotals.wins);
-  const manualPodiums = Math.trunc(podiumsTotal - seasonTotals.podiums);
-  const manualDriverOfDay = Math.trunc(driverOfDayTotal - seasonTotals.driverOfDay);
-  const manualDriverTitles = Math.trunc(driverTitlesTotal - seasonTotals.driverTitles);
-  const manualConstructorTitles = Math.trunc(constructorTitlesTotal - seasonTotals.constructorTitles);
+  const manualStarts = Math.max(0, Math.trunc(startsTotal - seasonTotals.starts));
+  const manualWins = Math.max(0, Math.trunc(winsTotal - seasonTotals.wins));
+  const manualPodiums = Math.max(0, Math.trunc(podiumsTotal - seasonTotals.podiums));
+  const manualDriverOfDay = Math.max(0, Math.trunc(driverOfDayTotal - seasonTotals.driverOfDay));
+  const manualDriverTitles = Math.max(0, Math.trunc(driverTitlesTotal - seasonTotals.driverTitles));
+  const manualConstructorTitles = Math.max(0, Math.trunc(constructorTitlesTotal - seasonTotals.constructorTitles));
 
   await prisma.driver
     .update({
@@ -528,12 +528,12 @@ export default async function AdminDriverDetailPage({
 
   const seasonTotals = await seasonTotalsForDriver(driverId);
   const totalComputed = {
-    starts: Math.max(0, seasonTotals.starts + (driver.starts ?? 0)),
-    wins: Math.max(0, seasonTotals.wins + (driver.wins ?? 0)),
-    podiums: Math.max(0, seasonTotals.podiums + (driver.podiums ?? 0)),
-    driverOfDay: Math.max(0, seasonTotals.driverOfDay + (driver.driverOfDay ?? 0)),
-    driverTitles: Math.max(0, seasonTotals.driverTitles + (driver.driverTitles ?? 0)),
-    constructorTitles: Math.max(0, seasonTotals.constructorTitles + (driver.constructorTitles ?? 0))
+    starts: seasonTotals.starts + Math.max(0, driver.starts ?? 0),
+    wins: seasonTotals.wins + Math.max(0, driver.wins ?? 0),
+    podiums: seasonTotals.podiums + Math.max(0, driver.podiums ?? 0),
+    driverOfDay: seasonTotals.driverOfDay + Math.max(0, driver.driverOfDay ?? 0),
+    driverTitles: seasonTotals.driverTitles + Math.max(0, driver.driverTitles ?? 0),
+    constructorTitles: seasonTotals.constructorTitles + Math.max(0, driver.constructorTitles ?? 0)
   };
 
   return (
@@ -649,7 +649,7 @@ export default async function AdminDriverDetailPage({
                 Gesamt-Stats
               </summary>
               <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
-                Gesamt = Summe aller Saison-Stats + Manuell
+                Gesamt = automatische Ergebniswerte + manuelle Zusatzwerte. Unter den automatisch berechneten Wert kann nicht gespeichert werden.
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="rounded-lg bg-white/5 px-3 py-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Rennstarts</div>

@@ -219,12 +219,12 @@ export default async function DriverDetailPage({
   );
 
   const totals = {
-    starts: Math.max(0, totalRaceStats.starts + (driver.starts ?? 0)),
-    wins: Math.max(0, totalRaceStats.wins + (driver.wins ?? 0)),
-    podiums: Math.max(0, totalRaceStats.podiums + (driver.podiums ?? 0)),
-    driverOfDay: Math.max(0, totalRaceStats.driverOfDay + (driver.driverOfDay ?? 0)),
-    driverTitles: Math.max(0, sum.driverTitles + (driver.driverTitles ?? 0)),
-    constructorTitles: Math.max(0, sum.constructorTitles + (driver.constructorTitles ?? 0))
+    starts: totalRaceStats.starts + Math.max(0, driver.starts ?? 0),
+    wins: totalRaceStats.wins + Math.max(0, driver.wins ?? 0),
+    podiums: totalRaceStats.podiums + Math.max(0, driver.podiums ?? 0),
+    driverOfDay: totalRaceStats.driverOfDay + Math.max(0, driver.driverOfDay ?? 0),
+    driverTitles: sum.driverTitles + Math.max(0, driver.driverTitles ?? 0),
+    constructorTitles: sum.constructorTitles + Math.max(0, driver.constructorTitles ?? 0)
   };
 
   const seasonTeam = currentSeason
