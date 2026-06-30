@@ -942,11 +942,13 @@ export default async function AdminRaceResultsPage({
         season: true,
         seasonNo: true,
         seasonIsTest: true,
+        isSprint: true,
         round: true,
         name: true,
         circuit: true,
         location: true,
         startsAt: true,
+        circuitId: true,
         twitchChannel: true,
         driverOfDayDriverId: true,
         resultsCsvDraftJson: true,
@@ -956,6 +958,48 @@ export default async function AdminRaceResultsPage({
     .catch(() => null);
 
   if (!race || race.league !== l) notFound();
+
+  const siblingRace = await prisma.race
+    .findFirst({
+      where: {
+        league: l,
+        season: race.season,
+        seasonNo: race.seasonNo,
+        seasonIsTest: race.seasonIsTest,
+        round: race.round,
+        isSprint: !race.isSprint
+      },
+      select: { id: true, isSprint: true, name: true }
+    })
+    .catch(() => null);
+
+  const seasonKey = `${race.season}-${race.seasonNo}-${race.seasonIsTest ? "1" : "0"}`;
+  const createMainHref = (() => {
+    const q = new URLSearchParams();
+    q.set("seasonKey", seasonKey);
+    q.set("season", String(race.season));
+    q.set("seasonNo", String(race.seasonNo));
+    q.set("round", String(race.round));
+    if (race.circuitId) q.set("circuitId", race.circuitId);
+    if (!race.circuitId && race.circuit) q.set("circuit", race.circuit);
+    if (race.location) q.set("location", race.location);
+    return `/admin/${league}/races?${q.toString()}`;
+  })();
+  const createSprintHref = (() => {
+    const q = new URLSearchParams();
+    q.set("seasonKey", seasonKey);
+    q.set("season", String(race.season));
+    q.set("seasonNo", String(race.seasonNo));
+    q.set("round", String(race.round));
+    q.set("isSprint", "1");
+    if (race.circuitId) q.set("circuitId", race.circuitId);
+    if (!race.circuitId && race.circuit) q.set("circuit", race.circuit);
+    if (race.location) q.set("location", race.location);
+    return `/admin/${league}/races?${q.toString()}`;
+  })();
+
+  const mainRaceId = race.isSprint ? (siblingRace?.id ?? null) : race.id;
+  const sprintRaceId = race.isSprint ? race.id : (siblingRace?.id ?? null);
 
   type DriverItem = {
     id: string;
@@ -1111,7 +1155,9 @@ export default async function AdminRaceResultsPage({
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-base font-semibold">Ergebnis · {race.name}</div>
+          <div className="text-base font-semibold">
+            Ergebnis · {race.isSprint ? "Sprintrennen" : "Rennen"} · Runde {race.round} · {race.name}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href={`/admin/${league}/results`}
@@ -1130,6 +1176,32 @@ export default async function AdminRaceResultsPage({
         <div className="mt-2 text-sm text-white/70">
           {race.seasonIsTest ? "TEST · " : ""}Saison {race.season} · Season {race.seasonNo} · Runde {race.round} ·{" "}
           {new Date(race.startsAt).toLocaleString("de-DE")}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Link
+            href={mainRaceId ? `/admin/${league}/results/${mainRaceId}` : createMainHref}
+            className={
+              "rounded-lg px-3 py-2 text-xs font-semibold " +
+              (!race.isSprint ? "bg-mrl-red text-white" : "bg-white/10 text-white/80 hover:bg-white/15")
+            }
+          >
+            Rennen
+          </Link>
+          <Link
+            href={sprintRaceId ? `/admin/${league}/results/${sprintRaceId}` : createSprintHref}
+            className={
+              "rounded-lg px-3 py-2 text-xs font-semibold " +
+              (race.isSprint ? "bg-mrl-red text-white" : "bg-white/10 text-white/80 hover:bg-white/15")
+            }
+          >
+            Sprint
+          </Link>
+          {!siblingRace ? (
+            <div className="text-xs font-semibold text-white/60">
+              Für diese Runde fehlt noch das {race.isSprint ? "Rennen" : "Sprintrennen"} · über den Button kannst du es schnell im Rennkalender anlegen.
+            </div>
+          ) : null}
         </div>
       </div>
 
