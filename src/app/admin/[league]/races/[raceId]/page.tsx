@@ -87,6 +87,29 @@ function utcDateFromBerlinDateTimeLocalValue(input: string) {
   return new Date(utcGuess.getTime() - offsetMs);
 }
 
+async function findSiblingRace(race: {
+  league: League;
+  season: number;
+  seasonNo: number;
+  seasonIsTest: boolean;
+  round: number;
+  isSprint: boolean;
+}) {
+  return prisma.race
+    .findFirst({
+      where: {
+        league: race.league,
+        season: race.season,
+        seasonNo: race.seasonNo,
+        seasonIsTest: race.seasonIsTest,
+        round: race.round,
+        isSprint: !race.isSprint
+      },
+      select: { id: true }
+    })
+    .catch(() => null);
+}
+
 async function setBroadcast(
   adminLeague: string,
   raceId: string,
@@ -160,9 +183,22 @@ async function updateRaceDetails(
   }
 
   const current = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true } })
+    .findUnique({
+      where: { id: raceId },
+      select: {
+        id: true,
+        league: true,
+        season: true,
+        seasonNo: true,
+        seasonIsTest: true,
+        round: true,
+        isSprint: true
+      }
+    })
     .catch(() => null);
   if (!current || current.league !== league) notFound();
+
+  const sibling = await findSiblingRace(current);
 
   await prisma.race
     .update({
@@ -176,6 +212,20 @@ async function updateRaceDetails(
       }
     })
     .catch(() => null);
+
+  if (sibling) {
+    await prisma.race
+      .update({
+        where: { id: sibling.id },
+        data: {
+          round: Math.max(1, Math.floor(round)),
+          startsAt,
+          location: location || null,
+          circuit: circuit || null
+        }
+      })
+      .catch(() => null);
+  }
 
   revalidatePath(`/admin/${adminLeague}/races/${raceId}`);
   revalidatePath(`/admin/${adminLeague}/races`);
@@ -215,9 +265,22 @@ async function bulkUpsertRaceEntries(
   }
 
   const race = await prisma.race
-    .findUnique({ where: { id: raceId }, select: { id: true, league: true, season: true, seasonNo: true, seasonIsTest: true } })
+    .findUnique({
+      where: { id: raceId },
+      select: {
+        id: true,
+        league: true,
+        season: true,
+        seasonNo: true,
+        seasonIsTest: true,
+        round: true,
+        isSprint: true
+      }
+    })
     .catch(() => null);
   if (!race || race.league !== league) return;
+
+  const sibling = await findSiblingRace(race);
 
   const season = await prisma.season
     .findUnique({
@@ -275,6 +338,16 @@ async function bulkUpsertRaceEntries(
         update: { participates, teamId: participates ? teamId : null }
       })
       .catch(() => null);
+
+    if (sibling) {
+      await prisma.raceEntry
+        .upsert({
+          where: { raceId_driverId: { raceId: sibling.id, driverId } },
+          create: { raceId: sibling.id, driverId, participates, teamId },
+          update: { participates, teamId: participates ? teamId : null }
+        })
+        .catch(() => null);
+    }
   }
 
   revalidatePath(`/admin/${adminLeague}/races/${raceId}`);

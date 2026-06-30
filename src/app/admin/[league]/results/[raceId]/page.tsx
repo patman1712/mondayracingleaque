@@ -41,6 +41,17 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function buildRaceName(input: {
+  seasonIsTest: boolean;
+  round: number;
+  isSprint: boolean;
+  circuit: string | null;
+}) {
+  const base = input.circuit ? input.circuit : `Runde ${input.round}`;
+  const withSprint = input.isSprint ? `SPRINT · ${base}` : base;
+  return input.seasonIsTest ? `TEST · ${withSprint}` : withSprint;
+}
+
 async function setResultsPublished(
   adminLeague: string,
   league: League,
@@ -933,33 +944,35 @@ export default async function AdminRaceResultsPage({
     publicSlug: cfg.publicSlug
   });
 
+  const raceSelect = {
+    id: true,
+    league: true,
+    season: true,
+    seasonNo: true,
+    seasonIsTest: true,
+    isSprint: true,
+    round: true,
+    name: true,
+    circuit: true,
+    location: true,
+    startsAt: true,
+    circuitId: true,
+    twitchChannel: true,
+    driverOfDayDriverId: true,
+    resultsCsvDraftJson: true,
+    resultsPublishedAt: true
+  } as const;
+
   const race = await prisma.race
     .findUnique({
       where: { id: raceId },
-      select: {
-        id: true,
-        league: true,
-        season: true,
-        seasonNo: true,
-        seasonIsTest: true,
-        isSprint: true,
-        round: true,
-        name: true,
-        circuit: true,
-        location: true,
-        startsAt: true,
-        circuitId: true,
-        twitchChannel: true,
-        driverOfDayDriverId: true,
-        resultsCsvDraftJson: true,
-        resultsPublishedAt: true,
-      }
+      select: raceSelect
     })
     .catch(() => null);
 
   if (!race || race.league !== l) notFound();
 
-  const siblingRace = await prisma.race
+  let siblingRace = await prisma.race
     .findFirst({
       where: {
         league: l,
@@ -969,9 +982,67 @@ export default async function AdminRaceResultsPage({
         round: race.round,
         isSprint: !race.isSprint
       },
-      select: { id: true, isSprint: true, name: true }
+      select: raceSelect
     })
     .catch(() => null);
+
+  if (race.isSprint && !siblingRace) {
+    siblingRace = await prisma.race
+      .create({
+        data: {
+          league: l,
+          season: race.season,
+          seasonNo: race.seasonNo,
+          seasonIsTest: race.seasonIsTest,
+          round: race.round,
+          isSprint: false,
+          name: buildRaceName({
+            seasonIsTest: race.seasonIsTest,
+            round: race.round,
+            isSprint: false,
+            circuit: race.circuit
+          }),
+          circuitId: race.circuitId,
+          circuit: race.circuit,
+          location: race.location,
+          startsAt: race.startsAt,
+          twitchChannel: race.twitchChannel
+        },
+        select: raceSelect
+      })
+      .catch(() => null);
+
+    if (siblingRace) {
+      const siblingRaceId = siblingRace.id;
+      const currentEntries = await prisma.raceEntry
+        .findMany({
+          where: { raceId: race.id },
+          select: { driverId: true, participates: true, teamId: true },
+          take: 5000
+        })
+        .catch(() => []);
+
+      if (currentEntries.length > 0) {
+        await prisma.$transaction(
+          currentEntries.map((entry) =>
+            prisma.raceEntry.upsert({
+              where: { raceId_driverId: { raceId: siblingRaceId, driverId: entry.driverId } },
+              create: {
+                raceId: siblingRaceId,
+                driverId: entry.driverId,
+                participates: entry.participates,
+                teamId: entry.teamId
+              },
+              update: {
+                participates: entry.participates,
+                teamId: entry.teamId
+              }
+            })
+          )
+        );
+      }
+    }
+  }
 
   const seasonKey = `${race.season}-${race.seasonNo}-${race.seasonIsTest ? "1" : "0"}`;
   const createMainHref = (() => {
@@ -1000,6 +1071,26 @@ export default async function AdminRaceResultsPage({
 
   const mainRaceId = race.isSprint ? (siblingRace?.id ?? null) : race.id;
   const sprintRaceId = race.isSprint ? race.id : (siblingRace?.id ?? null);
+  const weekendRaceId = race.isSprint ? race.id : (siblingRace?.id ?? race.id);
+
+  type RacePageRace = {
+    id: string;
+    league: League;
+    season: number;
+    seasonNo: number;
+    seasonIsTest: boolean;
+    isSprint: boolean;
+    round: number;
+    name: string;
+    circuit: string | null;
+    location: string | null;
+    startsAt: Date;
+    circuitId: string | null;
+    twitchChannel: string | null;
+    driverOfDayDriverId: string | null;
+    resultsCsvDraftJson: string | null;
+    resultsPublishedAt: Date | null;
+  };
 
   type DriverItem = {
     id: string;
@@ -1025,15 +1116,34 @@ export default async function AdminRaceResultsPage({
     fastestLap: boolean;
     driver: { name: string };
   };
-
-  let drivers: DriverItem[] = [];
-  let results: ResultItem[] = [];
-  let entries: Array<{
+  type EntryItem = {
     driverId: string;
     participates: boolean;
     teamId: string | null;
     team: { id: string; name: string; color: string | null } | null;
-  }> = [];
+  };
+  type PosterRow = {
+    position: number;
+    driverId: string;
+    driverName: string;
+    portraitUrl: string | null;
+    accent: string | null;
+    points: number;
+    timeText: string | null;
+    penaltySeconds: number;
+    status: string | null;
+    bestTime: string | null;
+    fastestLap: boolean;
+  };
+  type EditorSection = {
+    race: RacePageRace;
+    results: ResultItem[];
+    bulkDrivers: Array<{ driverId: string; name: string; teamName: string | null }>;
+    posterRows: PosterRow[];
+    participatingDrivers: Array<{ id: string; name: string; gamertag: string | null }>;
+  };
+
+  let drivers: DriverItem[] = [];
 
   const season = await prisma.season
     .findUnique({
@@ -1079,65 +1189,265 @@ export default async function AdminRaceResultsPage({
     }));
   } catch {}
 
-  try {
-    results = await prisma.raceResult.findMany({
-      where: { raceId },
-      orderBy: [{ position: "asc" }],
-      select: {
-        id: true,
-        driverId: true,
-        position: true,
-        points: true,
-        grid: true,
-        stops: true,
-        bestTime: true,
-        timeText: true,
-        finishTimeMs: true,
-        penaltySeconds: true,
-        status: true,
-        fastestLap: true,
-        driver: { select: { name: true } }
-      }
-    });
-  } catch {}
+  const editorRaces = [race, siblingRace]
+    .filter((v): v is RacePageRace => Boolean(v))
+    .sort((a, b) => Number(b.isSprint) - Number(a.isSprint));
 
-  entries = await prisma.raceEntry
-    .findMany({
-      where: { raceId },
-      select: { driverId: true, participates: true, teamId: true, team: { select: { id: true, name: true, color: true } } },
-      take: 5000
+  const editorSections: EditorSection[] = await Promise.all(
+    editorRaces.map(async (targetRace) => {
+      const [results, entries] = await Promise.all([
+        prisma.raceResult
+          .findMany({
+            where: { raceId: targetRace.id },
+            orderBy: [{ position: "asc" }],
+            select: {
+              id: true,
+              driverId: true,
+              position: true,
+              points: true,
+              grid: true,
+              stops: true,
+              bestTime: true,
+              timeText: true,
+              finishTimeMs: true,
+              penaltySeconds: true,
+              status: true,
+              fastestLap: true,
+              driver: { select: { name: true } }
+            }
+          })
+          .catch((): ResultItem[] => []),
+        prisma.raceEntry
+          .findMany({
+            where: { raceId: targetRace.id },
+            select: { driverId: true, participates: true, teamId: true, team: { select: { id: true, name: true, color: true } } },
+            take: 5000
+          })
+          .catch((): EntryItem[] => [])
+      ]);
+
+      const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
+      const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
+      const participatingDrivers = drivers.filter((d) => participatingDriverIds.has(d.id));
+      const driverById = new Map(participatingDrivers.map((d) => [d.id, d] as const));
+
+      const bulkDrivers = participatingDrivers.map((d) => {
+        const entry = entryByDriverId.get(d.id) ?? null;
+        const teamName = entry?.team?.name ?? (d.role === "MAIN" ? d.teamName : null);
+        return { driverId: d.id, name: d.name, teamName };
+      });
+
+      const posterRows = results.map((r) => {
+        const d = driverById.get(r.driverId) ?? null;
+        const entry = entryByDriverId.get(r.driverId) ?? null;
+        const accent = entry?.team?.color ?? d?.teamColor ?? null;
+        return {
+          position: r.position,
+          driverId: r.driverId,
+          driverName: r.driver.name,
+          portraitUrl: d?.portraitUrl ?? null,
+          accent,
+          points: r.points,
+          timeText: r.timeText,
+          penaltySeconds: r.penaltySeconds,
+          status: r.status,
+          bestTime: r.bestTime,
+          fastestLap: r.fastestLap
+        };
+      });
+
+      return {
+        race: targetRace,
+        results,
+        bulkDrivers,
+        posterRows,
+        participatingDrivers: participatingDrivers.map((d) => ({ id: d.id, name: d.name, gamertag: d.gamertag }))
+      };
     })
-    .catch(() => []);
+  );
 
-  const entryByDriverId = new Map(entries.map((e) => [e.driverId, e] as const));
-  const participatingDriverIds = new Set(entries.filter((e) => e.participates).map((e) => e.driverId));
-  const participatingDrivers = drivers.filter((d) => participatingDriverIds.has(d.id));
-  const driverById = new Map(participatingDrivers.map((d) => [d.id, d] as const));
+  function renderEditorSection(section: EditorSection) {
+    const sectionRaceId = section.race.id;
+    const sectionLabel = section.race.isSprint ? "Sprint" : "Rennen";
+    const sectionTitle = section.race.isSprint ? "Sprint-Ergebnis" : "Rennergebnis";
+    const sectionSubtitle = `Saison ${section.race.season} · Runde ${section.race.round} · ${section.race.name}`;
 
-  const bulkDrivers = participatingDrivers.map((d) => {
-    const entry = entryByDriverId.get(d.id) ?? null;
-    const teamName = entry?.team?.name ?? (d.role === "MAIN" ? d.teamName : null);
-    return { driverId: d.id, name: d.name, teamName };
-  });
+    return (
+      <div key={sectionRaceId} className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="text-base font-semibold">{sectionTitle}</div>
+          <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold text-white/70">
+            {sectionLabel}
+          </div>
+        </div>
+        <div className="text-sm text-white/70">
+          {sectionSubtitle} · {new Date(section.race.startsAt).toLocaleString("de-DE")}
+        </div>
 
-  const posterRows = results.map((r) => {
-    const d = driverById.get(r.driverId) ?? null;
-    const entry = entryByDriverId.get(r.driverId) ?? null;
-    const accent = entry?.team?.color ?? d?.teamColor ?? null;
-    return {
-      position: r.position,
-      driverId: r.driverId,
-      driverName: r.driver.name,
-      portraitUrl: d?.portraitUrl ?? null,
-      accent,
-      points: r.points,
-      timeText: r.timeText,
-      penaltySeconds: r.penaltySeconds,
-      status: r.status,
-      bestTime: r.bestTime,
-      fastestLap: r.fastestLap
-    };
-  });
+        <details className="rounded-2xl border border-white/10 bg-black/20">
+          <summary className="cursor-pointer list-none px-6 py-5 text-base font-semibold text-white">
+            Automatisch auslesen (CSV)
+            <div className="mt-2 text-sm font-normal text-white/70">
+              CSV einlesen, Fahrer automatisch zuordnen und importieren.
+            </div>
+          </summary>
+
+          <div className="px-6 pb-6">
+            {error && ["invalid"].includes(error) ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
+                Ungültige Datei oder Daten.
+              </div>
+            ) : null}
+
+            <div className="mt-4">
+              <RaceResultsCsvImportClient
+                drivers={section.participatingDrivers.map((d) => ({ id: d.id, name: d.name, gamertag: d.gamertag }))}
+                existingDraftJson={section.race.resultsCsvDraftJson ?? null}
+                liveTimingLeagueKey={liveTimingLeagueKey}
+                action={importResultsFromCsv.bind(null, league, l, sectionRaceId)}
+              />
+            </div>
+          </div>
+        </details>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
+            <div className="text-sm text-white/80">
+              Status:{" "}
+              {section.race.resultsPublishedAt ? (
+                <span className="font-semibold text-white">Veröffentlicht</span>
+              ) : (
+                <span className="font-semibold text-white/80">Nur Admin</span>
+              )}
+            </div>
+            <form action={setResultsPublished.bind(null, league, l, sectionRaceId)}>
+              <input type="hidden" name="publish" value={section.race.resultsPublishedAt ? "0" : "1"} />
+              <FormSubmitButton
+                className={
+                  "w-fit rounded-lg px-4 py-2 text-sm font-semibold " +
+                  (section.race.resultsPublishedAt ? "bg-white/10 text-white hover:bg-white/15" : "bg-mrl-red text-white")
+                }
+                pendingText="Speichern…"
+              >
+                {section.race.resultsPublishedAt ? "Veröffentlichung zurücknehmen" : "Ergebnis veröffentlichen"}
+              </FormSubmitButton>
+            </form>
+          </div>
+
+          {(section.results.length > 0 || section.race.resultsCsvDraftJson) ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+              <div className="text-sm text-white/80">
+                Ergebnis komplett entfernen, damit du es danach sauber neu importieren oder manuell neu anlegen kannst.
+              </div>
+              <form action={clearRaceResults.bind(null, league, l, sectionRaceId)}>
+                <FormSubmitButton
+                  className="w-fit rounded-lg border border-red-500/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/20"
+                  pendingText="Lösche…"
+                >
+                  Ergebnis löschen
+                </FormSubmitButton>
+              </form>
+            </div>
+          ) : null}
+
+          {section.results.length > 0 ? (
+            <div className="mt-4">
+              <RaceResultsPosterExportClient
+                raceId={sectionRaceId}
+                title={sectionTitle}
+                subtitle={sectionSubtitle}
+                rows={section.posterRows}
+                saveEnabled
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-6">
+            {section.bulkDrivers.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
+                Bitte zuerst im Fahrerfeld die Fahrer auf „Nimmt teil“ setzen, dann kannst du hier alle Ergebnisse in einem Schritt eintragen.
+              </div>
+            ) : (
+              <RaceResultsBulkEditorClient
+                drivers={section.bulkDrivers}
+                existingResults={section.results.map((r) => ({
+                  driverId: r.driverId,
+                  position: r.position,
+                  bestTime: r.bestTime,
+                  timeText: r.timeText,
+                  finishTimeMs: r.finishTimeMs,
+                  penaltySeconds: r.penaltySeconds,
+                  status: r.status,
+                  fastestLap: r.fastestLap
+                }))}
+                action={bulkUpsertResults.bind(null, league, l, sectionRaceId)}
+              />
+            )}
+          </div>
+
+          {section.results.length > 0 ? (
+            <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
+              <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
+                Fahrer des Tages
+                <div className="mt-1 text-xs font-normal text-white/70">
+                  Wird zur Fahrer-Statistik addiert (Saison + Gesamt), sobald Ergebnisse veröffentlicht sind.
+                </div>
+              </summary>
+              <div className="px-4 pb-4">
+                <form
+                  action={setDriverOfDay.bind(null, league, l, sectionRaceId)}
+                  className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]"
+                >
+                  <select
+                    name="driverOfDayDriverId"
+                    defaultValue={section.race.driverOfDayDriverId ?? ""}
+                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                  >
+                    <option value="">(Kein Fahrer des Tages)</option>
+                    {section.results
+                      .slice()
+                      .sort((a, b) => a.position - b.position)
+                      .map((r) => (
+                        <option key={r.driverId} value={r.driverId}>
+                          P{r.position} · {r.driver.name}
+                        </option>
+                      ))}
+                  </select>
+                  <FormSubmitButton
+                    className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                    pendingText="Speichern…"
+                  >
+                    Speichern
+                  </FormSubmitButton>
+                </form>
+              </div>
+            </details>
+          ) : null}
+
+          {section.results.length > 0 ? (
+            <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
+              <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
+                Stewards (Strafen)
+                <div className="mt-1 text-xs font-normal text-white/70">
+                  Sekunden-Strafen werden zur Endzeit addiert und das Ergebnis wird automatisch neu sortiert.
+                </div>
+              </summary>
+              <div className="px-4 pb-4">
+                <RaceResultsPenaltiesEditorClient
+                  results={section.results.map((r) => ({
+                    driverId: r.driverId,
+                    driverName: r.driver.name,
+                    penaltySeconds: r.penaltySeconds
+                  }))}
+                  action={applyPenalties.bind(null, league, l, sectionRaceId)}
+                />
+              </div>
+            </details>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AdminShell>
@@ -1205,182 +1515,14 @@ export default async function AdminRaceResultsPage({
         </div>
       </div>
 
-      <details className="rounded-2xl border border-white/10 bg-white/5">
-        <summary className="cursor-pointer list-none px-6 py-5 text-base font-semibold text-white">
-          Automatisch auslesen (CSV)
-          <div className="mt-2 text-sm font-normal text-white/70">
-            CSV einlesen, Fahrer automatisch zuordnen und importieren.
-          </div>
-        </summary>
-
-        <div className="px-6 pb-6">
-
-        {error && ["invalid"].includes(error) ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
-            Ungültige Datei oder Daten.
-          </div>
-        ) : null}
-
-        <div className="mt-4">
-          <RaceResultsCsvImportClient
-            drivers={participatingDrivers.map((d) => ({ id: d.id, name: d.name, gamertag: d.gamertag }))}
-            existingDraftJson={race.resultsCsvDraftJson ?? null}
-            liveTimingLeagueKey={liveTimingLeagueKey}
-            action={importResultsFromCsv.bind(null, league, l, raceId)}
-          />
-        </div>
-        </div>
-      </details>
-
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
         Fahrerfeld pflegst du jetzt im Rennkalender:
-        <Link href={`/admin/${league}/races/${raceId}#driver-field`} className="ml-2 font-semibold text-white hover:underline">
+        <Link href={`/admin/${league}/races/${weekendRaceId}#driver-field`} className="ml-2 font-semibold text-white hover:underline">
           Fahrerfeld öffnen
         </Link>
       </div>
-
-      <div id="manual-results" className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-base font-semibold">Rennergebnis (Manuell)</div>
-        </div>
-        <div className="mt-2 text-sm text-white/70">
-          Saison {race.season} · Runde {race.round} · {race.name} ·{" "}
-          {new Date(race.startsAt).toLocaleString("de-DE")}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
-          <div className="text-sm text-white/80">
-            Status:{" "}
-            {race.resultsPublishedAt ? (
-              <span className="font-semibold text-white">Veröffentlicht</span>
-            ) : (
-              <span className="font-semibold text-white/80">Nur Admin</span>
-            )}
-          </div>
-          <form action={setResultsPublished.bind(null, league, l, raceId)}>
-            <input type="hidden" name="publish" value={race.resultsPublishedAt ? "0" : "1"} />
-            <FormSubmitButton
-              className={
-                "w-fit rounded-lg px-4 py-2 text-sm font-semibold " +
-                (race.resultsPublishedAt ? "bg-white/10 text-white hover:bg-white/15" : "bg-mrl-red text-white")
-              }
-              pendingText="Speichern…"
-            >
-              {race.resultsPublishedAt ? "Veröffentlichung zurücknehmen" : "Ergebnis veröffentlichen"}
-            </FormSubmitButton>
-          </form>
-        </div>
-
-        {(results.length > 0 || race.resultsCsvDraftJson) ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-            <div className="text-sm text-white/80">
-              Ergebnis komplett entfernen, damit du es danach sauber neu importieren oder manuell neu anlegen kannst.
-            </div>
-            <form action={clearRaceResults.bind(null, league, l, raceId)}>
-              <FormSubmitButton
-                className="w-fit rounded-lg border border-red-500/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/20"
-                pendingText="Lösche…"
-              >
-                Ergebnis löschen
-              </FormSubmitButton>
-            </form>
-          </div>
-        ) : null}
-
-        {results.length > 0 ? (
-          <div className="mt-4">
-            <RaceResultsPosterExportClient
-              raceId={raceId}
-              title="Rennergebnis"
-              subtitle={`Saison ${race.season} · Runde ${race.round} · ${race.name}`}
-              rows={posterRows}
-              saveEnabled
-            />
-          </div>
-        ) : null}
-
-        <div className="mt-6">
-          {bulkDrivers.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
-              Bitte zuerst im Fahrerfeld die Fahrer auf „Nimmt teil“ setzen, dann kannst du hier alle Ergebnisse in einem Schritt eintragen.
-            </div>
-          ) : (
-            <RaceResultsBulkEditorClient
-              drivers={bulkDrivers}
-              existingResults={results.map((r) => ({
-                driverId: r.driverId,
-                position: r.position,
-                bestTime: r.bestTime,
-                timeText: r.timeText,
-                finishTimeMs: r.finishTimeMs,
-                penaltySeconds: r.penaltySeconds,
-                status: r.status,
-                fastestLap: r.fastestLap
-              }))}
-              action={bulkUpsertResults.bind(null, league, l, raceId)}
-            />
-          )}
-        </div>
-
-        {results.length > 0 ? (
-          <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
-            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
-              Fahrer des Tages
-              <div className="mt-1 text-xs font-normal text-white/70">
-                Wird zur Fahrer-Statistik addiert (Saison + Gesamt), sobald Ergebnisse veröffentlicht sind.
-              </div>
-            </summary>
-            <div className="px-4 pb-4">
-              <form
-                action={setDriverOfDay.bind(null, league, l, raceId)}
-                className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]"
-              >
-                <select
-                  name="driverOfDayDriverId"
-                  defaultValue={race.driverOfDayDriverId ?? ""}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
-                >
-                  <option value="">(Kein Fahrer des Tages)</option>
-                  {results
-                    .slice()
-                    .sort((a, b) => a.position - b.position)
-                    .map((r) => (
-                      <option key={r.driverId} value={r.driverId}>
-                        P{r.position} · {r.driver.name}
-                      </option>
-                    ))}
-                </select>
-                <FormSubmitButton
-                  className="w-fit rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
-                  pendingText="Speichern…"
-                >
-                  Speichern
-                </FormSubmitButton>
-              </form>
-            </div>
-          </details>
-        ) : null}
-
-        {results.length > 0 ? (
-          <details className="mt-6 rounded-2xl border border-white/10 bg-black/20">
-            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-white">
-              Stewards (Strafen)
-              <div className="mt-1 text-xs font-normal text-white/70">
-                Sekunden-Strafen werden zur Endzeit addiert und das Ergebnis wird automatisch neu sortiert.
-              </div>
-            </summary>
-            <div className="px-4 pb-4">
-              <RaceResultsPenaltiesEditorClient
-                results={results.map((r) => ({
-                  driverId: r.driverId,
-                  driverName: r.driver.name,
-                  penaltySeconds: r.penaltySeconds
-                }))}
-                action={applyPenalties.bind(null, league, l, raceId)}
-              />
-            </div>
-          </details>
-        ) : null}
+      <div id="manual-results" className="space-y-6">
+        {editorSections.map((section) => renderEditorSection(section))}
       </div>
       </div>
     </AdminShell>

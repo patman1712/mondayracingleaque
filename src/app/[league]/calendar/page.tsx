@@ -12,6 +12,15 @@ function imageUrl(imagePath: string | null | undefined) {
   return `/api/uploads/${encodeURIComponent(imagePath)}`;
 }
 
+function weekendKey(input: {
+  season: number;
+  seasonNo: number;
+  seasonIsTest: boolean;
+  round: number;
+}) {
+  return `${input.season}-${input.seasonNo}-${input.seasonIsTest ? "1" : "0"}-${input.round}`;
+}
+
 function cleanTileText(value: string | null | undefined) {
   if (!value) return null;
   return value.replace(/[\s·•\-–—]+$/g, "").trim() || null;
@@ -187,6 +196,17 @@ export default async function LeagueCalendarPage({
     });
   } catch {}
 
+  const visibleRaces = Array.from(
+    races.reduce((acc, r) => {
+      const key = weekendKey(r);
+      const current = acc.get(key) ?? null;
+      if (!current || (!current.isSprint && r.isSprint)) acc.set(key, r);
+      return acc;
+    }, new Map<string, RaceItem>())
+  )
+    .map(([, r]) => r)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
   return (
     <Container>
       <div className="mt-10">
@@ -209,12 +229,12 @@ export default async function LeagueCalendarPage({
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {races.length === 0 ? (
+        {visibleRaces.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60 sm:col-span-2 lg:col-span-3">
             Noch keine Rennen eingetragen.
           </div>
         ) : (
-          races.map((r) => (
+          visibleRaces.map((r) => (
             (() => {
               const start = new Date(r.startsAt);
               const isUpcoming = start.getTime() > Date.now();

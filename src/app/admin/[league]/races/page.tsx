@@ -135,6 +135,15 @@ function buildRaceName(input: {
   return input.seasonIsTest ? `TEST · ${withSprint}` : withSprint;
 }
 
+function weekendKey(input: {
+  season: number;
+  seasonNo: number;
+  seasonIsTest: boolean;
+  round: number;
+}) {
+  return `${input.season}-${input.seasonNo}-${input.seasonIsTest ? "1" : "0"}-${input.round}`;
+}
+
 async function createRace(
   adminLeague: string,
   league: League,
@@ -245,6 +254,50 @@ async function createRace(
         startsAt: parsedStartsAt.date
       }
     });
+
+    if (isSprint) {
+      const mainRaceName = buildRaceName({
+        season,
+        seasonNo,
+        seasonIsTest,
+        round,
+        isSprint: false,
+        circuit: circuitNameToSave,
+        location: locationToSave
+      });
+
+      await prisma.race.upsert({
+        where: {
+          league_season_seasonNo_seasonIsTest_round_isSprint: {
+            league,
+            season,
+            seasonNo,
+            seasonIsTest,
+            round,
+            isSprint: false
+          }
+        },
+        create: {
+          league,
+          season,
+          seasonNo,
+          seasonIsTest,
+          round,
+          isSprint: false,
+          name: mainRaceName,
+          circuitId: circuitId || null,
+          circuit: circuitNameToSave,
+          location: locationToSave,
+          startsAt: parsedStartsAt.date
+        },
+        update: {
+          circuitId: circuitId || null,
+          circuit: circuitNameToSave,
+          location: locationToSave,
+          startsAt: parsedStartsAt.date
+        }
+      });
+    }
 
     const image = formData.get("image");
     if (image instanceof File && image.size > 0) {
@@ -518,6 +571,17 @@ export default async function AdminRacesPage({
     });
   } catch {}
 
+  const visibleRaces = Array.from(
+    races.reduce((acc, r) => {
+      const key = weekendKey(r);
+      const current = acc.get(key) ?? null;
+      if (!current || (!current.isSprint && r.isSprint)) acc.set(key, r);
+      return acc;
+    }, new Map<string, RaceItem>())
+  )
+    .map(([, r]) => r)
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+
   return (
     <AdminShell>
       <div className="space-y-6">
@@ -711,10 +775,10 @@ export default async function AdminRacesPage({
           </Link>
         </div>
         <div className="mt-4 space-y-2">
-          {races.length === 0 ? (
+          {visibleRaces.length === 0 ? (
             <div className="text-sm text-white/60">Noch keine Rennen.</div>
           ) : (
-            races.map((r) => (
+            visibleRaces.map((r) => (
               <div
                 key={r.id}
                 className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
