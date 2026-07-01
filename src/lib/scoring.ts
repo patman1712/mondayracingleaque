@@ -99,19 +99,27 @@ export async function applyRaceScoring(prisma: PrismaClient, raceId: string) {
 
   let effectiveScoring = scoring;
   if (race.isSprint) {
-    const seasonRow = await prisma.season
-      .findUnique({
-        where: {
-          league_year_seasonNo_isTest: {
-            league: race.league,
-            year: race.season,
-            seasonNo: race.seasonNo,
-            isTest: race.seasonIsTest
-          }
-        },
-        select: { sprintPointsByPositionJson: true }
-      })
-      .catch(() => null);
+    const seasonRow =
+      (await prisma.season
+        .findUnique({
+          where: {
+            league_year_seasonNo_isTest: {
+              league: race.league,
+              year: race.season,
+              seasonNo: race.seasonNo,
+              isTest: race.seasonIsTest
+            }
+          },
+          select: { sprintPointsByPositionJson: true }
+        })
+        .catch(() => null)) ??
+      (await prisma.season
+        .findFirst({
+          where: { league: race.league, year: race.season, isTest: race.seasonIsTest },
+          orderBy: [{ seasonNo: "desc" }],
+          select: { sprintPointsByPositionJson: true }
+        })
+        .catch(() => null));
 
     let sprintPoints: number[] | null = null;
     const raw = (seasonRow?.sprintPointsByPositionJson ?? "").trim();
