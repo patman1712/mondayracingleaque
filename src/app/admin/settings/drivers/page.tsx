@@ -1,9 +1,9 @@
 import { AdminShell } from "@/components/AdminShell";
+import { AdminSettingsDriversListClient } from "@/components/AdminSettingsDriversListClient";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { ensureReserveTeam } from "@/lib/reserveTeam";
 import { DriverRole, DriverStatus, League } from "@prisma/client";
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import fs from "node:fs";
@@ -224,17 +224,20 @@ async function deactivateDriver(formData: FormData) {
   redirect("/admin/settings/drivers?ok=1");
 }
 
-export default async function AdminSettingsDriversPage() {
+export default async function AdminSettingsDriversPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
   await requireAdmin();
 
+  const sp = searchParams ? await searchParams : {};
+  const q = String(sp?.q ?? "").trim();
   const leagueMeta = await listLeagueMeta();
-  const labelByLeague = new Map(leagueMeta.map((l) => [l.league, l.name] as const));
-  const adminSlugByLeague = new Map(leagueMeta.map((l) => [l.league, l.adminSlug] as const));
 
   const seasons = await prisma.season
     .findMany({
       orderBy: [{ year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }, { league: "asc" }],
-      take: 500,
       select: { id: true, league: true, year: true, seasonNo: true, isTest: true, placement: true }
     })
     .catch(() => []);
@@ -246,13 +249,6 @@ export default async function AdminSettingsDriversPage() {
       take: 2000
     })
     .catch(() => []);
-
-  const teamsByLeague = new Map<League, { id: string; name: string }[]>();
-  for (const r of teamLeagues) {
-    const list = teamsByLeague.get(r.league) ?? [];
-    list.push(r.team);
-    teamsByLeague.set(r.league, list);
-  }
 
   const drivers = await prisma.driver
     .findMany({
@@ -271,17 +267,6 @@ export default async function AdminSettingsDriversPage() {
       }
     })
     .catch(() => []);
-
-  const seasonById = new Map(seasons.map((s) => [s.id, s] as const));
-  const seasonsByLeague = new Map<League, typeof seasons>();
-  for (const s of seasons) {
-    const list = seasonsByLeague.get(s.league) ?? [];
-    list.push(s);
-    seasonsByLeague.set(s.league, list);
-  }
-
-  const activeDrivers = drivers.filter((d) => d.status === "ACTIVE");
-  const retiredDrivers = drivers.filter((d) => d.status === "RETIRED");
 
   return (
     <AdminShell>
@@ -410,283 +395,30 @@ export default async function AdminSettingsDriversPage() {
           </form>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-base font-semibold">Fahrer</div>
-          {drivers.length === 0 ? (
-            <div className="mt-4 text-sm text-white/60">Noch keine Fahrer.</div>
-          ) : (
-            <div className="mt-4 space-y-5">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                  Aktiv ({activeDrivers.length})
-                </div>
-                <div className="mt-2 space-y-2">
-                  {activeDrivers.map((d) => (
-                    (() => {
-                      const activeLeagues = Array.from(
-                        new Set(
-                          d.seasons
-                            .map((s) => seasonById.get(s.seasonId)?.league ?? null)
-                            .filter((x): x is League => Boolean(x))
-                        )
-                      );
-                      return (
-                        <div
-                          key={d.id}
-                          className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate font-semibold">
-                              {d.number ? `#${d.number} ` : ""}
-                              {d.name}
-                            </div>
-                            <div className="mt-1 text-sm text-white/60">
-                              {d.gamertag ? `${d.gamertag} · ` : ""}
-                              {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
-                              {d.twitchChannel ? ` · Twitch: ${d.twitchChannel}` : ""}
-                              {activeLeagues.length
-                                ? ` · Ligen: ${activeLeagues
-                                    .map((l) => labelByLeague.get(l) ?? String(l))
-                                    .join(", ")}`
-                                : ""}
-                            </div>
-
-                            <details className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-white/70">
-                                Ligen / Saisons
-                              </summary>
-
-                              <div className="mt-3 grid gap-4 md:grid-cols-3">
-                                {leagueMeta.map((lm) => {
-                                  const lg = lm.league;
-                                  const seasonOptions = seasonsByLeague.get(lg) ?? [];
-                                  const teams = teamsByLeague.get(lg) ?? [];
-                                  const activeSeasons = d.seasons
-                                    .map((s) => ({ row: s, season: seasonById.get(s.seasonId) ?? null }))
-                                    .filter((x) => x.season?.league === lg);
-
-                                  return (
-                                    <div key={lg} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                      <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                                        {labelByLeague.get(lg) ?? String(lg)}
-                                      </div>
-
-                                      <form action={activateDriver} className="mt-2 grid gap-2">
-                                        <input type="hidden" name="driverId" value={d.id} />
-                                        <input type="hidden" name="role" value="MAIN" />
-                                        <select
-                                          name="seasonId"
-                                          defaultValue=""
-                                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
-                                        >
-                                          <option value="">Saison wählen…</option>
-                                          {seasonOptions.map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                              {s.placement === "ARCHIVE" ? "ARCHIV · " : ""}
-                                              {s.isTest ? "TEST · " : ""}
-                                              {s.year} · Season {s.seasonNo}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <select
-                                          name="teamId"
-                                          defaultValue=""
-                                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
-                                        >
-                                          <option value="">Team (optional)</option>
-                                          {teams.map((t) => (
-                                            <option key={t.id} value={t.id}>
-                                              {t.name}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                                          Als Stammfahrer aktivieren
-                                        </button>
-                                      </form>
-
-                                      <form action={activateDriver} className="mt-2 grid gap-2">
-                                        <input type="hidden" name="driverId" value={d.id} />
-                                        <input type="hidden" name="role" value="RESERVE" />
-                                        <select
-                                          name="seasonId"
-                                          defaultValue=""
-                                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs outline-none focus:border-white/25"
-                                        >
-                                          <option value="">Saison wählen…</option>
-                                          {seasonOptions.map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                              {s.placement === "ARCHIVE" ? "ARCHIV · " : ""}
-                                              {s.isTest ? "TEST · " : ""}
-                                              {s.year} · Season {s.seasonNo}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-                                          Als Ersatzfahrer aktivieren (Team automatisch)
-                                        </button>
-                                      </form>
-
-                                      {activeSeasons.length ? (
-                                        <div className="mt-3 space-y-2">
-                                          {activeSeasons.map(({ row, season }) =>
-                                            season ? (
-                                              <div
-                                                key={season.id}
-                                                className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
-                                              >
-                                                <div className="min-w-0 text-xs text-white/80">
-                                                  {row.role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer"} · {season.year} S{season.seasonNo}
-                                                  {row.teamRef?.name ? ` · ${row.teamRef.name}` : row.role === "RESERVE" ? ` · Ersatzfahrer` : ""}
-                                                </div>
-                                                <form action={deactivateDriver}>
-                                                  <input type="hidden" name="driverId" value={d.id} />
-                                                  <input type="hidden" name="seasonId" value={season.id} />
-                                                  <button className="rounded-lg bg-white/10 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/15">
-                                                    Entfernen
-                                                  </button>
-                                                </form>
-                                              </div>
-                                            ) : null
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="mt-3 text-xs text-white/50">
-                                          Noch nicht aktiv.
-                                        </div>
-                                      )}
-
-                                      <div className="mt-3">
-                                        {adminSlugByLeague.get(lg) ? (
-                                          <Link
-                                            href={`/admin/${adminSlugByLeague.get(lg)}/drivers/${d.id}`}
-                                            className="text-xs font-semibold text-white/70 hover:text-white"
-                                          >
-                                            In Liga bearbeiten →
-                                          </Link>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </details>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/admin/settings/drivers/${d.id}`}
-                              className="rounded-lg bg-mrl-red px-3 py-2 text-xs font-semibold text-white"
-                            >
-                              Details
-                            </Link>
-                            {activeLeagues.length ? (
-                              activeLeagues
-                                .map((l) => {
-                                  const slug = adminSlugByLeague.get(l);
-                                  if (!slug) return null;
-                                  return (
-                                    <Link
-                                      key={l}
-                                      href={`/admin/${slug}/drivers/${d.id}`}
-                                      className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                                    >
-                                      {labelByLeague.get(l) ?? String(l)} · Details
-                                    </Link>
-                                  );
-                                })
-                                .filter(Boolean)
-                            ) : (
-                              <div className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-white/60">
-                                Nicht aktiv
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                  In Rente ({retiredDrivers.length})
-                </div>
-                <div className="mt-2 space-y-2">
-                  {retiredDrivers.length === 0 ? (
-                    <div className="text-sm text-white/60">
-                      Noch keine Rentner.
-                    </div>
-                  ) : (
-                    retiredDrivers.map((d) => (
-                      (() => {
-                        const activeLeagues = Array.from(
-                          new Set(
-                            d.seasons
-                              .map((s) => seasonById.get(s.seasonId)?.league ?? null)
-                              .filter((x): x is League => Boolean(x))
-                          )
-                        );
-                        return (
-                          <div
-                            key={d.id}
-                            className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center"
-                          >
-                            <div className="min-w-0">
-                              <div className="truncate font-semibold">
-                                {d.number ? `#${d.number} ` : ""}
-                                {d.name}
-                              </div>
-                              <div className="mt-1 text-sm text-white/60">
-                                {d.gamertag ? `${d.gamertag} · ` : ""}
-                                {d.team ?? "-"} {d.country ? `· ${d.country}` : ""}
-                                {d.twitchChannel ? ` · Twitch: ${d.twitchChannel}` : ""}
-                                {activeLeagues.length
-                                  ? ` · Ligen: ${activeLeagues
-                                      .map((l) => labelByLeague.get(l) ?? String(l))
-                                      .join(", ")}`
-                                  : ""}
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Link
-                                href={`/admin/settings/drivers/${d.id}`}
-                                className="rounded-lg bg-mrl-red px-3 py-2 text-xs font-semibold text-white"
-                              >
-                                Details
-                              </Link>
-                              {activeLeagues.length ? (
-                                activeLeagues
-                                  .map((l) => {
-                                    const slug = adminSlugByLeague.get(l);
-                                    if (!slug) return null;
-                                    return (
-                                      <Link
-                                        key={l}
-                                        href={`/admin/${slug}/drivers/${d.id}`}
-                                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-                                      >
-                                        {labelByLeague.get(l) ?? String(l)} · Details
-                                      </Link>
-                                    );
-                                  })
-                                  .filter(Boolean)
-                              ) : (
-                                <div className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-white/60">
-                                  Nicht aktiv
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <AdminSettingsDriversListClient
+          initialQuery={q}
+          leagueMeta={leagueMeta}
+          seasons={seasons}
+          teamLeagues={teamLeagues}
+          drivers={drivers.map((d) => ({
+            id: d.id,
+            name: d.name,
+            gamertag: d.gamertag,
+            status: d.status,
+            number: d.number,
+            country: d.country,
+            team: d.team,
+            twitchChannel: d.twitchChannel,
+            seasons: d.seasons.map((s) => ({
+              seasonId: s.seasonId,
+              role: s.role,
+              teamId: s.teamId,
+              teamRef: s.teamRef
+            }))
+          }))}
+          activateDriver={activateDriver}
+          deactivateDriver={deactivateDriver}
+        />
       </div>
     </AdminShell>
   );
