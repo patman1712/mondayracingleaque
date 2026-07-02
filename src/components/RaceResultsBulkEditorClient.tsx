@@ -32,6 +32,12 @@ type Row = {
   fastestLap: boolean;
 };
 
+const NON_FINISH_STATUSES = ["DNF", "DSQ", "DNS", "RET"] as const;
+
+function isNonFinishStatus(value: string) {
+  return NON_FINISH_STATUSES.includes(value.trim().toUpperCase() as (typeof NON_FINISH_STATUSES)[number]);
+}
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -104,6 +110,17 @@ function formatGapMs(ms: number) {
   const milli = total % 1000;
   if (minutes > 0) return `+${minutes}:${pad2(seconds)}.${pad3(milli)}`;
   return `+${seconds}.${pad3(milli)}`;
+}
+
+function getWinnerMs(rows: Row[]) {
+  return (
+    parseRaceTimeMs((rows[0]?.endTime ?? "").trim()) ??
+    rows
+      .map((x) => parseRaceTimeMs((x.endTime ?? "").trim()))
+      .filter((x): x is number => typeof x === "number")
+      .sort((a, b) => a - b)[0] ??
+    null
+  );
 }
 
 function toInitialRows(drivers: DriverItem[], existing: ExistingResult[]) {
@@ -287,7 +304,7 @@ export function RaceResultsBulkEditorClient({
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="text-sm font-semibold text-white">Schnell-Eingabe</div>
       <div className="mt-1 text-xs text-white/60">
-        Reihenfolge per Drag & Drop = Position. Endzeit + Bestzeit eintragen. Strafen nur über „Stewards (Strafen)“.
+        Reihenfolge per Drag & Drop = Position. Du kannst Endzeit oder Gap eintragen. Strafen nur über „Stewards (Strafen)“.
       </div>
       {penalties.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -325,29 +342,47 @@ export function RaceResultsBulkEditorClient({
 
               <input
                 value={r.endTime}
-                onChange={(e) => updateRow(r.driverId, { endTime: e.target.value })}
+                onChange={(e) => {
+                  const nextEndTime = e.target.value;
+                  const status = (r.status ?? "").trim().toUpperCase();
+                  if (idx === 0 || isNonFinishStatus(status)) {
+                    updateRow(r.driverId, { endTime: nextEndTime });
+                    return;
+                  }
+                  const ms = parseRaceTimeMs(nextEndTime.trim());
+                  const winnerMs = getWinnerMs(rows);
+                  updateRow(r.driverId, {
+                    endTime: nextEndTime,
+                    gapText:
+                      typeof ms === "number" && typeof winnerMs === "number" && ms > winnerMs
+                        ? formatGapMs(ms - winnerMs)
+                        : r.gapText
+                  });
+                }}
                 className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
                 placeholder="Endzeit"
               />
 
               <input
-                value={(() => {
+                value={r.gapText}
+                onChange={(e) => {
+                  const nextGapText = e.target.value;
                   const status = (r.status ?? "").trim().toUpperCase();
-                  if (status && ["DNF", "DSQ", "DNS", "RET"].includes(status)) return "";
-                  const winnerMs =
-                    parseRaceTimeMs((rows[0]?.endTime ?? "").trim()) ??
-                    rows
-                      .map((x) => parseRaceTimeMs((x.endTime ?? "").trim()))
-                      .filter((x): x is number => typeof x === "number")
-                      .sort((a, b) => a - b)[0] ??
-                    null;
-                  const ms = parseRaceTimeMs((r.endTime ?? "").trim());
-                  if (idx === 0) return r.gapText;
-                  if (typeof ms === "number" && typeof winnerMs === "number") return formatGapMs(ms - winnerMs);
-                  return r.gapText;
-                })()}
-                readOnly
-                className="w-full rounded-lg border border-white/10 bg-black/15 px-2 py-2 text-xs text-white/70 outline-none"
+                  if (idx === 0 || isNonFinishStatus(status)) {
+                    updateRow(r.driverId, { gapText: nextGapText });
+                    return;
+                  }
+                  const gapMs = parseGapMs(nextGapText.trim());
+                  const winnerMs = getWinnerMs(rows);
+                  updateRow(r.driverId, {
+                    gapText: nextGapText,
+                    endTime:
+                      typeof gapMs === "number" && typeof winnerMs === "number"
+                        ? formatRaceTimeMs(winnerMs + gapMs)
+                        : r.endTime
+                  });
+                }}
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
                 placeholder="Gap"
               />
 
@@ -360,7 +395,14 @@ export function RaceResultsBulkEditorClient({
 
               <select
                 value={r.status}
-                onChange={(e) => updateRow(r.driverId, { status: e.target.value })}
+                onChange={(e) => {
+                  const nextStatus = e.target.value;
+                  updateRow(r.driverId, {
+                    status: nextStatus,
+                    endTime: isNonFinishStatus(nextStatus) ? "" : r.endTime,
+                    gapText: isNonFinishStatus(nextStatus) ? "" : r.gapText
+                  });
+                }}
                 className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white/90 outline-none focus:border-white/25"
               >
                 <option value="">(Status)</option>
