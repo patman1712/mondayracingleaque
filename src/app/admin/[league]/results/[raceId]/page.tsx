@@ -376,11 +376,26 @@ async function bulkUpsertResults(
     storedTimeTextByDriverId.set(r.driverId, tt || null);
   }
 
-  const base = 1000 + (Date.now() % 100000);
+  const base = 1_000_000 + (Date.now() % 100000);
   await prisma.$transaction(async (tx) => {
+    const allExisting = await tx.raceResult.findMany({
+      where: { raceId },
+      select: { driverId: true },
+      orderBy: { position: "asc" },
+      take: 5000
+    });
+
+    for (let i = 0; i < allExisting.length; i++) {
+      const r = allExisting[i];
+      await tx.raceResult.update({
+        where: { raceId_driverId: { raceId, driverId: r.driverId } },
+        data: { position: base + i }
+      });
+    }
+
     for (let i = 0; i < included.length; i++) {
       const r = included[i];
-      const tempPos = base + i;
+      const tempPos = base + allExisting.length + i;
       const current = existing.get(r.driverId) ?? null;
       await tx.raceResult.upsert({
         where: { raceId_driverId: { raceId, driverId: r.driverId } },
@@ -432,6 +447,16 @@ async function bulkUpsertResults(
     if (replace) {
       const ids = included.map((r) => r.driverId);
       await tx.raceResult.deleteMany({ where: { raceId, driverId: { notIn: ids } } }).catch(() => null);
+    } else {
+      const includedIds = new Set(included.map((r) => r.driverId));
+      const remaining = allExisting.filter((r) => !includedIds.has(r.driverId));
+      for (let i = 0; i < remaining.length; i++) {
+        const r = remaining[i];
+        await tx.raceResult.update({
+          where: { raceId_driverId: { raceId, driverId: r.driverId } },
+          data: { position: included.length + 1 + i }
+        });
+      }
     }
   });
 
