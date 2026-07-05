@@ -225,6 +225,7 @@ export default async function RaceDetailPage({
         imagePath: true,
         twitchChannel: true,
         resultsPublishedAt: true,
+        driverOfDayDriverId: true,
         circuitRef: { select: { imagePath: true } }
       }
     })
@@ -286,7 +287,7 @@ export default async function RaceDetailPage({
         round: race.round,
         isSprint: !race.isSprint
       },
-      select: { id: true, name: true, isSprint: true, resultsPublishedAt: true }
+      select: { id: true, name: true, isSprint: true, resultsPublishedAt: true, driverOfDayDriverId: true }
     })
     .catch(() => null);
 
@@ -349,12 +350,35 @@ export default async function RaceDetailPage({
           .catch(() => [])
       : [];
 
-  type ResultSection = { id: string; isSprint: boolean; title: string; results: ResultRow[]; field: RaceFieldDriver[] };
+  type ResultSection = {
+    id: string;
+    isSprint: boolean;
+    title: string;
+    driverOfDayDriverId: string | null;
+    results: ResultRow[];
+    field: RaceFieldDriver[];
+  };
 
   const resultSections: ResultSection[] = [
-    showResults ? { id: race.id, isSprint: race.isSprint, title: race.isSprint ? "Sprintrennen" : "Rennen", results, field } : null,
+    showResults
+      ? {
+          id: race.id,
+          isSprint: race.isSprint,
+          title: race.isSprint ? "Sprintrennen" : "Rennen",
+          driverOfDayDriverId: race.driverOfDayDriverId ?? null,
+          results,
+          field
+        }
+      : null,
     showOtherResults && otherRace
-      ? { id: otherRace.id, isSprint: otherRace.isSprint, title: otherRace.isSprint ? "Sprintrennen" : "Rennen", results: otherResults, field: otherField }
+      ? {
+          id: otherRace.id,
+          isSprint: otherRace.isSprint,
+          title: otherRace.isSprint ? "Sprintrennen" : "Rennen",
+          driverOfDayDriverId: otherRace.driverOfDayDriverId ?? null,
+          results: otherResults,
+          field: otherField
+        }
       : null
   ]
     .filter((v): v is ResultSection => v !== null)
@@ -362,7 +386,7 @@ export default async function RaceDetailPage({
 
   const anyResults = resultSections.length > 0;
 
-  function renderResultsSection(section: { id: string; isSprint: boolean; title: string; results: ResultRow[]; field: RaceFieldDriver[] }) {
+  function renderResultsSection(section: ResultSection) {
     const winner = section.results.find((r) => r.position === 1) ?? null;
     const winnerRaceTimeMs =
       winner && typeof winner.finishTimeMs === "number" && Number.isFinite(winner.finishTimeMs)
@@ -372,6 +396,7 @@ export default async function RaceDetailPage({
           : null;
 
     const fieldByDriverId = new Map(section.field.map((d) => [d.id, d] as const));
+    const driverOfDay = section.driverOfDayDriverId ? fieldByDriverId.get(section.driverOfDayDriverId) ?? null : null;
     const splitAt = Math.ceil(section.results.length / 2);
     const leftResults = section.results.slice(0, splitAt);
     const rightResults = section.results.slice(splitAt);
@@ -388,120 +413,185 @@ export default async function RaceDetailPage({
             Keine Ergebnisse.
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
-              <div key={colIdx} className="grid gap-3">
-                {col.map((r) => {
-                  const d = fieldByDriverId.get(r.driver.id) ?? null;
-                  const portraitUrl = d?.portraitUrl ?? null;
-                  const accent = d?.accent ?? null;
-                  const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
-                  const best = r.bestTime ?? "";
-                  const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
-                  const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
-                  const flag = countryToFlagEmoji(d?.country ?? null);
-                  const number = d?.number ?? r.driver.number ?? null;
-                  const teamLogoUrl = d?.teamLogoUrl ?? null;
+          <div className="space-y-5">
+            {driverOfDay ? (
+              <Link
+                href={`/${league}/drivers/${driverOfDay.id}`}
+                className="group relative block overflow-hidden rounded-[28px] border border-white/10"
+                style={{ backgroundImage: heroBg(driverOfDay.accent) }}
+              >
+                <div
+                  className="absolute inset-0 opacity-25"
+                  style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                />
+                <div
+                  className="absolute left-0 top-0 h-[5px] w-full"
+                  style={{ backgroundColor: driverOfDay.accent ?? "#ffffff" }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/15 to-black/70" />
 
-                  return (
-                    <Link
-                      key={r.id}
-                      href={`/${league}/drivers/${r.driver.id}`}
-                      className="group grid grid-cols-[56px_1fr_88px] gap-2"
-                    >
-                      <div
-                        className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
-                        style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
-                      >
-                        <div className="text-xl font-extrabold text-white">{r.position}</div>
-                      </div>
+                {driverOfDay.portraitUrl ? (
+                  <div className="absolute inset-y-0 right-0 w-[42%] p-3">
+                    <div className="relative h-full w-full">
+                      <img
+                        src={driverOfDay.portraitUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
-                      <div
-                        className="relative overflow-hidden rounded-2xl border border-white/10"
-                        style={{ backgroundImage: heroBg(accent) }}
+                {driverOfDay.teamLogoUrl ? (
+                  <div className="pointer-events-none absolute inset-y-0 right-[26%] z-0 flex w-[16%] items-center justify-center">
+                    <img
+                      src={driverOfDay.teamLogoUrl}
+                      alt=""
+                      className="max-h-20 w-auto max-w-full object-contain opacity-20 sm:max-h-24"
+                    />
+                  </div>
+                ) : null}
+
+                <div className="relative z-10 min-h-[220px] p-5 sm:p-6">
+                  <div className="text-xs font-extrabold uppercase tracking-[0.3em] text-amber-200/90">
+                    Driver of the Day
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    {countryToFlagEmoji(driverOfDay.country) ? (
+                      <div className="text-xl leading-none">{countryToFlagEmoji(driverOfDay.country)}</div>
+                    ) : null}
+                    <div className="min-w-0 truncate text-2xl font-extrabold uppercase tracking-wide text-white sm:text-3xl">
+                      {driverOfDay.name}
+                    </div>
+                    {driverOfDay.number ? (
+                      <div className="shrink-0 text-sm font-extrabold text-white/70">#{driverOfDay.number}</div>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-white/80">
+                    {driverOfDay.raceTeamName ? `Team: ${driverOfDay.raceTeamName}` : driverOfDay.teamName ? `Team: ${driverOfDay.teamName}` : ""}
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-white/65">
+                    {section.title}
+                  </div>
+                </div>
+              </Link>
+            ) : null}
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {[leftResults, rightResults].filter((c) => c.length > 0).map((col, colIdx) => (
+                <div key={colIdx} className="grid gap-3">
+                  {col.map((r) => {
+                    const d = fieldByDriverId.get(r.driver.id) ?? null;
+                    const portraitUrl = d?.portraitUrl ?? null;
+                    const accent = d?.accent ?? null;
+                    const endOrStatus = getResultDisplayTime(r, winnerRaceTimeMs);
+                    const best = r.bestTime ?? "";
+                    const bestClass = r.fastestLap ? "text-violet-300" : "text-white/80";
+                    const penalty = typeof r.penaltySeconds === "number" && r.penaltySeconds > 0 ? r.penaltySeconds : 0;
+                    const flag = countryToFlagEmoji(d?.country ?? null);
+                    const number = d?.number ?? r.driver.number ?? null;
+                    const teamLogoUrl = d?.teamLogoUrl ?? null;
+
+                    return (
+                      <Link
+                        key={r.id}
+                        href={`/${league}/drivers/${r.driver.id}`}
+                        className="group grid grid-cols-[56px_1fr_88px] gap-2"
                       >
                         <div
-                          className="absolute inset-0 opacity-25"
-                          style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
-                        />
+                          className="flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-black/25"
+                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                        >
+                          <div className="text-xl font-extrabold text-white">{r.position}</div>
+                        </div>
+
                         <div
-                          className="absolute left-0 top-0 h-[4px] w-full"
-                          style={{ backgroundColor: accent ?? "#ffffff" }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/70" />
+                          className="relative overflow-hidden rounded-2xl border border-white/10"
+                          style={{ backgroundImage: heroBg(accent) }}
+                        >
+                          <div
+                            className="absolute inset-0 opacity-25"
+                            style={{ ...f1Dots(), clipPath: "polygon(0 0, 86% 0, 62% 100%, 0 100%)" }}
+                          />
+                          <div
+                            className="absolute left-0 top-0 h-[4px] w-full"
+                            style={{ backgroundColor: accent ?? "#ffffff" }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/70" />
 
-                        {portraitUrl ? (
-                          <div className="absolute inset-y-0 right-0 w-[38%] p-2">
-                            <div className="relative h-full w-full">
-                              <img
-                                src={portraitUrl}
-                                alt=""
-                                className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
-                              />
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {teamLogoUrl ? (
-                          <div className="pointer-events-none absolute inset-y-0 right-[24%] z-0 flex w-[16%] items-center justify-center">
-                            <img
-                              src={teamLogoUrl}
-                              alt=""
-                              className="max-h-16 w-auto max-w-full object-contain opacity-20 sm:max-h-20"
-                            />
-                          </div>
-                        ) : null}
-
-                        <div className="relative z-10 p-4">
-                          <div className="flex items-center gap-2">
-                            {flag ? (
-                              <div className="text-base leading-none">
-                                {flag}
+                          {portraitUrl ? (
+                            <div className="absolute inset-y-0 right-0 w-[38%] p-2">
+                              <div className="relative h-full w-full">
+                                <img
+                                  src={portraitUrl}
+                                  alt=""
+                                  className="absolute inset-0 h-full w-full object-contain object-right object-bottom opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                                />
                               </div>
-                            ) : null}
-                            <div className="min-w-0 truncate text-base font-extrabold uppercase tracking-wide text-white">
-                              {r.driver.name}
-                            </div>
-                            {number ? (
-                              <div className="shrink-0 text-xs font-extrabold text-white/70">
-                                #{number}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
-                            <span>{endOrStatus}</span>
-                            {penalty ? (
-                              <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
-                                +{penalty}s
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {best ? (
-                            <div className={"mt-2 text-sm font-semibold " + bestClass}>
-                              Best Lap {best}
                             </div>
                           ) : null}
-                        </div>
-                      </div>
 
-                      <div
-                        className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
-                        style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
-                      >
-                        <div>
-                          <div className="text-xl font-extrabold text-white">{r.points.toFixed(0)}</div>
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                            PTS
+                          {teamLogoUrl ? (
+                            <div className="pointer-events-none absolute inset-y-0 right-[24%] z-0 flex w-[16%] items-center justify-center">
+                              <img
+                                src={teamLogoUrl}
+                                alt=""
+                                className="max-h-16 w-auto max-w-full object-contain opacity-20 sm:max-h-20"
+                              />
+                            </div>
+                          ) : null}
+
+                          <div className="relative z-10 p-4">
+                            <div className="flex items-center gap-2">
+                              {flag ? (
+                                <div className="text-base leading-none">
+                                  {flag}
+                                </div>
+                              ) : null}
+                              <div className="min-w-0 truncate text-base font-extrabold uppercase tracking-wide text-white">
+                                {r.driver.name}
+                              </div>
+                              {number ? (
+                                <div className="shrink-0 text-xs font-extrabold text-white/70">
+                                  #{number}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-base font-extrabold text-white">
+                              <span>{endOrStatus}</span>
+                              {penalty ? (
+                                <span className="rounded-lg border border-red-500/35 bg-red-500/15 px-2 py-1 text-xs font-extrabold text-red-300">
+                                  +{penalty}s
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {best ? (
+                              <div className={"mt-2 text-sm font-semibold " + bestClass}>
+                                Best Lap {best}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
+
+                        <div
+                          className="flex items-center justify-end overflow-hidden rounded-2xl border-2 bg-black/25 px-3 py-2 text-right"
+                          style={{ borderColor: accent ?? "rgba(255,255,255,0.15)" }}
+                        >
+                          <div>
+                            <div className="text-xl font-extrabold text-white">{r.points.toFixed(0)}</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
+                              PTS
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
