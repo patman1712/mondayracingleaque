@@ -176,10 +176,8 @@ async function loadRaceField(raceId: string, seasonId: string | null): Promise<R
     const role = ds?.role ?? "MAIN";
     const roleLabel = role === "RESERVE" ? "Ersatzfahrer" : "Stammfahrer";
     const accent = e.team?.color ?? ds?.teamRef?.color ?? null;
-    const teamLogoUrl =
-      role === "MAIN"
-        ? imageUrl(ds?.teamRef?.logoPath ?? null) ?? imageUrl(e.team?.logoPath ?? null)
-        : imageUrl(e.team?.logoPath ?? null) ?? imageUrl(ds?.teamRef?.logoPath ?? null);
+    const teamLogoUrl = imageUrl(e.team?.logoPath ?? null) ?? imageUrl(ds?.teamRef?.logoPath ?? null);
+    const displayedTeamName = e.team?.name ?? ds?.teamRef?.name ?? null;
 
     return {
       id: e.driver.id,
@@ -189,8 +187,8 @@ async function loadRaceField(raceId: string, seasonId: string | null): Promise<R
       portraitUrl: imageUrl(ds?.portraitPath) ?? null,
       role,
       roleLabel,
-      teamName: role === "MAIN" ? ds?.teamRef?.name ?? null : null,
-      raceTeamName: e.team?.name ?? null,
+      teamName: displayedTeamName,
+      raceTeamName: e.team?.name ?? displayedTeamName,
       teamLogoUrl,
       accent
     };

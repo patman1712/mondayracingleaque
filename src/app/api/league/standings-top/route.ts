@@ -64,10 +64,6 @@ export async function GET(req: Request) {
     });
   }
 
-  const driverRoleById = new Map<string, "MAIN" | "RESERVE">(
-    seasonDrivers.map((r) => [r.driverId, r.role] as const)
-  );
-
   const races = await prisma.race
     .findMany({
       where: {
@@ -102,10 +98,7 @@ export async function GET(req: Request) {
       const p = Number(r.points ?? 0);
       if (Number.isFinite(p)) driverPoints.set(r.driverId, (driverPoints.get(r.driverId) ?? 0) + p);
 
-      const role = driverRoleById.get(r.driverId) ?? "MAIN";
-      const teamId =
-        raceTeamByDriverId.get(r.driverId) ??
-        (role === "MAIN" ? driverInfo.get(r.driverId)?.teamId ?? null : null);
+      const teamId = raceTeamByDriverId.get(r.driverId) ?? null;
       if (!teamId) continue;
       const list = teamRacePoints.get(teamId) ?? [];
       list.push(Number.isFinite(p) ? p : 0);
