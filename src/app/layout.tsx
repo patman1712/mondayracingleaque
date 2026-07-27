@@ -44,15 +44,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: ReactNode;
 }>) {
-  const row = await prisma.appConfig
-    .findUnique({ where: { key: "branding:logoPath" }, select: { value: true } })
-    .catch(() => null);
-  const logoPath = row?.value ? String(row.value) : null;
+  const [logoRow, discordRow] = await Promise.all([
+    prisma.appConfig.findUnique({ where: { key: "branding:logoPath" }, select: { value: true } }).catch(() => null),
+    prisma.appConfig.findUnique({ where: { key: "branding:discordInviteUrl" }, select: { value: true } }).catch(() => null)
+  ]);
+  const logoPath = logoRow?.value ? String(logoRow.value) : null;
+  const discordUrl = discordRow?.value ? String(discordRow.value) : "https://discord.gg/FFxKvcnYXj";
 
   return (
     <html lang="de">
       <body className={`${racing.variable} min-h-dvh`}>
-        <Header logoSrc={uploadUrl(logoPath) ?? "/logo.svg"} />
+        <Header logoSrc={uploadUrl(logoPath) ?? "/logo.svg"} discordUrl={discordUrl} />
         <main className="min-h-[60dvh]">{children}</main>
         <Footer />
       </body>

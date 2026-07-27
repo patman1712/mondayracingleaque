@@ -195,6 +195,36 @@ async function removeHomeHeroText() {
   redirect("/admin/settings/appearance?ok=1");
 }
 
+async function saveDiscordUrl(formData: FormData) {
+  "use server";
+  await requireAdmin();
+
+  const raw = String(formData.get("discordUrl") ?? "").trim();
+  if (!raw) {
+    await prisma.appConfig.delete({ where: { key: "branding:discordInviteUrl" } }).catch(() => null);
+    revalidatePath("/");
+    revalidatePath("/admin/settings/appearance");
+    redirect("/admin/settings/appearance?ok=1");
+  }
+
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("invalid");
+  } catch {
+    redirect("/admin/settings/appearance?error=invalid");
+  }
+
+  await prisma.appConfig.upsert({
+    where: { key: "branding:discordInviteUrl" },
+    create: { key: "branding:discordInviteUrl", value: raw },
+    update: { value: raw }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin/settings/appearance");
+  redirect("/admin/settings/appearance?ok=1");
+}
+
 export default async function AdminAppearancePage({
   searchParams
 }: {
@@ -223,6 +253,9 @@ export default async function AdminAppearancePage({
   const heroSublineRow = await prisma.appConfig
     .findUnique({ where: { key: "branding:homeHeroSubline" }, select: { value: true } })
     .catch(() => null);
+  const discordRow = await prisma.appConfig
+    .findUnique({ where: { key: "branding:discordInviteUrl" }, select: { value: true } })
+    .catch(() => null);
 
   const logoPath = logoRow?.value ? String(logoRow.value) : null;
   const heroPath = heroRow?.value ? String(heroRow.value) : null;
@@ -231,6 +264,7 @@ export default async function AdminAppearancePage({
   const heroHeadlineAccent = heroHeadlineAccentRow?.value ? String(heroHeadlineAccentRow.value) : "";
   const heroSubline = heroSublineRow?.value ? String(heroSublineRow.value) : "";
   const hasHeroText = Boolean(heroBadge || heroHeadlinePrimary || heroHeadlineAccent || heroSubline);
+  const discordUrl = discordRow?.value ? String(discordRow.value) : "https://discord.gg/FFxKvcnYXj";
 
   return (
     <AdminShell>
@@ -393,6 +427,27 @@ export default async function AdminAppearancePage({
               ) : (
                 <div />
               )}
+              <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
+                Speichern
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-base font-semibold">Header Links</div>
+          <div className="mt-1 text-sm text-white/60">
+            Discord-Link wird im Header neben MRL TV angezeigt.
+          </div>
+
+          <form action={saveDiscordUrl} className="mt-5 grid gap-3">
+            <input
+              name="discordUrl"
+              defaultValue={discordUrl}
+              placeholder="Discord Invite Link (z.B. https://discord.gg/...)"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            />
+            <div className="flex items-center justify-end gap-2">
               <button className="rounded-lg bg-mrl-red px-4 py-2 text-sm font-semibold text-white">
                 Speichern
               </button>
