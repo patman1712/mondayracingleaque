@@ -74,6 +74,9 @@ export function Header({
                   Kalender
                 </Link>
                 <NavTv />
+                <Link href="/structure" className="text-white/80 hover:text-white">
+                  MRL-Struktur
+                </Link>
                 {discordUrl ? (
                   <a
                     href={discordUrl}
@@ -132,6 +135,13 @@ export function Header({
 
             <div className="mt-4 grid gap-2">
               <MobileNavTv onNavigate={() => setMobileOpen(false)} />
+              <Link
+                href="/structure"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
+              >
+                MRL-Struktur
+              </Link>
               {discordUrl ? (
                 <a
                   href={discordUrl}

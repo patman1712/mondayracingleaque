@@ -74,6 +74,12 @@ export function AdminSidebarClient({ leagues }: { leagues: LeagueItem[] }) {
             Branding
           </Link>
           <Link
+            href="/admin/settings/structure"
+            className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            MRL-Struktur
+          </Link>
+          <Link
             href="/admin/settings/seasons"
             className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
           >
