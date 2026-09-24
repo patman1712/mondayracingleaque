@@ -73,6 +73,9 @@ export function Header({
                 <Link href="/calendar" className="text-white/80 hover:text-white">
                   Kalender
                 </Link>
+                <Link href="/team-wm" className="text-white/80 hover:text-white">
+                  MRL Team WM
+                </Link>
                 <NavTv />
                 <Link href="/structure" className="text-white/80 hover:text-white">
                   MRL-Struktur
@@ -166,6 +169,13 @@ export function Header({
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
               >
                 Kalender
+              </Link>
+              <Link
+                href="/team-wm"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
+              >
+                MRL Team WM
               </Link>
             </div>
 
