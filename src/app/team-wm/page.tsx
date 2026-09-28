@@ -85,29 +85,60 @@ export default async function MrlTeamWmPage() {
   const allRacesByLeague: Record<string, number> = {};
 
   try {
-    const leagueSeasons = new Map<League, SeasonInfo | null>();
+    const initialSeasons = new Map<League, SeasonInfo | null>();
     for (const l of TARGET_LEAGUES) {
       const s = await getActiveSeason({
         league: l,
         select: { id: true, year: true, seasonNo: true, isTest: true }
       }).catch(() => null);
-      leagueSeasons.set(l, s ? { ...s, league: l } : null);
+      initialSeasons.set(l, s ? { ...s, league: l } : null);
+    }
+
+    const leadCandidate = Array.from(initialSeasons.values())
+      .filter((s): s is SeasonInfo => Boolean(s))
+      .sort((a, b) => (b.year !== a.year ? b.year - a.year : b.seasonNo - a.seasonNo))[0] ?? null;
+
+    const targetYear = leadCandidate?.year ?? 0;
+    const targetSeasonNo = leadCandidate?.seasonNo ?? 1;
+    const targetIsTest = leadCandidate?.isTest ?? false;
+
+    const syncedSeasons = new Map<League, SeasonInfo | null>();
+    for (const l of TARGET_LEAGUES) {
+      const direct = await prisma.season
+        .findFirst({
+          where: {
+            league: l,
+            year: targetYear,
+            seasonNo: targetSeasonNo,
+            isTest: targetIsTest
+          },
+          select: { id: true, year: true, seasonNo: true, isTest: true }
+        })
+        .catch(() => null);
+      if (direct) {
+        syncedSeasons.set(l, { ...direct, league: l });
+      } else {
+        const active = initialSeasons.get(l) ?? null;
+        syncedSeasons.set(l, active);
+      }
     }
 
     seasonLabels = TARGET_LEAGUES.map((l) => {
-      const s = leagueSeasons.get(l) ?? null;
+      const s = syncedSeasons.get(l) ?? null;
       const leagueName =
         l === League.ONE ? "MRL One" : l === League.TWO ? "MRL Two" : l === League.THREE ? "MRL Three" : String(l);
       if (s) {
+        const synced =
+          s.year === targetYear && s.seasonNo === targetSeasonNo && s.isTest === targetIsTest;
         return {
           league: l,
-          label: `${leagueName} · Saison ${s.year} · Season ${s.seasonNo}${s.isTest ? " · TEST" : ""}`
+          label: `${leagueName} · Saison ${s.year} · Season ${s.seasonNo}${s.isTest ? " · TEST" : ""}${synced ? "" : " (Abweichung)"}`
         };
       }
-      return { league: l, label: `${leagueName} · Keine aktive Saison` };
+      return { league: l, label: `${leagueName} · Keine Saison gefunden` };
     });
 
-    const activeSeasons = Array.from(leagueSeasons.values()).filter(
+    const activeSeasons = Array.from(syncedSeasons.values()).filter(
       (s): s is SeasonInfo => Boolean(s)
     );
     if (activeSeasons.length === 0) notFound();
