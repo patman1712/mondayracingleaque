@@ -80,6 +80,12 @@ export function AdminSidebarClient({ leagues }: { leagues: LeagueItem[] }) {
             MRL-Struktur
           </Link>
           <Link
+            href="/admin/settings/team-wm"
+            className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            MRL Team WM
+          </Link>
+          <Link
             href="/admin/settings/seasons"
             className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white"
           >

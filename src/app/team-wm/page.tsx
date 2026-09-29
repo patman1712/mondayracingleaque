@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
-import { getActiveSeason } from "@/lib/currentSeason";
+import { getTeamWmSeason, getTeamWmSeasonId } from "@/lib/currentSeason";
 import Link from "next/link";
 import { League } from "@prisma/client";
 import Image from "next/image";
@@ -86,8 +86,10 @@ export default async function MrlTeamWmPage() {
 
   try {
     const leagueSeasons = new Map<League, SeasonInfo | null>();
+    const explicitIds = new Map<League, string | null>();
     for (const l of TARGET_LEAGUES) {
-      const s = await getActiveSeason({
+      explicitIds.set(l, await getTeamWmSeasonId(l).catch(() => null));
+      const s = await getTeamWmSeason({
         league: l,
         select: { id: true, year: true, seasonNo: true, isTest: true }
       }).catch(() => null);
@@ -98,13 +100,15 @@ export default async function MrlTeamWmPage() {
       const s = leagueSeasons.get(l) ?? null;
       const leagueName =
         l === League.ONE ? "MRL One" : l === League.TWO ? "MRL Two" : l === League.THREE ? "MRL Three" : String(l);
+      const isManual = Boolean(explicitIds.get(l));
+      const sourceTag = isManual ? " · manuell" : " · auto";
       if (s) {
         return {
           league: l,
-          label: `${leagueName} · Saison ${s.year} · Season ${s.seasonNo}${s.isTest ? " · TEST" : ""}`
+          label: `${leagueName} · Saison ${s.year} · Season ${s.seasonNo}${s.isTest ? " · TEST" : ""}${sourceTag}`
         };
       }
-      return { league: l, label: `${leagueName} · Keine aktive Saison` };
+      return { league: l, label: `${leagueName} · Keine Saison gefunden${sourceTag}` };
     });
 
     const activeSeasons = Array.from(leagueSeasons.values()).filter(
