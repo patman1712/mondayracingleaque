@@ -38,16 +38,16 @@ const prisma = prismaBin();
 const next = nextBin();
 
 const cmd = process.argv[2] ?? "start";
-
-const push = spawnSync(prisma, ["db", "push", "--accept-data-loss"], {
-  stdio: "inherit",
-  env: process.env
-});
-
-if (push.status !== 0) process.exit(push.status ?? 1);
-
 const args =
   cmd === "dev" ? ["dev"] : cmd === "build" ? ["build"] : ["start"];
+
+if (cmd === "dev") {
+  const push = spawnSync(prisma, ["db", "push", "--accept-data-loss"], {
+    stdio: "inherit",
+    env: process.env
+  });
+  if (push.status !== 0) process.exit(push.status ?? 1);
+}
 
 const child = spawn(next, args, {
   stdio: "inherit",
