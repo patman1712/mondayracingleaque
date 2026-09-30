@@ -5,13 +5,23 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { League } from "@prisma/client";
 import { listAdminLeagues } from "@/lib/league";
-import { getTeamWmSeasonId, setTeamWmSeasonId } from "@/lib/currentSeason";
+import {
+  getTeamWmSeasonId,
+  setTeamWmSeasonId,
+  getTeamWmEnabledLeagues,
+  setTeamWmEnabledLeagues
+} from "@/lib/currentSeason";
 
 export const dynamic = "force-dynamic";
 
-const TARGET_LEAGUES: League[] = [League.ONE, League.TWO, League.THREE];
-
-function seasonLabel(s: { id: string; year: number; seasonNo: number; placement: string; isTest: boolean; label: string | null }) {
+function seasonLabel(s: {
+  id: string;
+  year: number;
+  seasonNo: number;
+  placement: string;
+  isTest: boolean;
+  label: string | null;
+}) {
   const name = s.label ? s.label : `Saison ${s.year} · Season ${s.seasonNo}`;
   const tags: string[] = [];
   if (s.isTest) tags.push("TEST");
@@ -19,15 +29,24 @@ function seasonLabel(s: { id: string; year: number; seasonNo: number; placement:
   return tags.length ? `${name} · ${tags.join(" / ")}` : name;
 }
 
-async function saveTeamWmSeasons(formData: FormData) {
+async function saveTeamWmConfig(formData: FormData) {
   "use server";
   await requireAdmin();
 
   const leaguesMeta = await listAdminLeagues();
-  const slugByLeague = new Map(leaguesMeta.map((l) => [l.league, l.adminSlug]));
 
-  for (const league of TARGET_LEAGUES) {
-    const field = `season_${league}`;
+  const enabledLeagues: League[] = [];
+  for (const lm of leaguesMeta) {
+    const enabled = String(formData.get(`enabled_${lm.league}`) ?? "0") === "1";
+    if (enabled) enabledLeagues.push(lm.league);
+  }
+  if (enabledLeagues.length === 0) {
+    redirect("/admin/settings/team-wm?error=no_leagues");
+  }
+  await setTeamWmEnabledLeagues(enabledLeagues);
+
+  for (const lm of leaguesMeta) {
+    const field = `season_${lm.league}`;
     const raw = String(formData.get(field) ?? "").trim();
     const seasonId = raw === "__auto__" || raw === "" ? null : raw;
 
@@ -35,31 +54,30 @@ async function saveTeamWmSeasons(formData: FormData) {
       const valid = await prisma.season
         .findUnique({ where: { id: seasonId }, select: { id: true, league: true } })
         .catch(() => null);
-      if (!valid || valid.league !== league) {
-        redirect(`/admin/settings/team-wm?error=invalid_${league}`);
+      if (!valid || valid.league !== lm.league) {
+        redirect(`/admin/settings/team-wm?error=invalid_${lm.league}`);
       }
     }
-    await setTeamWmSeasonId(league, seasonId);
+    await setTeamWmSeasonId(lm.league, seasonId);
   }
 
   revalidatePath("/team-wm");
   revalidatePath("/admin/settings/team-wm");
-  for (const l of TARGET_LEAGUES) {
-    const slug = slugByLeague.get(l);
-    if (slug) {
-      revalidatePath(`/admin/${slug}/settings`);
-    }
+  for (const l of leaguesMeta) {
+    revalidatePath(`/admin/${l.adminSlug}/settings`);
   }
   redirect("/admin/settings/team-wm?ok=1");
 }
 
-async function resetTeamWmSeasons() {
+async function resetTeamWmConfig() {
   "use server";
   await requireAdmin();
 
-  for (const league of TARGET_LEAGUES) {
-    await setTeamWmSeasonId(league, null);
+  const leaguesMeta = await listAdminLeagues();
+  for (const lm of leaguesMeta) {
+    await setTeamWmSeasonId(lm.league, null);
   }
+  await setTeamWmEnabledLeagues([League.ONE, League.TWO, League.THREE]);
   revalidatePath("/team-wm");
   revalidatePath("/admin/settings/team-wm");
   redirect("/admin/settings/team-wm?ok=reset");
@@ -72,38 +90,70 @@ export default async function AdminTeamWmSettingsPage({
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const ok = sp.ok === "1" ? "Gespeichert." : sp.ok === "reset" ? "Auf Auto-Modus zurückgesetzt." : null;
-  const error = sp.error ?? null;
+  const ok =
+    sp.ok === "1"
+      ? "Gespeichert."
+      : sp.ok === "reset"
+        ? "Zurückgesetzt auf Standard (MRL One · MRL Two · MRL Three, Auto-Modus)."
+        : null;
+  const error = sp.error
+    ? sp.error === "no_leagues"
+      ? "Bitte mindestens eine Liga aktivieren."
+      : `Fehlerhafte Saison-Auswahl (${sp.error.toUpperCase().replace("_", " ")}).`
+    : null;
 
   const leaguesMeta = await listAdminLeagues();
-  const nameByLeague = new Map(leaguesMeta.map((l) => [l.league, l.name] as const));
+  const enabled = await getTeamWmEnabledLeagues();
+  const enabledSet = new Set(enabled);
 
-  const seasonsByLeague = new Map<League, Array<{ id: string; year: number; seasonNo: number; placement: string; isTest: boolean; label: string | null }>>();
-  for (const league of TARGET_LEAGUES) {
+  const seasonsByLeague = new Map<
+    League,
+    Array<{
+      id: string;
+      year: number;
+      seasonNo: number;
+      placement: string;
+      isTest: boolean;
+      label: string | null;
+    }>
+  >();
+  for (const lm of leaguesMeta) {
     const rows = await prisma.season
       .findMany({
-        where: { league },
-        orderBy: [{ placement: "asc" }, { year: "desc" }, { seasonNo: "desc" }, { isTest: "asc" }],
-        select: { id: true, year: true, seasonNo: true, placement: true, isTest: true, label: true },
-        take: 100
+        where: { league: lm.league },
+        orderBy: [
+          { placement: "asc" },
+          { year: "desc" },
+          { seasonNo: "desc" },
+          { isTest: "asc" }
+        ],
+        select: {
+          id: true,
+          year: true,
+          seasonNo: true,
+          placement: true,
+          isTest: true,
+          label: true
+        },
+        take: 120
       })
       .catch(() => []);
-    seasonsByLeague.set(league, rows);
+    seasonsByLeague.set(lm.league, rows);
   }
 
   const currentByLeague = new Map<League, string | null>();
-  for (const league of TARGET_LEAGUES) {
-    currentByLeague.set(league, await getTeamWmSeasonId(league));
+  for (const lm of leaguesMeta) {
+    currentByLeague.set(lm.league, await getTeamWmSeasonId(lm.league));
   }
 
   return (
     <AdminShell>
       <div className="space-y-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-base font-semibold">MRL Team WM · Saison-Auswahl</div>
+          <div className="text-base font-semibold">MRL Team WM · Konfiguration</div>
           <div className="mt-1 text-sm text-white/60">
-            Wähle pro Liga manuell, welche Saison in die übergeordnete MRL Team WM einfließt.
-            Ohne Auswahl wird automatisch die aktive Saison der Liga verwendet.
+            Aktiviere die Ligen, die in die übergeordnete MRL Team WM einfließen sollen, und
+            wähle pro Liga die Saison (ohne Auswahl = automatisch die aktive Saison der Liga).
           </div>
 
           {ok ? (
@@ -113,54 +163,76 @@ export default async function AdminTeamWmSettingsPage({
           ) : null}
           {error ? (
             <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              Fehlerhafte Saison-Auswahl ({error.toUpperCase().replace("_", " ")}).
+              {error}
             </div>
           ) : null}
 
-          <form action={saveTeamWmSeasons} className="mt-5 space-y-5">
-            {TARGET_LEAGUES.map((league) => {
-              const leagueName = nameByLeague.get(league) ?? `MRL ${league}`;
-              const seasons = seasonsByLeague.get(league) ?? [];
-              const current = currentByLeague.get(league) ?? null;
+          <form action={saveTeamWmConfig} className="mt-5 space-y-5">
+            {leaguesMeta.map((lm) => {
+              const seasons = seasonsByLeague.get(lm.league) ?? [];
+              const current = currentByLeague.get(lm.league) ?? null;
+              const isEnabled = enabledSet.has(lm.league);
 
               return (
                 <div
-                  key={league}
-                  className="grid gap-3 rounded-xl border border-white/10 bg-black/10 p-4 sm:grid-cols-[200px_minmax(0,1fr)] sm:items-center"
+                  key={lm.league}
+                  className={`rounded-xl border p-4 ${
+                    isEnabled
+                      ? "border-white/15 bg-black/10"
+                      : "border-white/5 bg-black/5 opacity-75"
+                  }`}
                 >
-                  <div>
-                    <div className="text-sm font-semibold text-white/85">{leagueName}</div>
-                    <div className="text-xs text-white/50">Team-WM Saison auswählen</div>
-                  </div>
-                  <div className="space-y-2">
-                    <select
-                      name={`season_${league}`}
-                      defaultValue={current ?? "__auto__"}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
-                    >
-                      <option value="__auto__">
-                        ⟶ Automatisch (aktive Saison der Liga)
-                      </option>
-                      {seasons.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {seasonLabel(s)}
+                  <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:items-start">
+                    <div className="space-y-3">
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name={`enabled_${lm.league}`}
+                          value="1"
+                          defaultChecked={isEnabled}
+                          className="mt-0.5 h-4 w-4"
+                        />
+                        <span>
+                          <div className="font-semibold text-white/85">{lm.name}</div>
+                          <div className="text-[11px] text-white/50">
+                            {lm.publicSlug} · {lm.league}
+                          </div>
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs text-white/50">Team-WM Saison auswählen</div>
+                      <select
+                        name={`season_${lm.league}`}
+                        defaultValue={current ?? "__auto__"}
+                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+                      >
+                        <option value="__auto__">
+                          ⟶ Automatisch (aktive Saison der Liga)
                         </option>
-                      ))}
-                      {seasons.length === 0 ? (
-                        <option disabled value="">
-                          Keine Saisons vorhanden
-                        </option>
-                      ) : null}
-                    </select>
-                    {current ? (
-                      <div className="text-xs text-white/50">
-                        · Manuell festgelegt
-                      </div>
-                    ) : (
-                      <div className="text-xs text-white/50">
-                        · Auto-Modus: Verwendet die aktive Saison von /{leagueName.toLowerCase().replace(/\s+/g, "-")}/standings
-                      </div>
-                    )}
+                        {seasons.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {seasonLabel(s)}
+                          </option>
+                        ))}
+                        {seasons.length === 0 ? (
+                          <option disabled value="">
+                            Keine Saisons vorhanden
+                          </option>
+                        ) : null}
+                      </select>
+                      {current ? (
+                        <div className="text-xs text-white/50">
+                          · Manuell festgelegt
+                        </div>
+                      ) : (
+                        <div className="text-xs text-white/50">
+                          · Auto-Modus: Verwendet die aktive Saison von /{lm.publicSlug}
+                          /standings
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -175,10 +247,10 @@ export default async function AdminTeamWmSettingsPage({
               </button>
               <button
                 type="submit"
-                formAction={resetTeamWmSeasons}
+                formAction={resetTeamWmConfig}
                 className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 outline-none hover:bg-white/10"
               >
-                Auf Auto-Modus zurücksetzen
+                Auf Standard zurücksetzen
               </button>
               <a
                 href="/team-wm"

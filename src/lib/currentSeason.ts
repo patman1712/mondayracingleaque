@@ -53,6 +53,38 @@ export async function getTeamWmSeason<TSelect extends Prisma.SeasonSelect>(opts:
   return getActiveSeason(opts);
 }
 
+const ENABLED_LEAGUES_KEY = "teamWm:enabledLeaguesJson";
+const DEFAULT_ENABLED_FALLBACK: League[] = [League.ONE, League.TWO, League.THREE];
+
+export async function getTeamWmEnabledLeagues(): Promise<League[]> {
+  const cfg = await prisma.appConfig
+    .findUnique({ where: { key: ENABLED_LEAGUES_KEY }, select: { value: true } })
+    .catch(() => null);
+  if (!cfg?.value) return DEFAULT_ENABLED_FALLBACK;
+  try {
+    const parsed = JSON.parse(cfg.value);
+    if (!Array.isArray(parsed)) return DEFAULT_ENABLED_FALLBACK;
+    const filtered = parsed.filter(
+      (v) =>
+        v === League.ONE || v === League.TWO || v === League.THREE || v === League.ROOKIE
+    );
+    return filtered.length ? filtered : DEFAULT_ENABLED_FALLBACK;
+  } catch {
+    return DEFAULT_ENABLED_FALLBACK;
+  }
+}
+
+export async function setTeamWmEnabledLeagues(leagues: League[]): Promise<void> {
+  const value = JSON.stringify(leagues);
+  await prisma.appConfig
+    .upsert({
+      where: { key: ENABLED_LEAGUES_KEY },
+      create: { key: ENABLED_LEAGUES_KEY, value },
+      update: { value }
+    })
+    .catch(() => null);
+}
+
 export async function getActiveSeason<TSelect extends Prisma.SeasonSelect>(opts: {
   league: League;
   select: TSelect;

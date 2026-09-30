@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { Container } from "@/components/Container";
 import { prisma } from "@/lib/db";
-import { getTeamWmSeason, getTeamWmSeasonId } from "@/lib/currentSeason";
+import {
+  getTeamWmSeason,
+  getTeamWmSeasonId,
+  getTeamWmEnabledLeagues
+} from "@/lib/currentSeason";
+import { listAdminLeagues } from "@/lib/league";
 import Link from "next/link";
 import { League } from "@prisma/client";
 import Image from "next/image";
@@ -40,8 +45,6 @@ function f1Dots() {
     backgroundPosition: "0 0, 2px 2px"
   } as const;
 }
-
-const TARGET_LEAGUES: League[] = [League.ONE, League.TWO, League.THREE];
 
 type AggregatedTeamStanding = {
   teamId: string;
@@ -85,9 +88,18 @@ export default async function MrlTeamWmPage() {
   const allRacesByLeague: Record<string, number> = {};
 
   try {
+    const enabledLeagues = await getTeamWmEnabledLeagues().catch(() => [
+      League.ONE,
+      League.TWO,
+      League.THREE
+    ]);
+    const leaguesMeta = await listAdminLeagues().catch(() => []);
+    const nameByLeague = new Map(leaguesMeta.map((l) => [l.league, l.name] as const));
+    const targetLeagues = enabledLeagues.length ? enabledLeagues : [League.ONE, League.TWO, League.THREE];
+
     const leagueSeasons = new Map<League, SeasonInfo | null>();
     const explicitIds = new Map<League, string | null>();
-    for (const l of TARGET_LEAGUES) {
+    for (const l of targetLeagues) {
       explicitIds.set(l, await getTeamWmSeasonId(l).catch(() => null));
       const s = await getTeamWmSeason({
         league: l,
@@ -96,10 +108,9 @@ export default async function MrlTeamWmPage() {
       leagueSeasons.set(l, s ? { ...s, league: l } : null);
     }
 
-    seasonLabels = TARGET_LEAGUES.map((l) => {
+    seasonLabels = targetLeagues.map((l) => {
       const s = leagueSeasons.get(l) ?? null;
-      const leagueName =
-        l === League.ONE ? "MRL One" : l === League.TWO ? "MRL Two" : l === League.THREE ? "MRL Three" : String(l);
+      const leagueName = nameByLeague.get(l) ?? String(l);
       const isManual = Boolean(explicitIds.get(l));
       const sourceTag = isManual ? " · manuell" : " · auto";
       if (s) {
@@ -116,6 +127,7 @@ export default async function MrlTeamWmPage() {
     );
     if (activeSeasons.length === 0) notFound();
     const activeSeasonIds = activeSeasons.map((s) => s.id);
+    const usedLeagues: League[] = targetLeagues;
 
     const seasonDriversRaw = await prisma.driverSeason
       .findMany({
@@ -181,7 +193,7 @@ export default async function MrlTeamWmPage() {
     const racesRaw = await prisma.race
       .findMany({
         where: {
-          league: { in: TARGET_LEAGUES },
+          league: { in: usedLeagues },
           resultsPublishedAt: { not: null },
           OR: activeSeasons.map((s) => ({
             league: s.league,
@@ -308,12 +320,12 @@ export default async function MrlTeamWmPage() {
 
           const breakdown: { league: League; points: number }[] = [];
           const perLeague = teamPointsByLeague.get(teamId) ?? null;
-          for (const l of TARGET_LEAGUES) {
+          for (const l of usedLeagues) {
             breakdown.push({ league: l, points: perLeague?.get(l) ?? 0 });
           }
 
           let accent: string | null = null;
-          for (const l of TARGET_LEAGUES) {
+          for (const l of usedLeagues) {
             const candidate = teamSeasonAccentByTeamLeague.get(`${teamId}::${l}`);
             if (candidate) {
               accent = candidate;
